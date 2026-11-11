@@ -21,6 +21,25 @@ Any classic ESP32 with Bluetooth Classic works (ESP32-WROOM / `esp32dev`). The E
 have no Bluetooth Classic, so they can only use the USB serial link. All pins and timings
 live in [`src/config.h`](src/config.h).
 
+### Alternative screen: 1602 LCD (handy for development)
+
+A standard 16×2 character LCD with a PCF8574 I2C backpack works instead of the OLED. Pick
+**Screen type → LCD 1602** in the PC app (*Device → Screens*) and set its address (0x27 for PCF8574
+backpacks, 0x3F for PCF8574A). Before it has been configured, the buddy uses whichever screen it finds
+at boot (OLED preferred), and it reports what it found so the PC app can suggest the address.
+
+| Part              | ESP32 pin | Notes                                                        |
+|-------------------|-----------|--------------------------------------------------------------|
+| LCD backpack `SDA`| GPIO 21   | same bus as the OLED                                         |
+| LCD backpack `SCL`| GPIO 22   |                                                              |
+| LCD `VCC` / `GND` | 5V / GND  | most 1602 modules need 5 V; adjust the contrast pot on the back |
+
+On the LCD the eyes are 2×2 characters each, drawn with custom glyphs from the same eye shapes as
+the OLED face. They blink, glance around (moving across columns) and change shape with the mood.
+Apps use bars, sparklines and scrolling text, and urgent nudges flash the backlight. 5 V backpacks
+pull SDA/SCL up to 5 V; most ESP32 boards tolerate this, but a level shifter (or removing the
+backpack's pull-ups) is the safe option.
+
 ### Optional: a second screen (one per eye)
 
 Choose **1 or 2 screens** in the PC app (*Device → Screens*); the buddy stores the choice in flash.

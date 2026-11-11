@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 // ---- Identity ---------------------------------------------------------------
-#define FW_VERSION      "1.1.0"
+#define FW_VERSION      "1.2.0"
 #define DEVICE_NAME     "DeskBuddy"
 
 // ---- Display (SSD1306 128x32, I2C) -----------------------------------------
@@ -22,6 +22,15 @@
 #define PIN_SCL2        19
 #define DISP2_I2C_ADDR  0x3C      // 7-bit address
 #define DISP1_I2C_ADDR  0x3C
+
+// ---- Alternative display: 1602 character LCD with a PCF8574 I2C backpack ---
+// Shares the first I2C bus (GPIO 21/22). Choose OLED or LCD in the PC app; with nothing
+// chosen yet the buddy picks whichever it finds at boot. Backpacks are usually at 0x27
+// (PCF8574) or 0x3F (PCF8574A); the address is also set from the PC app.
+#define LCD_COLS        16
+#define LCD_ROWS        2
+#define LCD_DEFAULT_ADDR 0x27
+#define LCD_FRAME_MS    50        // the LCD is slow to update (and to change visibly)
 
 // ---- Buttons (wired to GND, internal pull-ups) -----------------------------
 #define PIN_BTN_LEFT    25

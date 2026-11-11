@@ -15,7 +15,7 @@
 
 <div class="row spread">
     <h1>@(_isNew ? "New app" : _app.Name)</h1>
-    <OledPreview Visual="_app.Visual" Name="@_app.Name" Value="_test?.Value" Min="_app.Min" Max="_app.Max" Unit="@_app.Unit" Text="@_test?.Text"
+    <AppPreview Visual="_app.Visual" Name="@_app.Name" Value="_test?.Value" Min="_app.Min" Max="_app.Max" Unit="@_app.Unit" Text="@_test?.Text"
                  Level="LevelEvaluator.Evaluate(_app.Levels, _test?.Value)" />
 </div>
 

@@ -49,9 +49,18 @@ public class ProtocolTests
             Brightness = 300, ScreenCount = 2, DualLayout = DualLayout.Mirror, ContentScreen = ScreenSide.Left,
             SwapScreens = true, FlipScreen2 = true,
         });
-        Assert.Equal("""{"t":"cfg","bright":255,"screens":2,"layout":"mirror","content":"left","swap":true,"flip1":false,"flip2":true}""",
+        Assert.Equal("""{"t":"cfg","bright":255,"display":"oled","lcdAddr":39,"screens":2,"layout":"mirror","content":"left","swap":true,"flip1":false,"flip2":true}""",
             msg.ToJsonString());
         Assert.Equal(1, DeviceProtocol.Cfg(new DeviceSettings { ScreenCount = 7 })["screens"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void Cfg_selects_the_lcd()
+    {
+        var msg = DeviceProtocol.Cfg(new DeviceSettings { Display = DisplayType.Lcd1602, LcdAddress = 0x3F });
+        Assert.Equal("lcd1602", msg["display"]!.GetValue<string>());
+        Assert.Equal(0x3F, msg["lcdAddr"]!.GetValue<int>());
+        Assert.Equal(0x77, DeviceProtocol.Cfg(new DeviceSettings { LcdAddress = 500 })["lcdAddr"]!.GetValue<int>());
     }
 
     [Fact]
@@ -220,6 +229,8 @@ public class ConfigTests
         cfg.Apps[0].Takeover.Mode = TakeoverMode.WhenAbove;
         cfg.Device.ScreenCount = 2;
         cfg.Device.ContentScreen = ScreenSide.Left;
+        cfg.Device.Display = DisplayType.Lcd1602;
+        cfg.Device.LcdAddress = 0x3F;
         store.Save(cfg);
 
         var reloaded = new ConfigStore(path).Snapshot();
@@ -227,6 +238,9 @@ public class ConfigTests
         Assert.Equal(TakeoverMode.WhenAbove, reloaded.Apps[0].Takeover.Mode);
         Assert.Equal(2, reloaded.Device.ScreenCount);
         Assert.Equal(ScreenSide.Left, reloaded.Device.ContentScreen);
+        Assert.Equal(DisplayType.Lcd1602, reloaded.Device.Display);
+        Assert.Equal(0x3F, reloaded.Device.LcdAddress);
+        Assert.Contains("\"Lcd1602\"", File.ReadAllText(path));
         Assert.Contains("\"WhenAbove\"", File.ReadAllText(path));
         Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
     }

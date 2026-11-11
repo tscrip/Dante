@@ -81,6 +81,12 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
     public int? DeviceScreens { get; private set; }
     /// <summary>Whether a second screen answered on the buddy's second display address.</summary>
     public bool? SecondScreenDetected { get; private set; }
+    /// <summary>Display type the buddy is using ("oled" / "lcd1602").</summary>
+    public string? DeviceDisplay { get; private set; }
+    /// <summary>Whether an OLED answered at boot.</summary>
+    public bool? OledDetected { get; private set; }
+    /// <summary>I2C address an LCD backpack answered at during boot (0 = none found).</summary>
+    public int? LcdDetectedAddress { get; private set; }
     public string? LastError { get; private set; }
     public DateTimeOffset? LastHeard { get; private set; }
     /// <summary>Port open AND the buddy answered recently (an SPP port can be "open" with the device off).</summary>
@@ -153,6 +159,9 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
         Firmware = null;
         DeviceScreens = null;
         SecondScreenDetected = null;
+        DeviceDisplay = null;
+        OledDetected = null;
+        LcdDetectedAddress = null;
         SetStatus(LinkStatus.Connected, settings.PortName);
 
         Write(transport, DeviceProtocol.Hello().ToJsonString());
@@ -206,6 +215,9 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
                     Firmware = evt.Raw["fw"]?.GetValue<string>();
                     DeviceScreens = evt.Raw["screens"]?.GetValue<int>();
                     SecondScreenDetected = evt.Raw["disp2"]?.GetValue<bool>();
+                    DeviceDisplay = evt.Raw["display"]?.GetValue<string>();
+                    OledDetected = evt.Raw["oled"]?.GetValue<bool>();
+                    LcdDetectedAddress = evt.Raw["lcd"]?.GetValue<int>();
                 }
                 StatusChanged?.Invoke();
                 EventReceived?.Invoke(evt);

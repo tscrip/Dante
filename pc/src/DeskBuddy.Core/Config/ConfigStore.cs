@@ -75,6 +75,7 @@ public sealed class ConfigStore
         }
         config.Device.Brightness = Math.Clamp(config.Device.Brightness, 0, 255);
         config.Device.ScreenCount = config.Device.ScreenCount == 2 ? 2 : 1;
+        config.Device.LcdAddress = Math.Clamp(config.Device.LcdAddress, 0x08, 0x77);
     }
 
     public static string Slug(string s)

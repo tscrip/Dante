@@ -59,6 +59,8 @@ public static class DeviceProtocol
     {
         ["t"] = "cfg",
         ["bright"] = Math.Clamp(d.Brightness, 0, 255),
+        ["display"] = d.Display == DisplayType.Lcd1602 ? "lcd1602" : "oled",
+        ["lcdAddr"] = Math.Clamp(d.LcdAddress, 0x08, 0x77),
         ["screens"] = d.ScreenCount == 2 ? 2 : 1,
         ["layout"] = d.DualLayout == DualLayout.Mirror ? "mirror" : "watch",
         ["content"] = d.ContentScreen == ScreenSide.Left ? "left" : "right",

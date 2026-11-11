@@ -23,7 +23,7 @@ public sealed class FakeBuddy : IDeviceTransport
     {
         var msg = (JsonObject)JsonNode.Parse(line)!;
         Received.Enqueue(msg);
-        if (msg["t"]!.GetValue<string>() == "hello") _toPc.Add("""{"t":"hello","fw":"test","name":"DeskBuddy","screens":1,"disp2":true}""");
+        if (msg["t"]!.GetValue<string>() == "hello") _toPc.Add("""{"t":"hello","fw":"test","name":"DeskBuddy","display":"oled","screens":1,"disp2":true,"oled":false,"lcd":39}""");
     }
 
     public void Press(string json) => _toPc.Add(json);
@@ -100,6 +100,9 @@ public class EngineIntegrationTests : IAsyncLifetime
         Assert.Equal(1, initial["screens"]!.GetValue<int>());
         for (var i = 0; i < 40 && _link.SecondScreenDetected is null; i++) await Task.Delay(50);
         Assert.True(_link.SecondScreenDetected);
+        Assert.Equal("oled", _link.DeviceDisplay);
+        Assert.False(_link.OledDetected);
+        Assert.Equal(0x27, _link.LcdDetectedAddress);
 
         var cfg = _store.Snapshot();
         cfg.Device.ScreenCount = 2;
@@ -111,6 +114,11 @@ public class EngineIntegrationTests : IAsyncLifetime
         Assert.Equal("watch", updated["layout"]!.GetValue<string>());
         Assert.Equal("left", updated["content"]!.GetValue<string>());
         Assert.Equal(LinkStatus.Connected, _link.Status); // display changes don't drop the connection
+
+        cfg.Device.Display = DisplayType.Lcd1602;
+        _store.Save(cfg);
+        var lcd = await WaitFor(m => Is(m, "cfg") && m["display"]!.GetValue<string>() == "lcd1602");
+        Assert.Equal(0x27, lcd["lcdAddr"]!.GetValue<int>());
     }
 
     [Fact]

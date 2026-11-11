@@ -54,40 +54,70 @@
     <h2>Screens</h2>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
         <div>
-            <label class="check"><input type="radio" name="screens" checked="@(_cfg.Device.ScreenCount != 2)" @onchange="() => _cfg.Device.ScreenCount = 1" />
-                <span><strong>1 screen</strong> <span class="muted small">— both eyes on one display</span></span></label>
-            <label class="check"><input type="radio" name="screens" checked="@(_cfg.Device.ScreenCount == 2)" @onchange="() => _cfg.Device.ScreenCount = 2" />
-                <span><strong>2 screens</strong> <span class="muted small">— one big eye per display</span></span></label>
+            <label class="field"><span>Screen type</span>
+                <select @bind="_cfg.Device.Display">
+                    <option value="@DisplayType.Oled128x32">OLED 0.91" 128×32 (SSD1306, I2C)</option>
+                    <option value="@DisplayType.Lcd1602">LCD 1602 16×2 (PCF8574 I2C backpack)</option>
+                </select>
+                @if (Link.Online && Link.OledDetected is not null)
+                {
+                    <span class="help">Buddy found at boot: OLED @(Link.OledDetected == true ? "✓" : "✗") ·
+                        LCD @LcdFoundText</span>
+                }
+            </label>
 
-            @if (_cfg.Device.ScreenCount == 2)
+            @if (_cfg.Device.Display == DisplayType.Lcd1602)
             {
-                @if (Link.Online && Link.SecondScreenDetected == false)
+                <label class="field"><span>LCD I2C address</span>
+                    <select value="@_cfg.Device.LcdAddress" @onchange="SetLcdAddress">
+                        @foreach (var addr in LcdAddresses) { <option value="@addr">@AddressLabel(addr)</option> }
+                    </select>
+                    <span class="help">Same I2C pins as the OLED (SDA 21 / SCL 22). One character screen, so the face, apps and nudges are drawn as text plus custom characters.</span>
+                </label>
+                @if (Link.Online && Link.LcdDetectedAddress is > 0 and var found && found != _cfg.Device.LcdAddress)
                 {
-                    <div class="notice error small">The buddy didn't find a second screen when it started. Check the wiring
-                        (second screen on SDA 18 / SCL 19 by default) and restart it.</div>
+                    <div class="notice small">The buddy found an LCD at @Hex(found).
+                        <button class="btn sm" @onclick="() => _cfg.Device.LcdAddress = found">Use it</button></div>
                 }
-                <h3 class="small muted">On app screens</h3>
-                <label class="check"><input type="radio" name="layout" checked="@(_cfg.Device.DualLayout == DualLayout.Watch)" @onchange="() => _cfg.Device.DualLayout = DualLayout.Watch" />
-                    <span>App on one screen, the other eye watches it</span></label>
-                <label class="check"><input type="radio" name="layout" checked="@(_cfg.Device.DualLayout == DualLayout.Mirror)" @onchange="() => _cfg.Device.DualLayout = DualLayout.Mirror" />
-                    <span>App on both screens</span></label>
-                @if (_cfg.Device.DualLayout == DualLayout.Watch)
-                {
-                    <label class="field"><span>App goes on the</span>
-                        <select @bind="_cfg.Device.ContentScreen">
-                            <option value="@ScreenSide.Right">right screen</option>
-                            <option value="@ScreenSide.Left">left screen</option>
-                        </select>
-                        <span class="help">Speech bubbles and nudge messages appear there too.</span>
-                    </label>
-                }
-                <h3 class="small muted">Mounting</h3>
-                <label class="check"><input type="checkbox" @bind="_cfg.Device.SwapScreens" /> Swap left and right screens</label>
+                <label class="check"><input type="checkbox" checked="@(_cfg.Device.Brightness > 0)" @onchange="SetBacklight" /> Backlight on</label>
             }
-            <label class="check"><input type="checkbox" @bind="_cfg.Device.FlipScreen1" /> Upside down: @(_cfg.Device.ScreenCount == 2 ? "screen 1" : "screen")</label>
-            @if (_cfg.Device.ScreenCount == 2)
+            else
             {
-                <label class="check"><input type="checkbox" @bind="_cfg.Device.FlipScreen2" /> Upside down: screen 2</label>
+                <label class="check"><input type="radio" name="screens" checked="@(_cfg.Device.ScreenCount != 2)" @onchange="() => _cfg.Device.ScreenCount = 1" />
+                    <span><strong>1 screen</strong> <span class="muted small">— both eyes on one display</span></span></label>
+                <label class="check"><input type="radio" name="screens" checked="@(_cfg.Device.ScreenCount == 2)" @onchange="() => _cfg.Device.ScreenCount = 2" />
+                    <span><strong>2 screens</strong> <span class="muted small">— one big eye per display</span></span></label>
+
+                @if (_cfg.Device.ScreenCount == 2)
+                {
+                    @if (Link.Online && Link.SecondScreenDetected == false)
+                    {
+                        <div class="notice error small">The buddy didn't find a second screen when it started. Check the wiring
+                            (second screen on SDA 18 / SCL 19 by default) and restart it.</div>
+                    }
+                    <h3 class="small muted">On app screens</h3>
+                    <label class="check"><input type="radio" name="layout" checked="@(_cfg.Device.DualLayout == DualLayout.Watch)" @onchange="() => _cfg.Device.DualLayout = DualLayout.Watch" />
+                        <span>App on one screen, the other eye watches it</span></label>
+                    <label class="check"><input type="radio" name="layout" checked="@(_cfg.Device.DualLayout == DualLayout.Mirror)" @onchange="() => _cfg.Device.DualLayout = DualLayout.Mirror" />
+                        <span>App on both screens</span></label>
+                    @if (_cfg.Device.DualLayout == DualLayout.Watch)
+                    {
+                        <label class="field"><span>App goes on the</span>
+                            <select @bind="_cfg.Device.ContentScreen">
+                                <option value="@ScreenSide.Right">right screen</option>
+                                <option value="@ScreenSide.Left">left screen</option>
+                            </select>
+                            <span class="help">Speech bubbles and nudge messages appear there too.</span>
+                        </label>
+                    }
+                    <h3 class="small muted">Mounting</h3>
+                    <label class="check"><input type="checkbox" @bind="_cfg.Device.SwapScreens" /> Swap left and right screens</label>
+                }
+                <label class="check"><input type="checkbox" @bind="_cfg.Device.FlipScreen1" /> Upside down: @(_cfg.Device.ScreenCount == 2 ? "screen 1" : "screen")</label>
+                @if (_cfg.Device.ScreenCount == 2)
+                {
+                    <label class="check"><input type="checkbox" @bind="_cfg.Device.FlipScreen2" /> Upside down: screen 2</label>
+                }
             }
             <button class="btn primary" @onclick="Save" style="margin-top:.5rem">Save &amp; send to buddy</button>
             @if (_savedAt is { } at && DateTimeOffset.UtcNow - at < TimeSpan.FromSeconds(4))
@@ -97,7 +127,8 @@
         </div>
         <div>
             <ScreenLayoutPreview Settings="_cfg.Device" />
-            <p class="muted small">The buddy remembers this, so it starts up in the right mode even before the PC connects.</p>
+            <p class="muted small">The buddy remembers this, so it starts up in the right mode even before the PC connects.
+                Before it has ever been configured it uses whichever screen it finds.</p>
         </div>
     </div>
 </div>
@@ -127,6 +158,17 @@
     private void RefreshPorts() => _ports = SerialTransport.ListPorts();
 
     private DateTimeOffset? _savedAt;
+
+    // 0x20-0x27 = PCF8574, 0x38-0x3F = PCF8574A (set by the A0-A2 jumpers on the backpack).
+    private static string Hex(int a) => $"0x{a:X2}";
+    private static string AddressLabel(int a) => Hex(a) + (a == 0x27 ? " (PCF8574, most common)" : a == 0x3F ? " (PCF8574A)" : "");
+    private string LcdFoundText => Link.LcdDetectedAddress is > 0 and var a ? $"✓ at {Hex(a)}" : "✗";
+    private void SetLcdAddress(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var a)) _cfg.Device.LcdAddress = a; }
+    private void SetBacklight(ChangeEventArgs e) => _cfg.Device.Brightness = e.Value is true ? 200 : 0;
+
+    private IEnumerable<int> LcdAddresses =>
+        new[] { 0x27, 0x3F }.Concat(Enumerable.Range(0x20, 8)).Concat(Enumerable.Range(0x38, 8))
+            .Append(_cfg.Device.LcdAddress).Distinct();
 
     private void Save()
     {

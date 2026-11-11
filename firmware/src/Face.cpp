@@ -15,19 +15,6 @@ struct EyeStyle {
 
 enum Shape : uint8_t { SH_NORMAL, SH_HEART, SH_CROSS, SH_SPIRAL, SH_SQUINT };
 
-// Decorations drawn in the margins left/right of the eyes.
-enum Decor : uint16_t {
-  DEC_Z      = 1 << 0,
-  DEC_SWEAT  = 1 << 1,
-  DEC_BANG   = 1 << 2,
-  DEC_HA     = 1 << 3,
-  DEC_HEARTS = 1 << 4,
-  DEC_BOOP   = 1 << 5,
-  DEC_QUEST  = 1 << 6,
-  DEC_WOW    = 1 << 7,
-  DEC_STARS  = 1 << 8,
-};
-
 const int EYE_GAP = 16;
 // Dual-screen mode: each eye gets a whole 128x32 panel, so stretch it into a big wide eye.
 const float BIG_W = 2.3f, BIG_H = 1.2f, BIG_LOOK = 1.6f;
@@ -513,6 +500,31 @@ void drawSingle(U8G2& g, int eye, int ox, float lookBias, int dy) {
     g.setFont(u8g2_font_4x6_tr);
     g.drawStr(ox + 1, 7, "no PC");
   }
+}
+
+FaceInfo info() {
+  FaceInfo f;
+  f.mood = alone ? MOOD_SLEEPY : moodNow;
+  f.decor = decor;
+  f.pending = pending;
+  f.alone = alone;
+  f.lookX = clampf(lookX + offX, -24, 24);
+  f.lookY = clampf(lookY + offY, -5, 5);
+  return f;
+}
+
+void drawEyeScaled(U8G2& g, int eye, int cx, int cy, float sx, float sy, int radius) {
+  uint32_t now = millis();
+  eye = eye ? 1 : 0;
+  float blink = (gag == GAG_NONE) ? blinkFactor(now) : 1.0f;
+  EyeStyle e = cur[eye];
+  e.w *= sx;
+  e.h *= sy;
+  int saved = radiusCap;
+  radiusCap = radius;
+  g.setDrawColor(1);
+  drawEye(g, cx, cy, e, blink, eye == 0, shape[eye], now);
+  radiusCap = saved;
 }
 
 void drawMini(U8G2& g, int cx, int cy, float scale, MiniExpr expr, uint32_t now) {

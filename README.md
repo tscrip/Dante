@@ -22,6 +22,8 @@ on your PC, which pushes simple values to the buddy over Bluetooth.
 
 ## How it behaves
 
+* **Screen type** — a 0.91" 128×32 OLED, or a 1602 character LCD (PCF8574 I2C) for development;
+  chosen on the *Device* page and switched live.
 * **One or two screens** — use a single display for both eyes, or give each eye its own display.
   With two, app screens either show the app on one display while the other eye watches it, or on both.
   Pick it (plus swap/upside-down fixes for mounting) on the *Device* page; the buddy remembers it.

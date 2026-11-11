@@ -22,6 +22,29 @@ enum Gag : uint8_t {
   GAG_COUNT
 };
 
+// Decorations around the eyes ("z", sweat, "!!", ...). Exposed so other renderers (the
+// character LCD) can show them their own way.
+enum FaceDecor : uint16_t {
+  DEC_Z      = 1 << 0,
+  DEC_SWEAT  = 1 << 1,
+  DEC_BANG   = 1 << 2,
+  DEC_HA     = 1 << 3,
+  DEC_HEARTS = 1 << 4,
+  DEC_BOOP   = 1 << 5,
+  DEC_QUEST  = 1 << 6,
+  DEC_WOW    = 1 << 7,
+  DEC_STARS  = 1 << 8,
+};
+
+// What the face is doing right now, for renderers that draw it differently.
+struct FaceInfo {
+  Mood mood;          // effective mood (sleepy when alone)
+  uint16_t decor;     // FaceDecor flags
+  int pending;
+  bool alone;
+  float lookX, lookY; // gaze incl. shakes/hops; x roughly -24..24, y -5..5
+};
+
 // Expressions for the small faces used in toasts / takeovers.
 enum MiniExpr : uint8_t { MINI_LOOK = 0, MINI_SURPRISED, MINI_HAPPY, MINI_WORRIED, MINI_ANGRY };
 
@@ -44,6 +67,11 @@ namespace Face {
   // eye 0 = left eye, 1 = right eye. lookBias pushes the gaze sideways (e.g. towards the
   // other screen when it shows an app), dy nudges it vertically (bounces).
   void drawSingle(U8G2& g, int eye, int ox, float lookBias, int dy);
+
+  FaceInfo info();
+  // Draws eye `eye` (0 left, 1 right) in its current state, scaled by (sx, sy), centred at (cx, cy),
+  // with corner radius at most `radius`. Used to rasterise tiny eyes into LCD glyphs.
+  void drawEyeScaled(U8G2& g, int eye, int cx, int cy, float sx, float sy, int radius);
 
   // Small pair of eyes centred at (cx, cy); `scale` 1.0 == full-size eyes.
   void drawMini(U8G2& g, int cx, int cy, float scale, MiniExpr expr, uint32_t now);

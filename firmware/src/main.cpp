@@ -12,6 +12,8 @@
 #include "Face.h"
 #include "Apps.h"
 #include "Displays.h"
+#include "Lcd.h"
+#include "LcdUi.h"
 
 // ---- screens ---------------------------------------------------------------------
 // Screen 0 is the face, screens 1..n are the PC-defined apps.
@@ -69,8 +71,11 @@ static void fillHello(JsonDocument& d) {
   d["t"] = "hello";
   d["fw"] = FW_VERSION;
   d["name"] = DEVICE_NAME;
+  d["display"] = Displays::kindName();
   d["screens"] = Displays::count();
   d["disp2"] = Displays::secondDetected();
+  d["oled"] = Displays::oledDetected();
+  d["lcd"] = Displays::lcdDetected();       // backpack address found at boot, 0 = none
 }
 
 static void sendHello() {
@@ -306,6 +311,22 @@ static void drawTakeoverEye(U8G2& g, int side, Alert& a, uint32_t now) {
   urgentFlash(g, a, t);
 }
 
+// 1602 character LCD: one screen, text-mode rendering, no slide transitions.
+static void renderLcd(Alert* alert, uint32_t now) {
+  static uint32_t lastLcd = 0;
+  if (now - lastLcd < LCD_FRAME_MS) return;
+  lastLcd = now;
+
+  bool light = Displays::settings().bright > 0;
+  Lcd::backlight(light);
+  Lcd::clear();
+  if (alert) LcdUi::takeover(alert->title, alert->txt, alert->lvl, alert->since, now, light);
+  else if (toast.active) LcdUi::toast(toast.title, toast.text, toast.start, now);
+  else if (screen == 0) LcdUi::face(now);
+  else if (App* a = Apps::get(screen - 1)) LcdUi::app(*a, screen, screenCount(), now);
+  Lcd::flush();
+}
+
 // ---- Arduino entry points -------------------------------------------------------------
 void setup() {
   randomSeed(esp_random());
@@ -338,6 +359,8 @@ void loop() {
   if (toast.active && now - toast.start > TOAST_MS) { toast.active = false; Face::react(); }   // double-take afterwards
   if (sliding && now - slideStart >= SLIDE_MS) sliding = false;
   Alert* alert = currentAlert();
+
+  if (Displays::isLcd()) { renderLcd(alert, now); return; }
 
   for (int side = 0; side < Displays::count(); side++) {
     U8G2& g = Displays::side(side);

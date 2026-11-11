@@ -111,3 +111,8 @@ th { color: var(--muted); font-weight: 600; font-size: .85rem; }
 #blazor-error-ui { display: none; position: fixed; bottom: 0; left: 0; right: 0; padding: .75rem 1rem; background: #7f1d1d; color: #fff; z-index: 1000; }
 #blazor-error-ui .dismiss { cursor: pointer; position: absolute; right: 1rem; }
 #blazor-error-ui .reload { color: #fff; }
+
+.lcd { display: inline-block; background: #2e5bff; border: 6px solid #1c2a55; border-radius: 6px; padding: 6px 8px; max-width: 100%; overflow: hidden; }
+.lcd-row { display: flex; gap: 2px; margin: 2px 0; }
+.lcd-row span { display: inline-block; width: 1.05em; height: 1.5em; line-height: 1.5em; text-align: center; background: #3d68ff;
+    color: #f2f6ff; font: 600 14px/1.5 ui-monospace, Menlo, monospace; white-space: pre; }

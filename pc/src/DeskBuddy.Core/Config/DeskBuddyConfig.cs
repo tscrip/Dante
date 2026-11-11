@@ -20,7 +20,12 @@ public sealed class DeviceSettings
     /// <summary>OLED contrast 0-255.</summary>
     public int Brightness { get; set; } = 200;
 
-    /// <summary>1 = both eyes on one screen; 2 = one screen per eye.</summary>
+    /// <summary>What kind of screen the buddy has.</summary>
+    public DisplayType Display { get; set; } = DisplayType.Oled128x32;
+    /// <summary>I2C address of the LCD's PCF8574 backpack (usually 0x27, or 0x3F for the PCF8574A).</summary>
+    public int LcdAddress { get; set; } = 0x27;
+
+    /// <summary>OLED only: 1 = both eyes on one screen; 2 = one screen per eye.</summary>
     public int ScreenCount { get; set; } = 1;
     /// <summary>Two screens only: what app screens look like.</summary>
     public DualLayout DualLayout { get; set; } = DualLayout.Watch;
@@ -32,6 +37,15 @@ public sealed class DeviceSettings
     public bool FlipScreen1 { get; set; }
     /// <summary>Rotate screen 2 by 180°.</summary>
     public bool FlipScreen2 { get; set; }
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter<DisplayType>))]
+public enum DisplayType
+{
+    /// <summary>0.91" SSD1306 128x32 OLED (one, or two for one-eye-per-screen).</summary>
+    Oled128x32,
+    /// <summary>16x2 HD44780 character LCD with a PCF8574 I2C backpack ("1602 I2C").</summary>
+    Lcd1602,
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<DualLayout>))]
