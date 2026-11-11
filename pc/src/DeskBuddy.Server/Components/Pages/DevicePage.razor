@@ -88,11 +88,12 @@
                     <option value="@DisplayType.Auto">Automatic: whatever the buddy finds</option>
                     <option value="@DisplayType.Oled128x32">OLED 0.91" 128×32 (SSD1306, I2C)</option>
                     <option value="@DisplayType.Lcd1602">LCD 1602 16×2 (PCF8574 I2C backpack)</option>
+                    <option value="@DisplayType.Lcd2004">LCD 2004 20×4 (PCF8574 I2C backpack)</option>
                 </select>
                 @if (Link.Online && Link.OledDetected is not null)
                 {
                     <span class="help">Buddy found at boot: OLED @(Link.OledDetected == true ? "✓" : "✗") ·
-                        LCD @LcdFoundText · using: <strong>@(Link.DeviceDisplay == "lcd1602" ? "LCD 1602" : "OLED")</strong></span>
+                        LCD @LcdFoundText · using: <strong>@(Link.DeviceLcd switch { LcdSize.Size20x4 => "LCD 2004", LcdSize.Size16x2 => "LCD 1602", _ => "OLED" })</strong></span>
                     @if (Link.OledDetected == false && Link.LcdDetectedAddress is not > 0)
                     {
                         <div class="notice error small">The buddy found no screen on its I2C bus. Check the wiring: SDA → GPIO 8, SCL → GPIO 9, plus power and GND.</div>
@@ -101,14 +102,24 @@
                     {
                         <div class="notice error small">OLED is selected but the buddy only found an LCD. Pick "LCD 1602" or "Automatic".</div>
                     }
-                    else if (_cfg.Device.Display == DisplayType.Lcd1602 && Link.LcdDetectedAddress is not > 0)
+                    else if (_cfg.Device.IsLcd && Link.LcdDetectedAddress is not > 0)
                     {
-                        <div class="notice error small">LCD 1602 is selected but the buddy didn't find an LCD backpack.</div>
+                        <div class="notice error small">An LCD is selected but the buddy didn't find an LCD backpack.</div>
                     }
                 }
             </label>
 
-            @if (_cfg.Device.Display == DisplayType.Lcd1602)
+            @if (_cfg.Device.Display == DisplayType.Auto)
+            {
+                <label class="field"><span>If the buddy finds an LCD, it's a</span>
+                    <select @bind="_cfg.Device.LcdSize">
+                        <option value="@LcdSize.Size16x2">1602 (16×2)</option>
+                        <option value="@LcdSize.Size20x4">2004 (20×4)</option>
+                    </select>
+                    <span class="help">Both sizes look the same on the I2C bus, so the buddy can't tell them apart by itself.</span>
+                </label>
+            }
+            @if (_cfg.Device.IsLcd)
             {
                 <label class="field"><span>LCD I2C address</span>
                     <select value="@_cfg.Device.LcdAddress" @onchange="SetLcdAddress">
@@ -168,7 +179,7 @@
             }
         </div>
         <div>
-            <ScreenLayoutPreview Settings="_cfg.Device" DetectedLcd="@(Link.DeviceDisplay == "lcd1602")" />
+            <ScreenLayoutPreview Settings="_cfg.Device" DetectedLcd="@Link.DeviceLcd" />
             <p class="muted small">The buddy remembers this, so it starts up in the right mode even before the PC connects.
                 Before it has ever been configured it uses whichever screen it finds.</p>
         </div>

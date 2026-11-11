@@ -25,12 +25,15 @@ The pins avoid the S3's strapping pins (0, 3, 45, 46), native USB (19/20), UART0
 GPIO 26-37, which the flash/PSRAM use on most S3 modules (octal-PSRAM "R8" modules included).
 All pins and timings live in [`src/config.h`](src/config.h).
 
-### Alternative screen: 1602 LCD (handy for development)
+### Alternative screen: 1602 (16×2) or 2004 (20×4) LCD
 
-A standard 16×2 character LCD with a PCF8574 I2C backpack works instead of the OLED. Pick
-**Screen type → LCD 1602** in the PC app (*Device → Screens*) and set its address (0x27 for PCF8574
+A standard character LCD with a PCF8574 I2C backpack works instead of the OLED: 16×2 ("1602")
+or 20×4 ("2004"). Pick **Screen type → LCD 1602** or **LCD 2004** in the PC app (*Device →
+Screens*) and set its address (0x27 for PCF8574
 backpacks, 0x3F for PCF8574A). Before it has been configured, the buddy uses whichever screen it finds
 at boot (OLED preferred), and it reports what it found so the PC app can suggest the address.
+Both LCD sizes look the same on the I2C bus, so with *Automatic* the PC app also says which size
+to expect (it remembers the last LCD type you picked).
 
 | Part              | ESP32 pin | Notes                                                        |
 |-------------------|-----------|--------------------------------------------------------------|
@@ -40,7 +43,9 @@ at boot (OLED preferred), and it reports what it found so the PC app can suggest
 
 On the LCD the eyes are 2×2 characters each, drawn with custom glyphs from the same eye shapes as
 the OLED face. They blink, glance around (moving across columns) and change shape with the mood.
-Apps use bars, sparklines and scrolling text, and urgent nudges flash the backlight. 5 V backpacks
+Apps use bars, sparklines and scrolling text, and urgent nudges flash the backlight. On a 20×4 the
+face also gets a mouth that follows the mood (`` `--' `` happy, `---` grumpy, `{OO}` meltdown...),
+app screens add a line of detail and a `< 2/5 >` page indicator, and messages wrap over two lines. 5 V backpacks
 pull SDA/SCL up to 5 V. The ESP32-S3's pins are **not** 5 V tolerant, so use a level shifter
 (or remove the backpack's pull-up resistors and rely on 3.3 V pull-ups).
 
@@ -178,7 +183,7 @@ Values tween smoothly, and level-2 (critical) values blink.
 | `src/Link.*`         | JSON-lines over BLE + USB (native + UART port), heartbeat     |
 | `src/BleUart.*`      | Bluetooth LE Nordic UART Service (S3 has no Classic BT)       |
 | `src/Displays.*`     | one/two OLEDs or the LCD, settings stored in flash            |
-| `src/Lcd*.*`         | 1602 LCD driver (PCF8574) and its 16x2 rendering              |
+| `src/Lcd*.*`         | 1602/2004 LCD driver (PCF8574) and the 16x2 / 20x4 layouts    |
 | `src/Buttons.*`      | debounced short/long presses                                  |
 | `src/Face.*`         | procedural eyes, moods, gags, mini faces                      |
 | `src/Apps.*`         | app store + the six visuals, marquee helper                   |

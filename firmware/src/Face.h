@@ -39,6 +39,7 @@ enum FaceDecor : uint16_t {
 // What the face is doing right now, for renderers that draw it differently.
 struct FaceInfo {
   Mood mood;          // effective mood (sleepy when alone)
+  Gag gag;            // gag playing right now, GAG_NONE otherwise
   uint16_t decor;     // FaceDecor flags
   int pending;
   bool alone;

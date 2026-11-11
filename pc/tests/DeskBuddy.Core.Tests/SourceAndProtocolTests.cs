@@ -49,7 +49,7 @@ public class ProtocolTests
             Brightness = 300, ScreenCount = 2, DualLayout = DualLayout.Mirror, ContentScreen = ScreenSide.Left,
             SwapScreens = true, FlipScreen2 = true,
         });
-        Assert.Equal("""{"t":"cfg","bright":255,"display":"auto","lcdAddr":39,"screens":2,"layout":"mirror","content":"left","swap":true,"flip1":false,"flip2":true}""",
+        Assert.Equal("""{"t":"cfg","bright":255,"display":"auto","lcdSize":"1602","lcdAddr":39,"screens":2,"layout":"mirror","content":"left","swap":true,"flip1":false,"flip2":true}""",
             msg.ToJsonString());
         Assert.Equal(1, DeviceProtocol.Cfg(new DeviceSettings { ScreenCount = 7 })["screens"]!.GetValue<int>());
     }
@@ -65,6 +65,36 @@ public class ProtocolTests
         // Default: let the buddy use whatever screen it finds, rather than forcing the OLED.
         Assert.Equal(DisplayType.Auto, new DeviceSettings().Display);
         Assert.Equal("auto", DeviceProtocol.Cfg(new DeviceSettings())["display"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Cfg_selects_the_20x4_lcd()
+    {
+        var lcd = DeviceProtocol.Cfg(new DeviceSettings { Display = DisplayType.Lcd2004 });
+        Assert.Equal("lcd2004", lcd["display"]!.GetValue<string>());
+        Assert.Equal("2004", lcd["lcdSize"]!.GetValue<string>());
+
+        // Automatic still tells the buddy which LCD to expect if it finds one.
+        var auto = DeviceProtocol.Cfg(new DeviceSettings { Display = DisplayType.Auto, LcdSize = LcdSize.Size20x4 });
+        Assert.Equal("auto", auto["display"]!.GetValue<string>());
+        Assert.Equal("2004", auto["lcdSize"]!.GetValue<string>());
+
+        // An explicitly picked type wins over the remembered size.
+        Assert.Equal("1602", DeviceProtocol.Cfg(new DeviceSettings { Display = DisplayType.Lcd1602, LcdSize = LcdSize.Size20x4 })["lcdSize"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Picking_an_lcd_type_remembers_its_size_for_automatic()
+    {
+        var cfg = new DeskBuddyConfig { Device = { Display = DisplayType.Lcd2004 } };
+        ConfigStore.Validate(cfg);
+        Assert.Equal(LcdSize.Size20x4, cfg.Device.LcdSize);
+        cfg.Device.Display = DisplayType.Auto;
+        Assert.Equal(LcdSize.Size20x4, cfg.Device.EffectiveLcdSize);
+        var json = System.Text.Json.JsonSerializer.Serialize(cfg, ConfigStore.JsonOptions);
+        Assert.DoesNotContain("isLcd", json);
+        Assert.DoesNotContain("effectiveLcdSize", json);
+        Assert.Contains("\"Size20x4\"", json);
     }
 
     [Fact]

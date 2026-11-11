@@ -28,6 +28,22 @@ public sealed class DeviceSettings
     public DisplayType Display { get; set; } = DisplayType.Auto;
     /// <summary>I2C address of the LCD's PCF8574 backpack (usually 0x27, or 0x3F for the PCF8574A).</summary>
     public int LcdAddress { get; set; } = 0x27;
+    /// <summary>
+    /// Size of the character LCD. Follows <see cref="Display"/> when an LCD type is picked; with
+    /// <see cref="DisplayType.Auto"/> it tells the buddy which LCD to expect (both look the same on the bus).
+    /// </summary>
+    public LcdSize LcdSize { get; set; } = LcdSize.Size16x2;
+
+    [JsonIgnore]
+    public bool IsLcd => Display is DisplayType.Lcd1602 or DisplayType.Lcd2004;
+    /// <summary>The LCD size in effect.</summary>
+    [JsonIgnore]
+    public LcdSize EffectiveLcdSize => Display switch
+    {
+        DisplayType.Lcd1602 => LcdSize.Size16x2,
+        DisplayType.Lcd2004 => LcdSize.Size20x4,
+        _ => LcdSize,
+    };
 
     /// <summary>OLED only: 1 = both eyes on one screen; 2 = one screen per eye.</summary>
     public int ScreenCount { get; set; } = 1;
@@ -61,7 +77,12 @@ public enum DisplayType
     Oled128x32,
     /// <summary>16x2 HD44780 character LCD with a PCF8574 I2C backpack ("1602 I2C").</summary>
     Lcd1602,
+    /// <summary>20x4 HD44780 character LCD with a PCF8574 I2C backpack ("2004 I2C").</summary>
+    Lcd2004,
 }
+
+[JsonConverter(typeof(JsonStringEnumConverter<LcdSize>))]
+public enum LcdSize { Size16x2, Size20x4 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<DualLayout>))]
 public enum DualLayout

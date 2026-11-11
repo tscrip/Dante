@@ -1,5 +1,5 @@
-@* Approximation of the 16x2 character LCD rendering (the real one uses custom 5x8 glyphs). *@
-<div class="lcd" title="Preview of the 16x2 LCD">
+@* Approximation of the character LCD rendering (the real one uses custom 5x8 glyphs). *@
+<div class="lcd" title="Preview of the @(Cols)x@(RowCount) LCD">
     @foreach (var row in Rows())
     {
         <div class="lcd-row">@foreach (var ch in row) { <span>@ch</span> }</div>
@@ -8,6 +8,10 @@
 
 @code {
     [Parameter] public bool Face { get; set; }
+    [Parameter] public LcdSize Size { get; set; } = LcdSize.Size16x2;
+    /// <summary>Position on the buddy's carousel ("2/5" on a 20x4).</summary>
+    [Parameter] public int Page { get; set; } = 1;
+    [Parameter] public int Pages { get; set; } = 1;
     [Parameter] public VisualKind Visual { get; set; }
     [Parameter] public string Name { get; set; } = "";
     [Parameter] public double? Value { get; set; }
@@ -18,19 +22,24 @@
     [Parameter] public int Level { get; set; }
     [Parameter] public bool Sample { get; set; } = true;
 
-    private const int Cols = 16;
+    private int Cols => Size == LcdSize.Size20x4 ? 20 : 16;
+    private int RowCount => Size == LcdSize.Size20x4 ? 4 : 2;
+    private string Center(string s) => (new string(' ', Math.Max(0, (Cols - s.Length) / 2)) + s).PadRight(Cols);
 
     private double? Shown => Value ?? (Sample ? Min + (Max - Min) * 0.6 : null);
     private double Fraction => Shown is { } v && Max > Min ? Math.Clamp((v - Min) / (Max - Min), 0, 1) : 0;
 
-    private static string Fit(string s) => (s.Length > Cols ? s[..Cols] : s).PadRight(Cols);
+    private string Fit(string s) => (s.Length > Cols ? s[..Cols] : s).PadRight(Cols);
 
     private IEnumerable<string> Rows()
     {
         if (Face)
         {
-            yield return "    ██    ██    ";
-            yield return "    ██    ██    ";
+            var eyes = Center("██    ██");
+            if (RowCount == 4) yield return Fit("");
+            yield return eyes;
+            yield return eyes;
+            if (RowCount == 4) yield return Center("`--'");
             yield break;
         }
 
@@ -44,10 +53,17 @@
         yield return Fit(Visual switch
         {
             VisualKind.Gauge or VisualKind.Bar => Bar(),
-            VisualKind.Sparkline => "▂▃▅▄▆▅▃▄▆▇▅▆▄▅▆▇"[..Cols],
+            VisualKind.Sparkline => "▂▃▅▄▆▅▃▄▆▇▅▆▄▅▆▇▃▅▆▇"[..Cols],
             VisualKind.Status => (Level == 0 ? "✓ " : Level == 1 ? "! " : "X ") + (Text ?? (Level == 0 ? "all good" : "needs a look")),
             _ => text,
         });
+
+        if (RowCount == 4)
+        {
+            // Extra text on row 3 (where 16x2 has no room), page indicator on row 4.
+            yield return Fit(Visual is VisualKind.Text or VisualKind.Status ? "" : Text ?? (Sample ? "resets 2h10m" : ""));
+            yield return Center($"<  {Page}/{Math.Max(Page, Pages)}  >");
+        }
     }
 
     private string Bar()

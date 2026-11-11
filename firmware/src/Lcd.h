@@ -2,13 +2,15 @@
 #include <Arduino.h>
 #include "config.h"
 
-// HD44780 16x2 character LCD behind a PCF8574 I2C backpack ("1602 I2C").
+// HD44780 character LCD behind a PCF8574 I2C backpack: 16x2 ("1602") or 20x4 ("2004").
 // Draw into a shadow buffer with put/print/glyph, then flush() sends only what changed.
 namespace Lcd {
   bool probe(uint8_t addr);          // is something answering at this address?
-  void begin(uint8_t addr);          // (re)initialise the controller (~60 ms)
+  void begin(uint8_t addr, uint8_t cols, uint8_t rows);   // (re)initialise (~60 ms)
   void end();                        // blank + backlight off
   bool active();
+  int cols();
+  int rows();
 
   void clear();                      // shadow buffer -> spaces
   void put(int col, int row, uint8_t ch);

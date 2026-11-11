@@ -4,13 +4,16 @@
 namespace {
 // PCF8574 pin mapping used by practically every 1602/2004 backpack.
 const uint8_t RS = 0x01, EN = 0x04, BL = 0x08;
-const uint8_t ROW_OFFSET[4] = { 0x00, 0x40, 0x14, 0x54 };
+uint8_t nCols = 16, nRows = 2;
+// DDRAM address of each row's first cell. Rows 3 and 4 continue rows 1 and 2, so their
+// offset depends on the width (0x14/0x54 on a 20x4, 0x10/0x50 on a 16x4).
+uint8_t rowOffset(int r) { return (uint8_t)((r & 1 ? 0x40 : 0x00) + (r >= 2 ? nCols : 0)); }
 
 uint8_t addr = LCD_DEFAULT_ADDR;
 bool running = false;
 bool light = true, lightSent = false;
 
-uint8_t want[LCD_ROWS][LCD_COLS], shown[LCD_ROWS][LCD_COLS];
+uint8_t want[LCD_MAX_ROWS][LCD_MAX_COLS], shown[LCD_MAX_ROWS][LCD_MAX_COLS];
 uint8_t glyphWant[8][8], glyphShown[8][8];
 bool glyphValid[8];
 
@@ -54,8 +57,10 @@ bool probe(uint8_t a) {
   return Wire.endTransmission() == 0;
 }
 
-void begin(uint8_t a) {
+void begin(uint8_t a, uint8_t c, uint8_t r) {
   addr = a;
+  nCols = c > LCD_MAX_COLS ? LCD_MAX_COLS : c;
+  nRows = r > LCD_MAX_ROWS ? LCD_MAX_ROWS : r;
   light = true;
   expander(0);
   delay(50);
@@ -64,7 +69,7 @@ void begin(uint8_t a) {
   nibble(0x30); delayMicroseconds(4500);
   nibble(0x30); delayMicroseconds(150);
   nibble(0x20);
-  command(0x28);              // 4-bit, 2 lines, 5x8 font
+  command(0x28);              // 4-bit, "2 lines" (also what 4-line modules use), 5x8 font
   command(0x0C);              // display on, no cursor, no blink
   command(0x01); delay(2);    // clear
   command(0x06);              // entry mode: increment, no shift
@@ -84,17 +89,19 @@ void end() {
 }
 
 bool active() { return running; }
+int cols() { return nCols; }
+int rows() { return nRows; }
 
 void clear() { memset(want, ' ', sizeof(want)); }
 
 void put(int col, int row, uint8_t ch) {
-  if (col < 0 || col >= LCD_COLS || row < 0 || row >= LCD_ROWS) return;
+  if (col < 0 || col >= nCols || row < 0 || row >= nRows) return;
   want[row][col] = ch;
 }
 
 void print(int col, int row, const char* s, int maxLen) {
   if (!s) return;
-  if (maxLen < 0) maxLen = LCD_COLS - col;
+  if (maxLen < 0) maxLen = nCols - col;
   for (int i = 0; s[i] && i < maxLen; i++) put(col + i, row, (uint8_t)s[i]);
 }
 
@@ -119,12 +126,12 @@ void flush() {
   }
 
   // Then the changed characters, as runs so the address auto-increments.
-  for (int r = 0; r < LCD_ROWS; r++) {
+  for (int r = 0; r < nRows; r++) {
     int c = 0;
-    while (c < LCD_COLS) {
+    while (c < nCols) {
       if (want[r][c] == shown[r][c]) { c++; continue; }
-      command(0x80 | (ROW_OFFSET[r] + c));
-      while (c < LCD_COLS && want[r][c] != shown[r][c]) {
+      command(0x80 | (rowOffset(r) + c));
+      while (c < nCols && want[r][c] != shown[r][c]) {
         data(want[r][c]);
         shown[r][c] = want[r][c];
         c++;

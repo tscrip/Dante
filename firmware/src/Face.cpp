@@ -505,6 +505,7 @@ void drawSingle(U8G2& g, int eye, int ox, float lookBias, int dy) {
 FaceInfo info() {
   FaceInfo f;
   f.mood = alone ? MOOD_SLEEPY : moodNow;
+  f.gag = gag;
   f.decor = decor;
   f.pending = pending;
   f.alone = alone;

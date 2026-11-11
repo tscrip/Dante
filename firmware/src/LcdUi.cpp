@@ -52,6 +52,10 @@ void loadSparkGlyphs() {   // slot k = a column k+1 pixels tall
   }
 }
 
+inline int W() { return Lcd::cols(); }
+inline int H() { return Lcd::rows(); }
+inline bool tall() { return Lcd::rows() >= 4; }
+
 // Text that doesn't fit scrolls (after a short pause) and wraps with a gap.
 void marquee(int col, int row, int width, const char* text, uint32_t now, uint32_t start) {
   int len = (int)strlen(text);
@@ -66,14 +70,39 @@ void marquee(int col, int row, int width, const char* text, uint32_t now, uint32
   }
 }
 
-void printRight(int row, const char* s, int rightCol = LCD_COLS - 1) {
+// Two rows of text, word-wrapped. If it's longer than two rows, the second row scrolls the rest.
+void wrap2(int col, int row, int width, const char* text, uint32_t now, uint32_t start) {
+  int len = (int)strlen(text);
+  if (len <= width) { Lcd::print(col, row, text, width); return; }
+  int cut = width;
+  while (cut > 0 && text[cut] != ' ') cut--;   // last space that keeps line 1 within width
+  if (cut < width / 2) cut = width;            // one long word: just split it
+  Lcd::print(col, row, text, cut);
+  const char* rest = text + cut + (text[cut] == ' ' ? 1 : 0);
+  marquee(col, row + 1, width, rest, now, start);
+}
+
+void printRight(int row, const char* s, int rightCol = -1) {
+  if (rightCol < 0) rightCol = W() - 1;
   int len = (int)strlen(s);
   Lcd::print(rightCol - len + 1, row, s, len);
+}
+
+void printCentered(int row, const char* s) {
+  int len = (int)strlen(s);
+  Lcd::print((W() - len) / 2, row, s, len);
 }
 
 void fmtValue(float v, char* out, size_t n) {
   if (fabsf(v - roundf(v)) < 0.05f || fabsf(v) >= 100) snprintf(out, n, "%.0f", v);
   else snprintf(out, n, "%.1f", v);
+}
+
+// "<  3/6  >"-style page indicator for the bottom row of a 20x4.
+void pageLine(int row, int page, int pages) {
+  char b[24];
+  snprintf(b, sizeof(b), "<  %d/%d  >", page, pages);
+  printCentered(row, b);
 }
 
 // ---- face -----------------------------------------------------------------------------
@@ -96,17 +125,42 @@ void eyeGlyphs(int eye, int cy) {
     }
 }
 
-void decorations(const FaceInfo& f, uint32_t now) {
+// Margin decorations around the eye rows (top = first eye row).
+void decorations(const FaceInfo& f, int top, uint32_t now) {
+  const int R = W() - 3;   // start of the right margin
   bool flip = (now / 300) % 2;
-  if (f.decor & DEC_Z)      { Lcd::put(13, flip ? 1 : 0, 'z'); Lcd::put(14, flip ? 0 : 1, 'Z'); }
-  if (f.decor & DEC_SWEAT)  Lcd::put(13, (now / 250) % 2, '\'');
-  if (f.decor & DEC_BANG)   Lcd::print(0, 1, "!!");
-  if (f.decor & DEC_QUEST)  Lcd::put(14, 0, '?');
-  if (f.decor & DEC_HA)     { Lcd::print(0, flip ? 0 : 1, "ha"); Lcd::print(13, flip ? 1 : 0, "ha"); }
-  if (f.decor & DEC_HEARTS) { Lcd::print(1, flip ? 0 : 1, "<3"); Lcd::print(13, flip ? 1 : 0, "<3"); }
-  if (f.decor & DEC_BOOP)   Lcd::print(12, 0, "boop");
-  if (f.decor & DEC_WOW)    { Lcd::put(1, 0, '!'); Lcd::put(14, 0, '!'); }
-  if (f.decor & DEC_STARS)  { if (flip) Lcd::put(1, 0, '*'); else Lcd::put(14, 1, '*'); }
+  int a = top + (flip ? 1 : 0), b = top + (flip ? 0 : 1);
+  if (f.decor & DEC_Z)      { Lcd::put(R, a, 'z'); Lcd::put(R + 1, b, 'Z'); }
+  if (f.decor & DEC_SWEAT)  Lcd::put(R, top + (now / 250) % 2, '\'');
+  if (f.decor & DEC_BANG)   Lcd::print(0, top + 1, "!!");
+  if (f.decor & DEC_QUEST)  Lcd::put(R + 1, top, '?');
+  if (f.decor & DEC_HA)     { Lcd::print(0, a, "ha"); Lcd::print(R, b, "ha"); }
+  if (f.decor & DEC_HEARTS) { Lcd::print(1, a, "<3"); Lcd::print(R, b, "<3"); }
+  if (f.decor & DEC_BOOP)   Lcd::print(W() - 4, top, "boop");
+  if (f.decor & DEC_WOW)    { Lcd::put(1, top, '!'); Lcd::put(R + 1, top, '!'); }
+  if (f.decor & DEC_STARS)  { if (flip) Lcd::put(1, top, '*'); else Lcd::put(R + 1, top + 1, '*'); }
+}
+
+// 20x4 only: a mouth under the eyes. (No backslash: the LCD's ROM shows it as a yen sign.)
+const char* mouth(const FaceInfo& f, uint32_t now) {
+  switch (f.gag) {
+    case GAG_LOVE:      return "`--'";
+    case GAG_DIZZY:     return (now / 300) % 2 ? "~~~" : "-~-";
+    case GAG_WINK:      return "`-'";
+    case GAG_LAUGH:     return (now / 150) % 2 ? "(DD)" : "(OO)";
+    case GAG_SURPRISED: return "O";
+    case GAG_BOOP:      return "o";
+    default: break;
+  }
+  switch (f.mood) {
+    case MOOD_HAPPY:    return "`--'";
+    case MOOD_CURIOUS:  return "o";
+    case MOOD_ANTSY:    return (now / 400) % 2 ? "~~~" : "-~-";
+    case MOOD_GRUMPY:   return "---";
+    case MOOD_MELTDOWN: return (now / 200) % 2 ? "{OO}" : "[OO]";
+    case MOOD_SLEEPY:   return (now / 1200) % 2 ? "o" : "-";
+  }
+  return "-";
 }
 
 } // namespace
@@ -120,22 +174,26 @@ void face(uint32_t now) {
   eyeGlyphs(0, cy);
   eyeGlyphs(1, cy);
 
-  decorations(f, now);
+  const int top = tall() ? 1 : 0;   // eye rows: 0-1 on a 16x2, 1-2 on a 20x4
+  decorations(f, top, now);
   if (f.pending > 0 && !f.alone) {
     char b[6];
     snprintf(b, sizeof(b), "[%d]", f.pending > 99 ? 99 : f.pending);
     printRight(0, b);
   }
   if (f.alone && (now / 700) % 2 == 0) Lcd::print(0, 0, "noPC");
+  if (tall()) printCentered(3, mouth(f, now));
 
   // Eyes last so nothing overwrites them; looking around moves them across the columns.
-  int look = (int)lroundf(f.lookX / 24.0f * 2.0f);
-  look = look < -2 ? -2 : (look > 2 ? 2 : look);
-  int cols[2] = { 4 + look, 10 + look };
+  int reach = W() >= 20 ? 3 : 2;
+  int look = (int)lroundf(f.lookX / 24.0f * reach);
+  look = look < -reach ? -reach : (look > reach ? reach : look);
+  int mid = W() / 2;
+  int cols[2] = { mid - 4 + look, mid + 2 + look };
   for (int e = 0; e < 2; e++)
     for (int r = 0; r < 2; r++)
       for (int c = 0; c < 2; c++)
-        Lcd::put(cols[e] + c, r, (uint8_t)(e * 4 + r * 2 + c));
+        Lcd::put(cols[e] + c, top + r, (uint8_t)(e * 4 + r * 2 + c));
 }
 
 void app(const App& a, int page, int pages, uint32_t now) {
@@ -150,19 +208,20 @@ void app(const App& a, int page, int pages, uint32_t now) {
     snprintf(right, sizeof(right), "%s%s", v, a.unit);
     if (blinkOff) memset(right, ' ', strlen(right));
   }
-  int nameRoom = LCD_COLS - (int)strlen(right) - (right[0] ? 1 : 0);
+  int nameRoom = W() - (int)strlen(right) - (right[0] ? 1 : 0);
   Lcd::print(0, 0, a.name, nameRoom);
   printRight(0, right);
 
-  // Row 1: depends on the visual.
+  // Row 1: the visual. On a 20x4, row 2 gets the extra text and row 3 the page indicator.
+  bool textShown = false;
   switch (a.vis) {
     case VIS_GAUGE:
     case VIS_BAR: {
       loadBarGlyphs();
       float frac = (a.hasValue && a.max > a.min) ? (a.shown - a.min) / (a.max - a.min) : 0;
       frac = frac < 0 ? 0 : (frac > 1 ? 1 : frac);
-      int px = (int)lroundf(frac * LCD_COLS * 5);
-      for (int c = 0; c < LCD_COLS; c++) {
+      int px = (int)lroundf(frac * W() * 5);
+      for (int c = 0; c < W(); c++) {
         int lit = px - c * 5;
         Lcd::put(c, 1, lit >= 5 ? FULL : (lit > 0 ? (uint8_t)(G_BAR1 + lit - 1) : (a.vis == VIS_GAUGE && c % 4 == 3 ? '.' : ' ')));
       }
@@ -175,8 +234,9 @@ void app(const App& a, int page, int pages, uint32_t now) {
         snprintf(b, sizeof(b), d > 0 ? "+%ld!" : "%ld", d);
         int col = (now / 120) % 2 ? 0 : 1;   // a little hop
         Lcd::print(col, 1, b);
-      } else {
-        marquee(0, 1, LCD_COLS, a.txt, now, a.changedAt);
+      } else if (!tall()) {
+        marquee(0, 1, W(), a.txt, now, a.changedAt);
+        textShown = true;
       }
       break;
     }
@@ -184,12 +244,12 @@ void app(const App& a, int page, int pages, uint32_t now) {
       loadSparkGlyphs();
       float lo = a.min, hi = a.max;
       if (hi <= lo) hi = lo + 1;
-      int n = a.histN < LCD_COLS ? a.histN : LCD_COLS;
+      int n = a.histN < W() ? a.histN : W();
       for (int i = 0; i < n; i++) {
         int idx = (a.histHead - n + i + HIST_LEN) % HIST_LEN;
         float f = (a.hist[idx] - lo) / (hi - lo);
         int lvl = (int)lroundf((f < 0 ? 0 : (f > 1 ? 1 : f)) * 7);
-        Lcd::put(LCD_COLS - n + i, 1, (uint8_t)lvl);
+        Lcd::put(W() - n + i, 1, (uint8_t)lvl);
       }
       break;
     }
@@ -198,7 +258,10 @@ void app(const App& a, int page, int pages, uint32_t now) {
       uint8_t icon = a.lvl == 0 ? (uint8_t)G_CHECK : (uint8_t)(a.lvl == 1 ? '!' : 'X');
       if (!blinkOff) Lcd::put(0, 1, icon);
       if (a.hasValue) { fmtValue(a.value, v, sizeof(v)); printRight(0, v); }
-      marquee(2, 1, LCD_COLS - 2, a.txt[0] ? a.txt : (a.lvl ? "needs a look" : "all good"), now, a.changedAt);
+      const char* t = a.txt[0] ? a.txt : (a.lvl ? "needs a look" : "all good");
+      if (tall()) wrap2(2, 1, W() - 2, t, now, a.changedAt);
+      else marquee(2, 1, W() - 2, t, now, a.changedAt);
+      textShown = true;
       break;
     }
     case VIS_TEXT:
@@ -207,11 +270,24 @@ void app(const App& a, int page, int pages, uint32_t now) {
       if (a.txt[0]) snprintf(buf, sizeof(buf), "%s", a.txt);
       else if (a.hasValue) { fmtValue(a.value, v, sizeof(v)); snprintf(buf, sizeof(buf), "%s %s", v, a.unit); }
       else snprintf(buf, sizeof(buf), "...");
-      marquee(0, 1, LCD_COLS, buf, now, a.changedAt);
+      if (tall()) wrap2(0, 1, W(), buf, now, a.changedAt);
+      else marquee(0, 1, W(), buf, now, a.changedAt);
+      textShown = true;
       break;
     }
   }
-  (void)page; (void)pages;
+
+  if (tall()) {
+    if (!textShown && a.txt[0]) marquee(0, 2, W(), a.txt, now, a.changedAt);
+    else if (!textShown && a.vis == VIS_GAUGE) {     // scale under the gauge bar
+      char lo[12], hi[12];
+      fmtValue(a.min, lo, sizeof(lo));
+      fmtValue(a.max, hi, sizeof(hi));
+      Lcd::print(0, 2, lo);
+      printRight(2, hi);
+    }
+    pageLine(3, page, pages);
+  }
 }
 
 void toast(const char* title, const char* text, uint32_t start, uint32_t now) {
@@ -219,8 +295,9 @@ void toast(const char* title, const char* text, uint32_t start, uint32_t now) {
   loadBarGlyphs();
   Lcd::print(0, 0, t < 600 ? ":O" : ":D");
   Lcd::put(2, 0, G_BELL);
-  Lcd::print(4, 0, title[0] ? title : "psst!", LCD_COLS - 4);
-  marquee(0, 1, LCD_COLS, text, now, start + 300);
+  Lcd::print(4, 0, title[0] ? title : "psst!", W() - 4);
+  if (tall()) wrap2(0, 1, W(), text, now, start + 300);
+  else marquee(0, 1, W(), text, now, start + 300);
 }
 
 void takeover(const char* title, const char* text, uint8_t lvl, uint32_t since, uint32_t now, bool light) {
@@ -228,10 +305,17 @@ void takeover(const char* title, const char* text, uint8_t lvl, uint32_t since, 
   // "Knock knock": everything jumps one column every 3 s.
   int k = (t % 3000) < 450 && ((t / 110) % 2) ? 1 : 0;
   const char* eyes = lvl >= 2 ? ((t / 400) % 2 ? "(>_<)" : "(O_O)") : ((t / 2000) % 2 ? "(o_o)" : "(O_O)");
+  const char* msg = text[0] ? text : "psst... over here!";
   Lcd::print(k, 0, eyes);
-  marquee(6 + k, 0, LCD_COLS - 6 - k, title, now, since);
-  if ((t / 4000) % 2 == 1) Lcd::print(0, 1, "SEL:ok </>:later");
-  else marquee(k, 1, LCD_COLS - k, text[0] ? text : "psst... over here!", now, since + 600);
+  marquee(6 + k, 0, W() - 6 - k, title, now, since);
+  if (tall()) {
+    wrap2(k, 1, W() - k, msg, now, since + 600);
+    printCentered(3, (t / 4000) % 2 ? "SEL:on it  </>:later" : (lvl >= 2 ? "!! URGENT !!" : "need you :)"));
+  } else if ((t / 4000) % 2 == 1) {
+    Lcd::print(0, 1, "SEL:ok </>:later");
+  } else {
+    marquee(k, 1, W() - k, msg, now, since + 600);
+  }
   // Urgent: the backlight flashes.
   Lcd::backlight(light && !(lvl >= 2 && (t % 1000) < 160));
 }

@@ -83,8 +83,15 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
     public int? DeviceScreens { get; private set; }
     /// <summary>Whether a second screen answered on the buddy's second display address.</summary>
     public bool? SecondScreenDetected { get; private set; }
-    /// <summary>Display type the buddy is using ("oled" / "lcd1602").</summary>
+    /// <summary>Display type the buddy is using ("oled" / "lcd1602" / "lcd2004").</summary>
     public string? DeviceDisplay { get; private set; }
+    /// <summary>The LCD size the buddy is driving, or null when it's using an OLED.</summary>
+    public LcdSize? DeviceLcd => DeviceDisplay switch
+    {
+        "lcd1602" => LcdSize.Size16x2,
+        "lcd2004" => LcdSize.Size20x4,
+        _ => null,
+    };
     /// <summary>Whether an OLED answered at boot.</summary>
     public bool? OledDetected { get; private set; }
     /// <summary>I2C address an LCD backpack answered at during boot (0 = none found).</summary>

@@ -22,8 +22,8 @@ on your PC, which pushes simple values to the buddy over Bluetooth LE (or USB).
 
 ## How it behaves
 
-* **Screen type** — a 0.91" 128×32 OLED, or a 1602 character LCD (PCF8574 I2C) for development;
-  chosen on the *Device* page and switched live.
+* **Screen type** — a 0.91" 128×32 OLED, or a 1602 (16×2) or 2004 (20×4) character LCD
+  (PCF8574 I2C); chosen on the *Device* page (or *Automatic*) and switched live.
 * **One or two screens** — use a single display for both eyes, or give each eye its own display.
   With two, app screens either show the app on one display while the other eye watches it, or on both.
   Pick it (plus swap/upside-down fixes for mounting) on the *Device* page; the buddy remembers it.
@@ -60,7 +60,7 @@ on your PC, which pushes simple values to the buddy over Bluetooth LE (or USB).
    Your browser opens <http://127.0.0.1:5280>. On **Device**, choose **Bluetooth LE** (no pairing;
    *Scan* finds `DeskBuddy`) or **USB cable** and its port. Bluetooth LE works on Windows and Linux
    (BlueZ); on macOS use USB for now.
-3. **Screens** (same page): OLED or 1602 LCD, one or two OLEDs.
+3. **Screens** (same page): Automatic, OLED (one or two), LCD 1602 or LCD 2004.
 4. **Claude Code page → Install hooks** so the buddy knows when a session is waiting for you.
 5. **Azure DevOps**: set `DESKBUDDY_ADO_PAT` (PAT with *Code: Read*) in your environment, then edit
    *PRs for me* → organisation URL → enable.

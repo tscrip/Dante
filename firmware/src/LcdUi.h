@@ -2,8 +2,8 @@
 #include <Arduino.h>
 #include "Apps.h"
 
-// How the buddy looks on a 16x2 character LCD. Each call fills the LCD shadow buffer;
-// the caller flushes.
+// How the buddy looks on a character LCD (16x2 or 20x4; the size comes from Lcd::cols()/rows()).
+// Each call fills the LCD shadow buffer; the caller flushes.
 namespace LcdUi {
   void face(uint32_t now);
   void app(const App& a, int page, int pages, uint32_t now);

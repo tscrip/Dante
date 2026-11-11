@@ -1,13 +1,14 @@
 @* Sketch of what each physical screen shows for the face and for an app screen. *@
 @using System.Globalization
 
-@if (Settings.Display == DisplayType.Lcd1602 || (Settings.Display == DisplayType.Auto && DetectedLcd))
+@if (Settings.IsLcd || (Settings.Display == DisplayType.Auto && DetectedLcd is not null))
 {
+    var size = Settings.IsLcd ? Settings.EffectiveLcdSize : DetectedLcd!.Value;
     <div class="layout-preview">
         <div class="small muted">Face</div>
-        <LcdPreview Face="true" />
+        <LcdPreview Face="true" Size="size" />
         <div class="small muted" style="margin-top:.5rem">App screens</div>
-        <LcdPreview Visual="VisualKind.Gauge" Name="Claude 5h" Value="63" Unit="%" />
+        <LcdPreview Visual="VisualKind.Gauge" Name="Claude 5h" Value="63" Unit="%" Size="size" />
     </div>
     return;
 }
@@ -20,8 +21,8 @@
 
 @code {
     [Parameter, EditorRequired] public DeviceSettings Settings { get; set; } = new();
-    /// <summary>With Automatic, whether the buddy reported that it's using the LCD.</summary>
-    [Parameter] public bool DetectedLcd { get; set; }
+    /// <summary>With Automatic: the LCD the buddy reported it's using, if any.</summary>
+    [Parameter] public LcdSize? DetectedLcd { get; set; }
 
     private const int Scale = 2;
 

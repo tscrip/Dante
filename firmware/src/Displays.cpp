@@ -73,9 +73,10 @@ void load() {
   // yet). The defaults in Settings (KIND_AUTO etc.) then stand, which is what we want.
   if (!prefs.begin("deskbuddy", true)) return;
   uint8_t kind = prefs.getUChar("display", Displays::KIND_AUTO);
-  cfg.kind = kind == Displays::KIND_LCD1602 ? Displays::KIND_LCD1602
+  cfg.kind = kind == Displays::KIND_LCD ? Displays::KIND_LCD
            : kind == Displays::KIND_OLED ? Displays::KIND_OLED : Displays::KIND_AUTO;
   cfg.lcdAddr = prefs.getUChar("lcdAddr", LCD_DEFAULT_ADDR);
+  cfg.lcdSize = prefs.getUChar("lcdSize", Displays::LCD_1602) == Displays::LCD_2004 ? Displays::LCD_2004 : Displays::LCD_1602;
   cfg.screens = prefs.getUChar("screens", 1);
   cfg.layout = (Displays::Layout)prefs.getUChar("layout", Displays::LAYOUT_WATCH);
   cfg.contentSide = prefs.getUChar("content", 1);
@@ -90,6 +91,7 @@ void save() {
   if (!prefs.begin("deskbuddy", false)) return;
   prefs.putUChar("display", cfg.kind);
   prefs.putUChar("lcdAddr", cfg.lcdAddr);
+  prefs.putUChar("lcdSize", cfg.lcdSize);
   prefs.putUChar("screens", cfg.screens);
   prefs.putUChar("layout", cfg.layout);
   prefs.putUChar("content", cfg.contentSide);
@@ -102,13 +104,15 @@ void save() {
 
 Displays::Kind resolve() {
   if (cfg.kind != Displays::KIND_AUTO) return cfg.kind;
-  return (!detected1 && lcdFound) ? Displays::KIND_LCD1602 : Displays::KIND_OLED;
+  return (!detected1 && lcdFound) ? Displays::KIND_LCD : Displays::KIND_OLED;
 }
 
 // Push the settings to the hardware.
 void apply() {
   active = resolve();
-  bool lcd = active == Displays::KIND_LCD1602;
+  bool lcd = active == Displays::KIND_LCD;
+  uint8_t cols = cfg.lcdSize == Displays::LCD_2004 ? 20 : 16;
+  uint8_t rows = cfg.lcdSize == Displays::LCD_2004 ? 4 : 2;
   // In automatic mode, talk to the backpack we actually found.
   uint8_t lcdAddr = (cfg.kind == Displays::KIND_AUTO && lcdFound) ? lcdFound : cfg.lcdAddr;
   for (int i = 0; i < 2; i++) {
@@ -124,7 +128,10 @@ void apply() {
   }
   if (lcd) {
     static uint8_t startedAt = 0;
-    if (!Lcd::active() || startedAt != lcdAddr) { Lcd::begin(lcdAddr); startedAt = lcdAddr; }
+    if (!Lcd::active() || startedAt != lcdAddr || Lcd::cols() != cols || Lcd::rows() != rows) {
+      Lcd::begin(lcdAddr, cols, rows);
+      startedAt = lcdAddr;
+    }
     Lcd::backlight(cfg.bright > 0);
   } else {
     Lcd::end();
@@ -163,8 +170,8 @@ const Settings& settings() { return cfg; }
 bool secondDetected() { return detected2; }
 bool oledDetected() { return detected1; }
 uint8_t lcdDetected() { return lcdFound; }
-bool isLcd() { return active == KIND_LCD1602; }
-const char* kindName() { return isLcd() ? "lcd1602" : "oled"; }
+bool isLcd() { return active == KIND_LCD; }
+const char* kindName() { return !isLcd() ? "oled" : cfg.lcdSize == LCD_2004 ? "lcd2004" : "lcd1602"; }
 int count() { return !isLcd() && cfg.screens == 2 ? 2 : 1; }
 
 U8G2& side(int s) {
@@ -178,7 +185,12 @@ bool applyConfig(JsonDocument& m) {
   if (m["bright"].is<int>()) cfg.bright = (uint8_t)constrain(m["bright"].as<int>(), 0, 255);
   if (m["display"].is<const char*>()) {
     const char* d = m["display"];
-    cfg.kind = !strcmp(d, "lcd1602") ? KIND_LCD1602 : !strcmp(d, "oled") ? KIND_OLED : KIND_AUTO;
+    bool is2004 = !strcmp(d, "lcd2004");
+    cfg.kind = (is2004 || !strcmp(d, "lcd1602")) ? KIND_LCD : !strcmp(d, "oled") ? KIND_OLED : KIND_AUTO;
+    if (cfg.kind == KIND_LCD) cfg.lcdSize = is2004 ? LCD_2004 : LCD_1602;
+  }
+  if (m["lcdSize"].is<const char*>()) {   // lets "auto" know which LCD to expect
+    cfg.lcdSize = strcmp(m["lcdSize"], "2004") == 0 ? LCD_2004 : LCD_1602;
   }
   if (m["lcdAddr"].is<int>()) cfg.lcdAddr = (uint8_t)constrain(m["lcdAddr"].as<int>(), 0x08, 0x77);
   if (m["screens"].is<int>()) cfg.screens = m["screens"].as<int>() == 2 ? 2 : 1;
@@ -188,7 +200,7 @@ bool applyConfig(JsonDocument& m) {
   if (m["flip1"].is<bool>()) cfg.flip[0] = m["flip1"];
   if (m["flip2"].is<bool>()) cfg.flip[1] = m["flip2"];
 
-  bool changed = before.kind != cfg.kind || before.lcdAddr != cfg.lcdAddr || before.screens != cfg.screens || before.layout != cfg.layout || before.contentSide != cfg.contentSide ||
+  bool changed = before.kind != cfg.kind || before.lcdAddr != cfg.lcdAddr || before.lcdSize != cfg.lcdSize || before.screens != cfg.screens || before.layout != cfg.layout || before.contentSide != cfg.contentSide ||
                  before.swap != cfg.swap || before.flip[0] != cfg.flip[0] || before.flip[1] != cfg.flip[1] ||
                  before.bright != cfg.bright;
   if (changed) { apply(); save(); }

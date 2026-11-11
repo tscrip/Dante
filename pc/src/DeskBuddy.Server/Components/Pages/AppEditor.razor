@@ -15,7 +15,7 @@
 
 <div class="row spread">
     <h1>@(_isNew ? "New app" : _app.Name)</h1>
-    <AppPreview Visual="_app.Visual" Name="@_app.Name" Value="_test?.Value" Min="_app.Min" Max="_app.Max" Unit="@_app.Unit" Text="@_test?.Text"
+    <AppPreview Page="PreviewPage" Pages="PreviewPages" Visual="_app.Visual" Name="@_app.Name" Value="_test?.Value" Min="_app.Min" Max="_app.Max" Unit="@_app.Unit" Text="@_test?.Text"
                  Level="LevelEvaluator.Evaluate(_app.Levels, _test?.Value)" />
 </div>
 
@@ -176,6 +176,9 @@
     private bool _messageIsError;
 
     private IDataSource? Source => Sources.Find(_app.SourceType);
+    private List<AppDefinition> OnCarousel => [.. _cfg.Apps.Where(a => a.Enabled && a.ShowInCarousel)];
+    private int PreviewPages => OnCarousel.Count + (OnCarousel.Contains(_app) ? 0 : 1);
+    private int PreviewPage => OnCarousel.Contains(_app) ? OnCarousel.IndexOf(_app) + 1 : PreviewPages;
     private string PushId => _app.Id.Length > 0 ? _app.Id : ConfigStore.Slug(_app.Name);
 
     protected override void OnParametersSet()

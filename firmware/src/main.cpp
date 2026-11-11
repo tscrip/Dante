@@ -311,7 +311,7 @@ static void drawTakeoverEye(U8G2& g, int side, Alert& a, uint32_t now) {
   urgentFlash(g, a, t);
 }
 
-// 1602 character LCD: one screen, text-mode rendering, no slide transitions.
+// Character LCD (16x2 / 20x4): one screen, text-mode rendering, no slide transitions.
 static void renderLcd(Alert* alert, uint32_t now) {
   static uint32_t lastLcd = 0;
   if (now - lastLcd < LCD_FRAME_MS) return;
@@ -323,7 +323,7 @@ static void renderLcd(Alert* alert, uint32_t now) {
   if (alert) LcdUi::takeover(alert->title, alert->txt, alert->lvl, alert->since, now, light);
   else if (toast.active) LcdUi::toast(toast.title, toast.text, toast.start, now);
   else if (screen == 0) LcdUi::face(now);
-  else if (App* a = Apps::get(screen - 1)) LcdUi::app(*a, screen, screenCount(), now);
+  else if (App* a = Apps::get(screen - 1)) LcdUi::app(*a, screen, Apps::count(), now);   // "app 2 of 5"
   Lcd::flush();
 }
 
