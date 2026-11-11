@@ -2,7 +2,7 @@
 #include <Arduino.h>
 #include "Apps.h"
 
-// How HANK looks on a character LCD (16x2 or 20x4; the size comes from Lcd::cols()/rows()).
+// How DANTE looks on a character LCD (16x2 or 20x4; the size comes from Lcd::cols()/rows()).
 // Each call fills the LCD shadow buffer; the caller flushes.
 namespace LcdUi {
   void face(uint32_t now);

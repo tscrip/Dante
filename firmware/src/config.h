@@ -2,8 +2,8 @@
 #include <Arduino.h>
 
 // ---- Identity ---------------------------------------------------------------
-#define FW_VERSION      "2.3.0"
-#define DEVICE_NAME     "HANK"
+#define FW_VERSION      "2.4.0"
+#define DEVICE_NAME     "DANTE"
 
 // ---- Board: ESP32-S3 (e.g. ESP32-S3-DevKitC-1) --------------------------------
 // Pins avoid the S3's strapping pins (0, 3, 45, 46), native USB (19, 20), the UART0
@@ -29,7 +29,7 @@
 
 // ---- Alternative display: 1602 / 2004 character LCD with a PCF8574 I2C backpack
 // Shares the first I2C bus (GPIO 8/9). Choose OLED or LCD in the PC app; with nothing
-// chosen yet HANK picks whichever it finds at boot. Backpacks are usually at 0x27
+// chosen yet DANTE picks whichever it finds at boot. Backpacks are usually at 0x27
 // (PCF8574) or 0x3F (PCF8574A); the address is also set from the PC app.
 // Sizes supported: 16x2 ("1602") and 20x4 ("2004"); the size is set from the PC app.
 #define LCD_MAX_COLS    20
@@ -49,7 +49,7 @@
 // ---- Link ---------------------------------------------------------------------
 #define USB_BAUD        115200
 #define RX_LINE_MAX        1024
-#define PC_TIMEOUT_MS   30000UL   // no message for this long => HANK feels alone
+#define PC_TIMEOUT_MS   30000UL   // no message for this long => DANTE feels alone
 
 // ---- Timing -------------------------------------------------------------------
 #define FRAME_MS        33        // ~30 FPS

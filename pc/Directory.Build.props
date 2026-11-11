@@ -5,8 +5,8 @@
     picks the Windows target automatically, so `dotnet run` works unchanged on every OS.
   -->
   <PropertyGroup>
-    <HankTfm Condition="'$(HankTfm)' == '' And ($([MSBuild]::IsOSPlatform('Windows')) Or $(RuntimeIdentifier.StartsWith('win')))">net10.0-windows10.0.19041.0</HankTfm>
-    <HankTfm Condition="'$(HankTfm)' == ''">net10.0</HankTfm>
+    <DanteTfm Condition="'$(DanteTfm)' == '' And ($([MSBuild]::IsOSPlatform('Windows')) Or $(RuntimeIdentifier.StartsWith('win')))">net10.0-windows10.0.19041.0</DanteTfm>
+    <DanteTfm Condition="'$(DanteTfm)' == ''">net10.0</DanteTfm>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
 </Project>
