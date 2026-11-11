@@ -1,0 +1,14 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+
+# PlatformIO
+.pio/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

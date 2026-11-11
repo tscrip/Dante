@@ -1,0 +1,82 @@
+@page "/device"
+@inherits LiveComponent
+@inject ConfigStore Store
+
+<PageTitle>Device · DeskBuddy</PageTitle>
+
+<h1>Device</h1>
+
+<div class="grid">
+    <div class="panel">
+        <h2>Connection</h2>
+        <p>Status: <strong class="@(Link.Online ? "ok" : Link.Status == LinkStatus.Connected ? "warn" : "crit")">@(Link.Online ? "Online" : Link.Status.ToString())</strong>
+            @if (Link.Firmware is not null) { <span class="muted small"> · firmware @Link.Firmware</span> }</p>
+        @if (Link.LastError is not null) { <p class="crit small">@Link.LastError</p> }
+
+        <label class="field"><span>Port</span>
+            <div class="row" style="flex-wrap:nowrap">
+                <select @bind="_cfg.Device.PortName">
+                    <option value="">(choose)</option>
+                    @foreach (var p in _ports) { <option value="@p">@p</option> }
+                    @if (!string.IsNullOrEmpty(_cfg.Device.PortName) && !_ports.Contains(_cfg.Device.PortName))
+                    { <option value="@_cfg.Device.PortName">@_cfg.Device.PortName</option> }
+                </select>
+                <button class="btn sm" @onclick="RefreshPorts" title="Rescan">⟳</button>
+            </div>
+            <span class="help">Windows: the "Outgoing" COM port of the paired DeskBuddy · Linux: /dev/rfcomm0 · macOS: /dev/cu.DeskBuddy · USB works too.</span>
+        </label>
+        <label class="field"><span>Or type a port</span><input type="text" @bind="_cfg.Device.PortName" placeholder="COM5" /></label>
+        <label class="field"><span>Baud (USB only)</span><input type="number" @bind="_cfg.Device.BaudRate" /></label>
+        <label class="check"><input type="checkbox" @bind="_cfg.Device.AutoConnect" /> Connect (and keep reconnecting)</label>
+        <label class="field"><span>Screen brightness: @_cfg.Device.Brightness</span>
+            <input type="range" min="0" max="255" @bind="_cfg.Device.Brightness" @bind:event="oninput" /></label>
+        <div class="row">
+            <button class="btn primary" @onclick="Save">Save</button>
+            <button class="btn" @onclick="Link.Reconnect">Reconnect</button>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>Poke it</h2>
+        <label class="field"><span>Say</span><input type="text" @bind="_say" maxlength="63" /></label>
+        <div class="row">
+            <button class="btn" @onclick="() => Engine.Say(_say)">Say it</button>
+            <button class="btn" @onclick='() => Engine.TestAlert("Hey! Over here!", 1)'>Test nudge</button>
+            <button class="btn" @onclick='() => Engine.TestAlert("Something is on fire!", 2)'>Test urgent</button>
+        </div>
+        <p class="muted small" style="margin-top:1rem">Buttons on the buddy: <strong>LEFT/RIGHT</strong> browse apps ·
+            <strong>SELECT</strong> on the face plays a gag, on an app opens its link, long-press refreshes everything ·
+            during a nudge SELECT = "I'm on it", LEFT/RIGHT = snooze.</p>
+    </div>
+</div>
+
+<div class="panel">
+    <h2>Traffic</h2>
+    <div class="log">
+        @foreach (var line in Link.RecentLog().Reverse())
+        {
+            <div class="@(line.Outgoing ? "out" : "")">@line.At.ToLocalTime().ToString("HH:mm:ss") @(line.Outgoing ? "→" : "←") @line.Text</div>
+        }
+    </div>
+</div>
+
+@code {
+    private DeskBuddyConfig _cfg = new();
+    private IReadOnlyList<string> _ports = [];
+    private string _say = "Hello desk friend!";
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _cfg = Store.Snapshot();
+        RefreshPorts();
+    }
+
+    private void RefreshPorts() => _ports = SerialTransport.ListPorts();
+
+    private void Save()
+    {
+        Store.Save(_cfg);
+        _cfg = Store.Snapshot();
+    }
+}
