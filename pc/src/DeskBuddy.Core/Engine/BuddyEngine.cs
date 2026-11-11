@@ -348,7 +348,7 @@ public sealed class BuddyEngine : BackgroundService
 
     private void SendEverything(bool greeting)
     {
-        _link.Send(DeviceProtocol.Cfg(_cfg.Device.Brightness));
+        _link.Send(DeviceProtocol.Cfg(_cfg.Device));
         _link.Send(DeviceProtocol.Apps(_apps.Where(r => r.Def.ShowInCarousel).Select(r => r.Def)));
         foreach (var r in _apps.Where(r => r.Def.ShowInCarousel && r.Reading is not null))
             _link.Send(DeviceProtocol.Value(r.Def.Id, r.Reading!.Value, r.Reading.Text, r.Level, null));

@@ -42,6 +42,19 @@ public class ProtocolTests
     }
 
     [Fact]
+    public void Cfg_carries_screen_layout()
+    {
+        var msg = DeviceProtocol.Cfg(new DeviceSettings
+        {
+            Brightness = 300, ScreenCount = 2, DualLayout = DualLayout.Mirror, ContentScreen = ScreenSide.Left,
+            SwapScreens = true, FlipScreen2 = true,
+        });
+        Assert.Equal("""{"t":"cfg","bright":255,"screens":2,"layout":"mirror","content":"left","swap":true,"flip1":false,"flip2":true}""",
+            msg.ToJsonString());
+        Assert.Equal(1, DeviceProtocol.Cfg(new DeviceSettings { ScreenCount = 7 })["screens"]!.GetValue<int>());
+    }
+
+    [Fact]
     public void Parses_device_events_and_ignores_noise()
     {
         var evt = DeviceEvent.TryParse("""{"t":"btn","b":"sel","long":true,"scr":"prs"}""");
@@ -205,11 +218,15 @@ public class ConfigTests
         var cfg = store.Snapshot();
         cfg.Personality = Personality.Dramatic;
         cfg.Apps[0].Takeover.Mode = TakeoverMode.WhenAbove;
+        cfg.Device.ScreenCount = 2;
+        cfg.Device.ContentScreen = ScreenSide.Left;
         store.Save(cfg);
 
         var reloaded = new ConfigStore(path).Snapshot();
         Assert.Equal(Personality.Dramatic, reloaded.Personality);
         Assert.Equal(TakeoverMode.WhenAbove, reloaded.Apps[0].Takeover.Mode);
+        Assert.Equal(2, reloaded.Device.ScreenCount);
+        Assert.Equal(ScreenSide.Left, reloaded.Device.ContentScreen);
         Assert.Contains("\"WhenAbove\"", File.ReadAllText(path));
         Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
     }

@@ -1,6 +1,6 @@
 # DeskBuddy
 
-A little desk companion with a personality: an ESP32 with a 0.91" 128×32 OLED and three buttons that
+A little desk companion with a personality: an ESP32 with one or two 0.91" 128×32 OLEDs and three buttons that
 sits on your desk, pulls faces, and nudges you when things are waiting on you. All the thinking happens
 on your PC, which pushes simple values to the buddy over Bluetooth.
 
@@ -21,6 +21,10 @@ on your PC, which pushes simple values to the buddy over Bluetooth.
 | [`docs/protocol.md`](docs/protocol.md) | The wire protocol between the two. |
 
 ## How it behaves
+
+* **One or two screens** — use a single display for both eyes, or give each eye its own display.
+  With two, app screens either show the app on one display while the other eye watches it, or on both.
+  Pick it (plus swap/upside-down fixes for mounting) on the *Device* page; the buddy remembers it.
 
 * **Face screen** — procedural robot eyes that blink, glance around and react. Press **SELECT** (top) for a
   random gag: heart eyes, dizzy, wink, laughing `> <`, surprised, "boop!".

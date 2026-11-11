@@ -51,6 +51,58 @@
 </div>
 
 <div class="panel">
+    <h2>Screens</h2>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+        <div>
+            <label class="check"><input type="radio" name="screens" checked="@(_cfg.Device.ScreenCount != 2)" @onchange="() => _cfg.Device.ScreenCount = 1" />
+                <span><strong>1 screen</strong> <span class="muted small">— both eyes on one display</span></span></label>
+            <label class="check"><input type="radio" name="screens" checked="@(_cfg.Device.ScreenCount == 2)" @onchange="() => _cfg.Device.ScreenCount = 2" />
+                <span><strong>2 screens</strong> <span class="muted small">— one big eye per display</span></span></label>
+
+            @if (_cfg.Device.ScreenCount == 2)
+            {
+                @if (Link.Online && Link.SecondScreenDetected == false)
+                {
+                    <div class="notice error small">The buddy didn't find a second screen when it started. Check the wiring
+                        (second screen on SDA 18 / SCL 19 by default) and restart it.</div>
+                }
+                <h3 class="small muted">On app screens</h3>
+                <label class="check"><input type="radio" name="layout" checked="@(_cfg.Device.DualLayout == DualLayout.Watch)" @onchange="() => _cfg.Device.DualLayout = DualLayout.Watch" />
+                    <span>App on one screen, the other eye watches it</span></label>
+                <label class="check"><input type="radio" name="layout" checked="@(_cfg.Device.DualLayout == DualLayout.Mirror)" @onchange="() => _cfg.Device.DualLayout = DualLayout.Mirror" />
+                    <span>App on both screens</span></label>
+                @if (_cfg.Device.DualLayout == DualLayout.Watch)
+                {
+                    <label class="field"><span>App goes on the</span>
+                        <select @bind="_cfg.Device.ContentScreen">
+                            <option value="@ScreenSide.Right">right screen</option>
+                            <option value="@ScreenSide.Left">left screen</option>
+                        </select>
+                        <span class="help">Speech bubbles and nudge messages appear there too.</span>
+                    </label>
+                }
+                <h3 class="small muted">Mounting</h3>
+                <label class="check"><input type="checkbox" @bind="_cfg.Device.SwapScreens" /> Swap left and right screens</label>
+            }
+            <label class="check"><input type="checkbox" @bind="_cfg.Device.FlipScreen1" /> Upside down: @(_cfg.Device.ScreenCount == 2 ? "screen 1" : "screen")</label>
+            @if (_cfg.Device.ScreenCount == 2)
+            {
+                <label class="check"><input type="checkbox" @bind="_cfg.Device.FlipScreen2" /> Upside down: screen 2</label>
+            }
+            <button class="btn primary" @onclick="Save" style="margin-top:.5rem">Save &amp; send to buddy</button>
+            @if (_savedAt is { } at && DateTimeOffset.UtcNow - at < TimeSpan.FromSeconds(4))
+            {
+                <span class="ok small" style="margin-left:.5rem">Sent@(Link.Online ? "" : " (will apply when the buddy connects)")</span>
+            }
+        </div>
+        <div>
+            <ScreenLayoutPreview Settings="_cfg.Device" />
+            <p class="muted small">The buddy remembers this, so it starts up in the right mode even before the PC connects.</p>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
     <h2>Traffic</h2>
     <div class="log">
         @foreach (var line in Link.RecentLog().Reverse())
@@ -74,9 +126,12 @@
 
     private void RefreshPorts() => _ports = SerialTransport.ListPorts();
 
+    private DateTimeOffset? _savedAt;
+
     private void Save()
     {
         Store.Save(_cfg);
         _cfg = Store.Snapshot();
+        _savedAt = DateTimeOffset.UtcNow;
     }
 }

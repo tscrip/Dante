@@ -74,6 +74,7 @@ public sealed class ConfigStore
             app.Takeover.Level = Math.Clamp(app.Takeover.Level, 1, 2);
         }
         config.Device.Brightness = Math.Clamp(config.Device.Brightness, 0, 255);
+        config.Device.ScreenCount = config.Device.ScreenCount == 2 ? 2 : 1;
     }
 
     public static string Slug(string s)

@@ -21,6 +21,24 @@ Any classic ESP32 with Bluetooth Classic works (ESP32-WROOM / `esp32dev`). The E
 have no Bluetooth Classic, so they can only use the USB serial link. All pins and timings
 live in [`src/config.h`](src/config.h).
 
+### Optional: a second screen (one per eye)
+
+Choose **1 or 2 screens** in the PC app (*Device → Screens*); the buddy stores the choice in flash.
+With two screens each display shows one big eye. On app screens the PC app picks the layout:
+the app on one screen while the other eye *watches it*, or the app on both screens.
+
+| Part                          | ESP32 pin | Notes                                              |
+|-------------------------------|-----------|----------------------------------------------------|
+| 2nd OLED `SDA`                | GPIO 18   | second I2C bus (`Wire1`)                           |
+| 2nd OLED `SCL`                | GPIO 19   |                                                    |
+| 2nd OLED `VCC` / `GND`        | 3V3 / GND |                                                    |
+
+Most 0.91" modules are fixed at address `0x3C`, so two of them can't share a bus — hence the second
+bus. If your second module has an address jumper set to `0x3D`, you can put it on GPIO 21/22 instead:
+set `DISP2_SAME_BUS 1` and `DISP2_I2C_ADDR 0x3D` in `src/config.h`. Screens mounted the wrong way round
+or upside down are fixed in the PC app (swap / flip), no rewiring needed. The buddy reports whether it
+found the second screen at boot, and the PC app warns you if it didn't.
+
 ## Build and flash
 
 ```bash

@@ -1,5 +1,5 @@
 // DeskBuddy firmware: a tiny desk companion with opinions.
-// ESP32 + SSD1306 128x32 (I2C) + 3 buttons, talking JSON lines over Bluetooth SPP / USB.
+// ESP32 + one or two SSD1306 128x32 (I2C) + 3 buttons, talking JSON lines over Bluetooth SPP / USB.
 // Protocol: docs/protocol.md
 #include <Arduino.h>
 #include <Wire.h>
@@ -11,8 +11,7 @@
 #include "Buttons.h"
 #include "Face.h"
 #include "Apps.h"
-
-U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, PIN_SCL, PIN_SDA);
+#include "Displays.h"
 
 // ---- screens ---------------------------------------------------------------------
 // Screen 0 is the face, screens 1..n are the PC-defined apps.
@@ -66,11 +65,17 @@ static void showToast(const char* title, const char* text) {
 }
 
 // ---- outgoing messages ----------------------------------------------------------
-static void sendHello() {
-  JsonDocument d;
+static void fillHello(JsonDocument& d) {
   d["t"] = "hello";
   d["fw"] = FW_VERSION;
   d["name"] = DEVICE_NAME;
+  d["screens"] = Displays::count();
+  d["disp2"] = Displays::secondDetected();
+}
+
+static void sendHello() {
+  JsonDocument d;
+  fillHello(d);
   Link::send(d);
 }
 
@@ -136,7 +141,7 @@ static void onMessage(JsonDocument& m) {
   } else if (!strcmp(t, "say")) {
     showToast("", m["txt"] | "");
   } else if (!strcmp(t, "cfg")) {
-    if (m["bright"].is<int>()) u8g2.setContrast((uint8_t)constrain(m["bright"].as<int>(), 0, 255));
+    if (Displays::applyConfig(m)) sliding = false;
   }
 }
 
@@ -182,20 +187,42 @@ static void handleButton(const ButtonEvent& ev) {
 }
 
 // ---- rendering ------------------------------------------------------------------------
-static void renderScreen(int s, int ox, uint32_t now) {
-  if (s == 0) Face::draw(u8g2, ox);
-  else Apps::draw(u8g2, s - 1, ox, s, screenCount(), now);
+// Everything below draws into a given panel. Which panel shows what:
+//
+//   1 screen            : face (both eyes) or the app, as always.
+//   2 screens, face     : left panel = left eye, right panel = right eye.
+//   2 screens, app      : WATCH  - the app on the content side, the other eye watches it;
+//                         MIRROR - the app on both panels.
+static bool dual() { return Displays::count() == 2; }
+static int contentSide() { return Displays::settings().contentSide; }
+static bool mirror() { return Displays::settings().layout == Displays::LAYOUT_MIRROR; }
+
+// Does this side show "content" (apps, bubbles, takeover text) rather than a lone eye?
+static bool showsContent(int side) { return !dual() || mirror() || side == contentSide(); }
+
+// The watching eye glances towards the other panel.
+static float lookTowardContent(int side) { return side < contentSide() ? 26.0f : -26.0f; }
+
+static void renderOn(U8G2& g, int side, int s, uint32_t now) {
+  if (!dual()) {
+    if (s == 0) Face::draw(g, 0);
+    else Apps::draw(g, s - 1, 0, s, screenCount(), now);
+    return;
+  }
+  if (s == 0) { Face::drawSingle(g, side, 0, 0, 0); return; }
+  if (showsContent(side)) Apps::draw(g, s - 1, 0, s, screenCount(), now);
+  else Face::drawSingle(g, side, 0, lookTowardContent(side), 0);
 }
 
 static float easeInOut(float p) { return p < 0.5f ? 2 * p * p : 1 - powf(-2 * p + 2, 2) / 2; }
 
 // Slide transition: render both screens into separate buffers and splice columns.
 // (SSD1306 buffer = 4 pages x 128 columns, one byte per column per page.)
-static void renderSlide(uint32_t now) {
+static void renderSlide(U8G2& g, int side, uint32_t now) {
   static uint8_t a[512], b[512];
-  uint8_t* buf = u8g2.getBufferPtr();
-  u8g2.clearBuffer(); renderScreen(slideFrom, 0, now); memcpy(a, buf, sizeof(a));
-  u8g2.clearBuffer(); renderScreen(slideTo, 0, now);   memcpy(b, buf, sizeof(b));
+  uint8_t* buf = g.getBufferPtr();
+  g.clearBuffer(); renderOn(g, side, slideFrom, now); memcpy(a, buf, sizeof(a));
+  g.clearBuffer(); renderOn(g, side, slideTo, now);   memcpy(b, buf, sizeof(b));
 
   float p = easeInOut((float)(now - slideStart) / SLIDE_MS);
   int s = (int)(p * 128);
@@ -210,70 +237,86 @@ static void renderSlide(uint32_t now) {
   }
 }
 
-static void drawToast(uint32_t now) {
+static void drawToast(U8G2& g, uint32_t now) {
   uint32_t t = now - toast.start;
-  if (t > TOAST_MS) { toast.active = false; Face::react(); return; }   // double-take afterwards
   // Bubble pops in from the right.
   int slide = t < 160 ? (int)((160 - t) * 96 / 160) : 0;
   int bx = 30 + slide, by = 1, bw = 97, bh = 30;
-  u8g2.setDrawColor(0);
-  u8g2.drawBox(0, 0, 128, 32);
-  u8g2.setDrawColor(1);
-  Face::drawMini(u8g2, 14, 15 + (int)(sinf(t * 0.012f) * 2), 0.42f, t < 600 ? MINI_SURPRISED : MINI_HAPPY, now);
-  u8g2.drawRFrame(bx, by, bw, bh, 4);
-  u8g2.drawTriangle(bx, 13, bx, 19, bx - 4, 16);   // bubble tail
-  u8g2.setDrawColor(0); u8g2.drawVLine(bx, 14, 5); u8g2.setDrawColor(1);
-  u8g2.drawLine(bx, 13, bx - 4, 16); u8g2.drawLine(bx - 4, 16, bx, 19);
+  g.setDrawColor(0);
+  g.drawBox(0, 0, 128, 32);
+  g.setDrawColor(1);
+  Face::drawMini(g, 14, 15 + (int)(sinf(t * 0.012f) * 2), 0.42f, t < 600 ? MINI_SURPRISED : MINI_HAPPY, now);
+  g.drawRFrame(bx, by, bw, bh, 4);
+  g.drawTriangle(bx, 13, bx, 19, bx - 4, 16);   // bubble tail
+  g.setDrawColor(0); g.drawVLine(bx, 14, 5); g.setDrawColor(1);
+  g.drawLine(bx, 13, bx - 4, 16); g.drawLine(bx - 4, 16, bx, 19);
 
   int textY = 20;
   if (toast.title[0]) {
-    u8g2.setFont(u8g2_font_4x6_tr);
-    u8g2.drawStr(bx + 4, by + 7, toast.title);
+    g.setFont(u8g2_font_4x6_tr);
+    g.drawStr(bx + 4, by + 7, toast.title);
     textY = 24;
   }
-  u8g2.setFont(u8g2_font_6x10_tr);
-  drawMarquee(u8g2, toast.text, bx + 3, textY, bw - 6, now, toast.start + 300, by + 1, by + bh - 1);
+  g.setFont(u8g2_font_6x10_tr);
+  drawMarquee(g, toast.text, bx + 3, textY, bw - 6, now, toast.start + 300, by + 1, by + bh - 1);
 }
 
-static void drawTakeover(Alert& a, uint32_t now) {
-  uint32_t t = now - a.since;
-  // "Knock knock": shake every 3 s.
+// "Knock knock": shake every 3 s.
+static int knockOffset(uint32_t t) {
   uint32_t ph = t % 3000;
-  int ox = ph < 450 ? (int)(sinf(ph * 0.09f) * 3) : 0;
+  return ph < 450 ? (int)(sinf(ph * 0.09f) * 3) : 0;
+}
+
+static void urgentFlash(U8G2& g, Alert& a, uint32_t t) {
+  if (a.lvl >= 2 && (t % 1000) < 140) {
+    g.setDrawColor(2);
+    g.drawBox(0, 0, 128, 32);
+    g.setDrawColor(1);
+  }
+}
+
+static void drawTakeover(U8G2& g, Alert& a, uint32_t now) {
+  uint32_t t = now - a.since;
+  int ox = knockOffset(t);
 
   int bounce = (int)(-fabsf(sinf(t * 0.008f)) * 3);
   MiniExpr e = a.lvl >= 2 ? ((t / 1500) % 2 ? MINI_WORRIED : MINI_SURPRISED) : ((t / 2000) % 2 ? MINI_LOOK : MINI_WORRIED);
-  Face::drawMini(u8g2, ox + 16, 17 + bounce, 0.5f, e, now);
+  Face::drawMini(g, ox + 16, 17 + bounce, 0.5f, e, now);
 
-  u8g2.setFont(u8g2_font_6x10_tr);
-  drawMarquee(u8g2, a.title, ox + 36, 8, 92, now, a.since, 0, 9);
-  u8g2.setFont(u8g2_font_7x13B_tr);
-  drawMarquee(u8g2, a.txt[0] ? a.txt : "psst... over here!", ox + 36, 22, 92, now, a.since + 600, 10, 23);
-  u8g2.setFont(u8g2_font_4x6_tr);
-  if ((t / 4000) % 2 == 1) u8g2.drawStr(ox + 36, 31, "SEL:on it  </>:later");
-  else u8g2.drawStr(ox + 36, 31, a.lvl >= 2 ? "!! URGENT !!" : "need you :)");
+  g.setFont(u8g2_font_6x10_tr);
+  drawMarquee(g, a.title, ox + 36, 8, 92, now, a.since, 0, 9);
+  g.setFont(u8g2_font_7x13B_tr);
+  drawMarquee(g, a.txt[0] ? a.txt : "psst... over here!", ox + 36, 22, 92, now, a.since + 600, 10, 23);
+  g.setFont(u8g2_font_4x6_tr);
+  if ((t / 4000) % 2 == 1) g.drawStr(ox + 36, 31, "SEL:on it  </>:later");
+  else g.drawStr(ox + 36, 31, a.lvl >= 2 ? "!! URGENT !!" : "need you :)");
 
-  // Urgent alerts flash the whole screen.
-  if (a.lvl >= 2 && (t % 1000) < 140) {
-    u8g2.setDrawColor(2);
-    u8g2.drawBox(0, 0, 128, 32);
-    u8g2.setDrawColor(1);
-  }
+  urgentFlash(g, a, t);
+}
+
+// Dual-screen WATCH layout: the eye panel bounces and stares at the message, knocking in sync.
+static void drawTakeoverEye(U8G2& g, int side, Alert& a, uint32_t now) {
+  uint32_t t = now - a.since;
+  int bounce = (int)(-fabsf(sinf(t * 0.008f)) * 3);
+  // Every few seconds it turns to look at the human: "...well?"
+  float look = ((t / 2500) % 3 == 2) ? 0 : lookTowardContent(side);
+  Face::drawSingle(g, side, knockOffset(t), look, bounce);
+  g.setFont(u8g2_font_7x13B_tr);
+  if ((t / 400) % 2 == 0) g.drawStr(side == 0 ? 4 : 112, 20, a.lvl >= 2 ? "!!" : "!");
+  urgentFlash(g, a, t);
 }
 
 // ---- Arduino entry points -------------------------------------------------------------
 void setup() {
   randomSeed(esp_random());
   Buttons::begin();
-  u8g2.setBusClock(400000);
-  u8g2.begin();
-  u8g2.setContrast(200);
+  Displays::begin();
   Face::begin();
   Link::begin(onMessage);
 
   // Say hi on both links; whoever is listening will answer with `hello`.
   JsonDocument d;
-  d["t"] = "hello"; d["fw"] = FW_VERSION; d["name"] = DEVICE_NAME;
+  fillHello(d);
   serializeJson(d, Serial); Serial.write('\n');
 }
 
@@ -292,15 +335,23 @@ void loop() {
   Face::update(now);
   Apps::update(now);
 
-  u8g2.clearBuffer();
-  u8g2.setDrawColor(1);
-  if (Alert* a = currentAlert()) {
-    drawTakeover(*a, now);
-  } else {
-    if (sliding && now - slideStart >= SLIDE_MS) sliding = false;
-    if (sliding) renderSlide(now);
-    else renderScreen(screen, 0, now);
-    if (toast.active) drawToast(now);
+  if (toast.active && now - toast.start > TOAST_MS) { toast.active = false; Face::react(); }   // double-take afterwards
+  if (sliding && now - slideStart >= SLIDE_MS) sliding = false;
+  Alert* alert = currentAlert();
+
+  for (int side = 0; side < Displays::count(); side++) {
+    U8G2& g = Displays::side(side);
+    g.clearBuffer();
+    g.setDrawColor(1);
+    if (alert) {
+      if (showsContent(side)) drawTakeover(g, *alert, now);
+      else drawTakeoverEye(g, side, *alert, now);
+    } else {
+      // A lone watching eye doesn't slide: it just turns to look at the new screen.
+      if (sliding && showsContent(side)) renderSlide(g, side, now);
+      else renderOn(g, side, screen, now);
+      if (toast.active && showsContent(side)) drawToast(g, now);
+    }
+    g.sendBuffer();
   }
-  u8g2.sendBuffer();
 }

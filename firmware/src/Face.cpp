@@ -29,6 +29,9 @@ enum Decor : uint16_t {
 };
 
 const int EYE_GAP = 16;
+// Dual-screen mode: each eye gets a whole 128x32 panel, so stretch it into a big wide eye.
+const float BIG_W = 2.3f, BIG_H = 1.2f, BIG_LOOK = 1.6f;
+int radiusCap = 6;   // corner radius limit; bigger for the big single eyes
 
 EyeStyle cur[2], tgt[2];
 float lookX = 0, lookY = 0, tgtLookX = 0, tgtLookY = 0;
@@ -276,7 +279,7 @@ void drawEye(U8G2& g, int cx, int cy, const EyeStyle& e, float blink, bool left,
   int x0 = cx - w / 2;
   int y0 = cy - hh / 2;
   if (hh <= 4) { g.drawBox(x0, cy - 1, w, 3); return; }   // closed: a little line
-  int r = min(6, min(w, hh) / 2 - 1);
+  int r = min(radiusCap, min(w, hh) / 2 - 1);
   if (r >= 1) g.drawRBox(x0, y0, w, hh, r); else g.drawBox(x0, y0, w, hh);
 
   g.setDrawColor(0);
@@ -471,6 +474,44 @@ void draw(U8G2& g, int ox) {
     g.drawLine(x + 4, y + 6, x, y + 2);
     g.setFont(u8g2_font_4x6_tr);
     g.drawStr(x + 7, y + 7, "no PC");
+  }
+}
+
+void drawSingle(U8G2& g, int eye, int ox, float lookBias, int dy) {
+  uint32_t now = millis();
+  eye = eye ? 1 : 0;
+  float blink = (gag == GAG_NONE) ? blinkFactor(now) : 1.0f;
+  float lx = clampf((lookX + offX) * BIG_LOOK + lookBias, -36, 36);
+  float ly = clampf(lookY + offY + dy, -4, 4);
+
+  EyeStyle e = cur[eye];
+  e.w *= BIG_W;
+  e.h = fminf(e.h * BIG_H, 30.0f);
+
+  g.setDrawColor(1);
+  radiusCap = 9;
+  drawEye(g, ox + 64 + (int)lroundf(lx), 16 + (int)lroundf(ly), e, blink, eye == 0, shape[eye], now);
+  radiusCap = 6;
+
+  // Decorations live in the outer margins: the left screen gets the left-hand ones, the right
+  // screen the right-hand ones, so together the two panels read as one face.
+  if (eye == 0) g.setClipWindow(0, 0, 64, 32); else g.setClipWindow(64, 0, 128, 32);
+  drawDecor(g, ox, now);
+  g.setMaxClipWindow();
+
+  if (eye == 1 && pending > 0 && !alone) {
+    char b[6];
+    snprintf(b, sizeof(b), "%d", pending > 99 ? 99 : pending);
+    g.setFont(u8g2_font_5x7_tr);
+    int w = g.getStrWidth(b) + 4;
+    g.drawRBox(ox + 127 - w, 0, w, 9, 2);
+    g.setDrawColor(0);
+    g.drawStr(ox + 129 - w, 8, b);
+    g.setDrawColor(1);
+  }
+  if (eye == 0 && alone && (now / 700) % 2 == 0) {
+    g.setFont(u8g2_font_4x6_tr);
+    g.drawStr(ox + 1, 7, "no PC");
   }
 }
 

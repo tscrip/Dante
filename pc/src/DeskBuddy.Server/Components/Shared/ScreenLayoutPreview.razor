@@ -1,0 +1,50 @@
+@* Sketch of what each physical screen shows for the face and for an app screen. *@
+@using System.Globalization
+
+<div class="layout-preview">
+    <div class="small muted">Face</div>
+    <div class="row" style="gap:.5rem;flex-wrap:nowrap">@foreach (var p in Panels(face: true)) { <div class="oled">@((MarkupString)p)</div> }</div>
+    <div class="small muted" style="margin-top:.5rem">App screens</div>
+    <div class="row" style="gap:.5rem;flex-wrap:nowrap">@foreach (var p in Panels(face: false)) { <div class="oled">@((MarkupString)p)</div> }</div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public DeviceSettings Settings { get; set; } = new();
+
+    private const int Scale = 2;
+
+    private IEnumerable<string> Panels(bool face)
+    {
+        if (Settings.ScreenCount != 2)
+        {
+            yield return Svg(face ? Eye(40, 0) + Eye(88, 0) : Gauge());
+            yield break;
+        }
+        var contentLeft = Settings.ContentScreen == ScreenSide.Left;
+        for (var side = 0; side < 2; side++)
+        {
+            var isContent = Settings.DualLayout == DualLayout.Mirror || (side == 0) == contentLeft;
+            if (face) yield return Svg(BigEye(0) + Label(side == 0 ? "L" : "R"));
+            else if (isContent) yield return Svg(Gauge());
+            else yield return Svg(BigEye(side == 0 ? 20 : -20) + Label("watching"));
+        }
+    }
+
+    private static string N(double d) => d.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static string Svg(string body) =>
+        $"""<svg viewBox="0 0 128 32" width="{128 * Scale}" height="{32 * Scale}" fill="var(--oled-px)" stroke="var(--oled-px)" font-family="monospace">{body}</svg>""";
+
+    private static string Eye(double cx, double look) =>
+        $"""<rect x="{N(cx - 12 + look)}" y="5" width="24" height="22" rx="5" stroke="none"/>""";
+
+    private static string BigEye(double look) =>
+        $"""<rect x="{N(64 - 28 + look)}" y="3" width="56" height="26" rx="8" stroke="none"/>""";
+
+    private static string Label(string s) =>
+        $"""<text x="2" y="30" font-size="6" stroke="none" opacity=".7">{s}</text>""";
+
+    private static string Gauge() =>
+        """<path d="M 3 30 A 17 17 0 0 1 32 18" fill="none" stroke-width="5"/><path d="M 3 30 A 17 17 0 0 1 37 30" fill="none" stroke-width="1"/>""" +
+        """<text x="46" y="7" font-size="7" stroke="none">Claude 5h</text><text x="46" y="27" font-size="17" font-weight="700" stroke="none">63%</text>""";
+}

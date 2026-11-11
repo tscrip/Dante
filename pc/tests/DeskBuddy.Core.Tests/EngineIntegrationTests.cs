@@ -23,7 +23,7 @@ public sealed class FakeBuddy : IDeviceTransport
     {
         var msg = (JsonObject)JsonNode.Parse(line)!;
         Received.Enqueue(msg);
-        if (msg["t"]!.GetValue<string>() == "hello") _toPc.Add("""{"t":"hello","fw":"test","name":"DeskBuddy"}""");
+        if (msg["t"]!.GetValue<string>() == "hello") _toPc.Add("""{"t":"hello","fw":"test","name":"DeskBuddy","screens":1,"disp2":true}""");
     }
 
     public void Press(string json) => _toPc.Add(json);
@@ -92,6 +92,26 @@ public class EngineIntegrationTests : IAsyncLifetime
     }
 
     private static bool Is(JsonObject m, string type) => m["t"]!.GetValue<string>() == type;
+
+    [Fact]
+    public async Task Screen_settings_from_the_client_reach_the_buddy()
+    {
+        var initial = await WaitFor(m => Is(m, "cfg"));
+        Assert.Equal(1, initial["screens"]!.GetValue<int>());
+        for (var i = 0; i < 40 && _link.SecondScreenDetected is null; i++) await Task.Delay(50);
+        Assert.True(_link.SecondScreenDetected);
+
+        var cfg = _store.Snapshot();
+        cfg.Device.ScreenCount = 2;
+        cfg.Device.DualLayout = DualLayout.Watch;
+        cfg.Device.ContentScreen = ScreenSide.Left;
+        _store.Save(cfg);
+
+        var updated = await WaitFor(m => Is(m, "cfg") && m["screens"]!.GetValue<int>() == 2);
+        Assert.Equal("watch", updated["layout"]!.GetValue<string>());
+        Assert.Equal("left", updated["content"]!.GetValue<string>());
+        Assert.Equal(LinkStatus.Connected, _link.Status); // display changes don't drop the connection
+    }
 
     [Fact]
     public async Task Pushed_items_reach_the_buddy_change_its_mood_and_take_over()

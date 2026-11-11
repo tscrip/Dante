@@ -22,13 +22,13 @@ Limits on the device: max 12 apps, `id` ≤ 15 chars, `name` ≤ 19 chars, `unit
 | `alert` | `id`, `title`, `txt`, `lvl` (1 nudge, 2 urgent) | Take over the screen and nudge the human until acknowledged or cleared. |
 | `clear` | `id`   | Remove the takeover for that id. |
 | `say`   | `txt`  | Show a toast speech bubble (no value attached). |
-| `cfg`   | `bright` (0-255) | Device settings. |
+| `cfg`   | `bright` (0-255), `screens` (1\|2), `layout` (`watch`\|`mirror`), `content` (`left`\|`right`), `swap` (bool), `flip1` (bool), `flip2` (bool) | Device settings; every field optional. Display settings are stored in flash. `screens`: 1 = both eyes on one display, 2 = one eye per display. With 2 screens, app screens use `layout`: `watch` = the app on the `content` side while the other eye watches it, `mirror` = the app on both. `swap` exchanges left/right; `flip1`/`flip2` rotate a physical display 180°. |
 
 ## Device → PC
 
 | `t`      | Fields | Meaning |
 |----------|--------|---------|
-| `hello`  | `fw`, `name` | Firmware version and device name. PC replies by sending `apps`, every `val`, `mood`, active `alert`s. |
+| `hello`  | `fw`, `name`, `screens`, `disp2` | Firmware version, device name, screens in use, and whether a second display answered at boot. PC replies by sending `apps`, every `val`, `mood`, active `alert`s. |
 | `pong`   | –      | Heartbeat reply. |
 | `btn`    | `b` ∈ `sel`,`left`,`right`; `long` (bool); `scr` (app id or `face`) | Button press. Short `sel` on an app = "open it" (PC opens configured URL); long `sel` = "refresh now". |
 | `ack`    | `id`   | User pressed SELECT on a takeover ("I'm on it"). |
@@ -38,7 +38,8 @@ Limits on the device: max 12 apps, `id` ≤ 15 chars, `name` ≤ 19 chars, `unit
 
 ```
 PC  {"t":"hello"}
-DEV {"t":"hello","fw":"1.0.0","name":"DeskBuddy"}
+DEV {"t":"hello","fw":"1.1.0","name":"DeskBuddy","screens":1,"disp2":true}
+PC  {"t":"cfg","bright":200,"screens":2,"layout":"watch","content":"right","swap":false,"flip1":false,"flip2":false}
 PC  {"t":"apps","apps":[{"id":"cc_usage","name":"Claude 5h","vis":"gauge","min":0,"max":100,"unit":"%"},{"id":"prs","name":"PRs","vis":"counter","min":0,"max":20,"unit":""}]}
 PC  {"t":"val","id":"cc_usage","v":63,"txt":"resets 2h10m","lvl":0}
 PC  {"t":"val","id":"prs","v":3,"txt":"oldest 4h","lvl":1,"quip":"3 PRs! They multiply when you look away."}

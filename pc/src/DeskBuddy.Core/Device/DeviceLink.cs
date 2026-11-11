@@ -77,6 +77,10 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
     public LinkStatus Status { get; private set; } = LinkStatus.Disconnected;
     public string? PortName { get; private set; }
     public string? Firmware { get; private set; }
+    /// <summary>Screens the buddy is currently using (from its hello).</summary>
+    public int? DeviceScreens { get; private set; }
+    /// <summary>Whether a second screen answered on the buddy's second display address.</summary>
+    public bool? SecondScreenDetected { get; private set; }
     public string? LastError { get; private set; }
     public DateTimeOffset? LastHeard { get; private set; }
     /// <summary>Port open AND the buddy answered recently (an SPP port can be "open" with the device off).</summary>
@@ -147,6 +151,8 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
         while (_outbox.Reader.TryRead(out _)) { } // stale messages from a previous session
         LastError = null;
         Firmware = null;
+        DeviceScreens = null;
+        SecondScreenDetected = null;
         SetStatus(LinkStatus.Connected, settings.PortName);
 
         Write(transport, DeviceProtocol.Hello().ToJsonString());
@@ -195,7 +201,12 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
                 if (DeviceEvent.TryParse(line) is not { } evt) continue;
 
                 LastHeard = time.GetUtcNow();
-                if (evt.Type == "hello") Firmware = evt.Raw["fw"]?.GetValue<string>();
+                if (evt.Type == "hello")
+                {
+                    Firmware = evt.Raw["fw"]?.GetValue<string>();
+                    DeviceScreens = evt.Raw["screens"]?.GetValue<int>();
+                    SecondScreenDetected = evt.Raw["disp2"]?.GetValue<bool>();
+                }
                 StatusChanged?.Invoke();
                 EventReceived?.Invoke(evt);
             }

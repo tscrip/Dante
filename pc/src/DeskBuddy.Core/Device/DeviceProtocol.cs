@@ -54,7 +54,18 @@ public static class DeviceProtocol
 
     public static JsonObject Clear(string appId) => new() { ["t"] = "clear", ["id"] = appId };
     public static JsonObject Say(string text) => new() { ["t"] = "say", ["txt"] = Format.ToDeviceText(text, 63) };
-    public static JsonObject Cfg(int brightness) => new() { ["t"] = "cfg", ["bright"] = Math.Clamp(brightness, 0, 255) };
+    /// <summary>Display settings. The buddy stores them, so it boots in the right screen mode.</summary>
+    public static JsonObject Cfg(DeviceSettings d) => new()
+    {
+        ["t"] = "cfg",
+        ["bright"] = Math.Clamp(d.Brightness, 0, 255),
+        ["screens"] = d.ScreenCount == 2 ? 2 : 1,
+        ["layout"] = d.DualLayout == DualLayout.Mirror ? "mirror" : "watch",
+        ["content"] = d.ContentScreen == ScreenSide.Left ? "left" : "right",
+        ["swap"] = d.SwapScreens,
+        ["flip1"] = d.FlipScreen1,
+        ["flip2"] = d.FlipScreen2,
+    };
 
     public static string VisualWireName(VisualKind v) => v switch
     {

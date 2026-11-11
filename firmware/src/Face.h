@@ -40,6 +40,11 @@ namespace Face {
   void update(uint32_t now);
   void draw(U8G2& g, int ox);      // full-screen face, shifted by ox pixels
 
+  // Dual-screen mode: one big eye filling its own 128x32 screen.
+  // eye 0 = left eye, 1 = right eye. lookBias pushes the gaze sideways (e.g. towards the
+  // other screen when it shows an app), dy nudges it vertically (bounces).
+  void drawSingle(U8G2& g, int eye, int ox, float lookBias, int dy);
+
   // Small pair of eyes centred at (cx, cy); `scale` 1.0 == full-size eyes.
   void drawMini(U8G2& g, int cx, int cy, float scale, MiniExpr expr, uint32_t now);
 }

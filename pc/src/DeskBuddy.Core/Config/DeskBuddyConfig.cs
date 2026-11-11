@@ -19,7 +19,32 @@ public sealed class DeviceSettings
     public bool AutoConnect { get; set; } = true;
     /// <summary>OLED contrast 0-255.</summary>
     public int Brightness { get; set; } = 200;
+
+    /// <summary>1 = both eyes on one screen; 2 = one screen per eye.</summary>
+    public int ScreenCount { get; set; } = 1;
+    /// <summary>Two screens only: what app screens look like.</summary>
+    public DualLayout DualLayout { get; set; } = DualLayout.Watch;
+    /// <summary>Two screens, <see cref="DualLayout.Watch"/>: which screen shows the app (the other one watches it).</summary>
+    public ScreenSide ContentScreen { get; set; } = ScreenSide.Right;
+    /// <summary>The screens are wired the other way round: swap left and right.</summary>
+    public bool SwapScreens { get; set; }
+    /// <summary>Rotate screen 1 (the one on the first I2C bus) by 180°.</summary>
+    public bool FlipScreen1 { get; set; }
+    /// <summary>Rotate screen 2 by 180°.</summary>
+    public bool FlipScreen2 { get; set; }
 }
+
+[JsonConverter(typeof(JsonStringEnumConverter<DualLayout>))]
+public enum DualLayout
+{
+    /// <summary>One screen shows the app, the other is an eye that keeps watching it.</summary>
+    Watch,
+    /// <summary>Both screens show the app.</summary>
+    Mirror,
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter<ScreenSide>))]
+public enum ScreenSide { Left, Right }
 
 [JsonConverter(typeof(JsonStringEnumConverter<Personality>))]
 public enum Personality { Cheerful, Sarcastic, Dramatic }
