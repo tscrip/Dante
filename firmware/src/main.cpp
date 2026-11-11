@@ -335,6 +335,11 @@ void setup() {
   Face::begin();
   Link::begin(onMessage);
 
+  // A plain-text line for `pio device monitor` (the PC app ignores non-JSON lines).
+  char diag[160];
+  Displays::describe(diag, sizeof(diag));
+  Serial.println(diag);
+
   // Say hi on both links; whoever is listening will answer with `hello`.
   JsonDocument d;
   fillHello(d);

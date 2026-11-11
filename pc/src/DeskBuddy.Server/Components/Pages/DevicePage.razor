@@ -85,13 +85,26 @@
         <div>
             <label class="field"><span>Screen type</span>
                 <select @bind="_cfg.Device.Display">
+                    <option value="@DisplayType.Auto">Automatic: whatever the buddy finds</option>
                     <option value="@DisplayType.Oled128x32">OLED 0.91" 128×32 (SSD1306, I2C)</option>
                     <option value="@DisplayType.Lcd1602">LCD 1602 16×2 (PCF8574 I2C backpack)</option>
                 </select>
                 @if (Link.Online && Link.OledDetected is not null)
                 {
                     <span class="help">Buddy found at boot: OLED @(Link.OledDetected == true ? "✓" : "✗") ·
-                        LCD @LcdFoundText</span>
+                        LCD @LcdFoundText · using: <strong>@(Link.DeviceDisplay == "lcd1602" ? "LCD 1602" : "OLED")</strong></span>
+                    @if (Link.OledDetected == false && Link.LcdDetectedAddress is not > 0)
+                    {
+                        <div class="notice error small">The buddy found no screen on its I2C bus. Check the wiring: SDA → GPIO 8, SCL → GPIO 9, plus power and GND.</div>
+                    }
+                    else if (_cfg.Device.Display == DisplayType.Oled128x32 && Link.OledDetected == false && Link.LcdDetectedAddress is > 0)
+                    {
+                        <div class="notice error small">OLED is selected but the buddy only found an LCD. Pick "LCD 1602" or "Automatic".</div>
+                    }
+                    else if (_cfg.Device.Display == DisplayType.Lcd1602 && Link.LcdDetectedAddress is not > 0)
+                    {
+                        <div class="notice error small">LCD 1602 is selected but the buddy didn't find an LCD backpack.</div>
+                    }
                 }
             </label>
 
@@ -155,7 +168,7 @@
             }
         </div>
         <div>
-            <ScreenLayoutPreview Settings="_cfg.Device" />
+            <ScreenLayoutPreview Settings="_cfg.Device" DetectedLcd="@(Link.DeviceDisplay == "lcd1602")" />
             <p class="muted small">The buddy remembers this, so it starts up in the right mode even before the PC connects.
                 Before it has ever been configured it uses whichever screen it finds.</p>
         </div>

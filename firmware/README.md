@@ -77,6 +77,24 @@ S3's native **USB** port the main serial port; the DevKit's **UART** port also s
 If an upload doesn't start, hold **BOOT**, tap **RST**, release **BOOT**, and upload again.
 The `huge_app.csv` partition table leaves room for the Bluetooth stack.
 
+## Blank screen?
+
+Open the serial monitor (`pio device monitor`, then press **RST**). The first line says what the
+buddy found on the I2C bus and which screen it is driving, e.g.
+
+```
+DeskBuddy 2.0.1: I2C SDA=8 SCL=9 | OLED@0x3C not found | LCD 0x27 | screen: lcd1602 (auto)
+```
+
+* **Nothing found:** check SDA → GPIO 8, SCL → GPIO 9, power and GND (the old ESP32 build used
+  21/22).
+* **Found, but the other screen is used:** in the PC app set *Device → Screen type* to
+  *Automatic* or the right type and save; the buddy remembers it.
+* **1602 found but blank:** turn the contrast potentiometer on the backpack. The LCD needs 5 V,
+  and check the I2C level shifting described above.
+* **1602 shows a row of solid blocks:** it has power but never got initialised. Usually the wrong
+  address or the SDA/SCL wires are swapped.
+
 ## Connecting to the PC
 
 The buddy speaks the same JSON-lines protocol over **Bluetooth LE** and over **USB**, and always

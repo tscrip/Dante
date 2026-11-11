@@ -49,7 +49,7 @@ public class ProtocolTests
             Brightness = 300, ScreenCount = 2, DualLayout = DualLayout.Mirror, ContentScreen = ScreenSide.Left,
             SwapScreens = true, FlipScreen2 = true,
         });
-        Assert.Equal("""{"t":"cfg","bright":255,"display":"oled","lcdAddr":39,"screens":2,"layout":"mirror","content":"left","swap":true,"flip1":false,"flip2":true}""",
+        Assert.Equal("""{"t":"cfg","bright":255,"display":"auto","lcdAddr":39,"screens":2,"layout":"mirror","content":"left","swap":true,"flip1":false,"flip2":true}""",
             msg.ToJsonString());
         Assert.Equal(1, DeviceProtocol.Cfg(new DeviceSettings { ScreenCount = 7 })["screens"]!.GetValue<int>());
     }
@@ -61,6 +61,10 @@ public class ProtocolTests
         Assert.Equal("lcd1602", msg["display"]!.GetValue<string>());
         Assert.Equal(0x3F, msg["lcdAddr"]!.GetValue<int>());
         Assert.Equal(0x77, DeviceProtocol.Cfg(new DeviceSettings { LcdAddress = 500 })["lcdAddr"]!.GetValue<int>());
+        Assert.Equal("oled", DeviceProtocol.Cfg(new DeviceSettings { Display = DisplayType.Oled128x32 })["display"]!.GetValue<string>());
+        // Default: let the buddy use whatever screen it finds, rather than forcing the OLED.
+        Assert.Equal(DisplayType.Auto, new DeviceSettings().Display);
+        Assert.Equal("auto", DeviceProtocol.Cfg(new DeviceSettings())["display"]!.GetValue<string>());
     }
 
     [Fact]

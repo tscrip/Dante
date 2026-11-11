@@ -1,7 +1,7 @@
 @* Sketch of what each physical screen shows for the face and for an app screen. *@
 @using System.Globalization
 
-@if (Settings.Display == DisplayType.Lcd1602)
+@if (Settings.Display == DisplayType.Lcd1602 || (Settings.Display == DisplayType.Auto && DetectedLcd))
 {
     <div class="layout-preview">
         <div class="small muted">Face</div>
@@ -20,6 +20,8 @@
 
 @code {
     [Parameter, EditorRequired] public DeviceSettings Settings { get; set; } = new();
+    /// <summary>With Automatic, whether the buddy reported that it's using the LCD.</summary>
+    [Parameter] public bool DetectedLcd { get; set; }
 
     private const int Scale = 2;
 

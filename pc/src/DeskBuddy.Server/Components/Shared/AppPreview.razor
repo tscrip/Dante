@@ -1,7 +1,8 @@
 @* Shows an app the way the configured screen type will show it. *@
 @inject ConfigStore Store
+@inject DeviceLink Link
 
-@if (Store.Snapshot().Device.Display == DisplayType.Lcd1602)
+@if (ShowsLcd)
 {
     <LcdPreview Visual="Visual" Name="@Name" Value="Value" Min="Min" Max="Max" Unit="@Unit" Text="@Text" Level="Level" Sample="Sample" />
 }
@@ -21,4 +22,12 @@ else
     [Parameter] public int Level { get; set; }
     [Parameter] public int Scale { get; set; } = 3;
     [Parameter] public bool Sample { get; set; } = true;
+
+    // Automatic: preview whatever the buddy says it's using.
+    private bool ShowsLcd => Store.Snapshot().Device.Display switch
+    {
+        DisplayType.Lcd1602 => true,
+        DisplayType.Auto => Link.DeviceDisplay == "lcd1602",
+        _ => false,
+    };
 }

@@ -62,16 +62,19 @@ Displays::Settings cfg;
 bool detected2 = false;
 bool detected1 = false;
 uint8_t lcdFound = 0;
+Displays::Kind active = Displays::KIND_OLED;   // cfg.kind with KIND_AUTO resolved
 bool panel2Awake = false;
 Preferences prefs;
 
 U8G2* physical(int i) { return i == 0 ? (U8G2*)&panel1 : (U8G2*)&panel2; }
 
 void load() {
+  // Note: opening a namespace read-only fails on a freshly flashed chip (it doesn't exist
+  // yet). The defaults in Settings (KIND_AUTO etc.) then stand, which is what we want.
   if (!prefs.begin("deskbuddy", true)) return;
-  // 255 = never configured: pick whatever is attached (see begin()).
-  uint8_t kind = prefs.getUChar("display", 255);
-  cfg.kind = kind == 255 ? (Displays::Kind)255 : (Displays::Kind)kind;
+  uint8_t kind = prefs.getUChar("display", Displays::KIND_AUTO);
+  cfg.kind = kind == Displays::KIND_LCD1602 ? Displays::KIND_LCD1602
+           : kind == Displays::KIND_OLED ? Displays::KIND_OLED : Displays::KIND_AUTO;
   cfg.lcdAddr = prefs.getUChar("lcdAddr", LCD_DEFAULT_ADDR);
   cfg.screens = prefs.getUChar("screens", 1);
   cfg.layout = (Displays::Layout)prefs.getUChar("layout", Displays::LAYOUT_WATCH);
@@ -97,9 +100,17 @@ void save() {
   prefs.end();
 }
 
+Displays::Kind resolve() {
+  if (cfg.kind != Displays::KIND_AUTO) return cfg.kind;
+  return (!detected1 && lcdFound) ? Displays::KIND_LCD1602 : Displays::KIND_OLED;
+}
+
 // Push the settings to the hardware.
 void apply() {
-  bool lcd = cfg.kind == Displays::KIND_LCD1602;
+  active = resolve();
+  bool lcd = active == Displays::KIND_LCD1602;
+  // In automatic mode, talk to the backpack we actually found.
+  uint8_t lcdAddr = (cfg.kind == Displays::KIND_AUTO && lcdFound) ? lcdFound : cfg.lcdAddr;
   for (int i = 0; i < 2; i++) {
     physical(i)->setDisplayRotation(cfg.flip[i] ? U8G2_R2 : U8G2_R0);
     physical(i)->setContrast(cfg.bright);
@@ -113,7 +124,7 @@ void apply() {
   }
   if (lcd) {
     static uint8_t startedAt = 0;
-    if (!Lcd::active() || startedAt != cfg.lcdAddr) { Lcd::begin(cfg.lcdAddr); startedAt = cfg.lcdAddr; }
+    if (!Lcd::active() || startedAt != lcdAddr) { Lcd::begin(lcdAddr); startedAt = lcdAddr; }
     Lcd::backlight(cfg.bright > 0);
   } else {
     Lcd::end();
@@ -127,12 +138,14 @@ void begin() {
   load();
   Wire.begin(PIN_SDA, PIN_SCL, 400000);
   detected1 = Lcd::probe(DISP1_I2C_ADDR);
-  for (uint8_t a : { (uint8_t)cfg.lcdAddr, (uint8_t)0x27, (uint8_t)0x3F })
-    if (!lcdFound && a != DISP1_I2C_ADDR && Lcd::probe(a)) lcdFound = a;
-  if (cfg.kind == (Kind)255) {   // first boot: use what's there, OLED preferred
-    cfg.kind = (!detected1 && lcdFound) ? KIND_LCD1602 : KIND_OLED;
-    if (lcdFound) cfg.lcdAddr = lcdFound;
-  }
+  // PCF8574 backpacks live at 0x20-0x27, PCF8574A at 0x38-0x3F (A0-A2 jumpers). Try the
+  // configured one first, then the usual 0x27 / 0x3F, then the rest.
+  uint8_t candidates[18] = { cfg.lcdAddr, 0x27, 0x3F };
+  int n = 3;
+  for (uint8_t a = 0x20; a <= 0x26; a++) candidates[n++] = a;
+  for (uint8_t a = 0x38; a <= 0x3E; a++) candidates[n++] = a;
+  for (int i = 0; i < n && !lcdFound; i++)
+    if (candidates[i] != DISP1_I2C_ADDR && Lcd::probe(candidates[i])) lcdFound = candidates[i];
 
   panel1.setI2CAddress(DISP1_I2C_ADDR << 1);
   panel1.setBusClock(400000);
@@ -150,7 +163,7 @@ const Settings& settings() { return cfg; }
 bool secondDetected() { return detected2; }
 bool oledDetected() { return detected1; }
 uint8_t lcdDetected() { return lcdFound; }
-bool isLcd() { return cfg.kind == KIND_LCD1602; }
+bool isLcd() { return active == KIND_LCD1602; }
 const char* kindName() { return isLcd() ? "lcd1602" : "oled"; }
 int count() { return !isLcd() && cfg.screens == 2 ? 2 : 1; }
 
@@ -163,7 +176,10 @@ U8G2& side(int s) {
 bool applyConfig(JsonDocument& m) {
   Settings before = cfg;
   if (m["bright"].is<int>()) cfg.bright = (uint8_t)constrain(m["bright"].as<int>(), 0, 255);
-  if (m["display"].is<const char*>()) cfg.kind = strcmp(m["display"], "lcd1602") == 0 ? KIND_LCD1602 : KIND_OLED;
+  if (m["display"].is<const char*>()) {
+    const char* d = m["display"];
+    cfg.kind = !strcmp(d, "lcd1602") ? KIND_LCD1602 : !strcmp(d, "oled") ? KIND_OLED : KIND_AUTO;
+  }
   if (m["lcdAddr"].is<int>()) cfg.lcdAddr = (uint8_t)constrain(m["lcdAddr"].as<int>(), 0x08, 0x77);
   if (m["screens"].is<int>()) cfg.screens = m["screens"].as<int>() == 2 ? 2 : 1;
   if (m["layout"].is<const char*>()) cfg.layout = strcmp(m["layout"], "mirror") == 0 ? LAYOUT_MIRROR : LAYOUT_WATCH;
@@ -177,6 +193,14 @@ bool applyConfig(JsonDocument& m) {
                  before.bright != cfg.bright;
   if (changed) { apply(); save(); }
   return changed;
+}
+
+void describe(char* out, size_t n) {
+  char lcd[8] = "none";
+  if (lcdFound) snprintf(lcd, sizeof(lcd), "0x%02X", lcdFound);
+  snprintf(out, n, "DeskBuddy " FW_VERSION ": I2C SDA=%d SCL=%d | OLED@0x%02X %s | LCD %s | screen: %s%s",
+           PIN_SDA, PIN_SCL, DISP1_I2C_ADDR, detected1 ? "found" : "not found", lcd,
+           kindName(), cfg.kind == KIND_AUTO ? " (auto)" : " (set by PC app)");
 }
 
 } // namespace Displays

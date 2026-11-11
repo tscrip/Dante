@@ -25,7 +25,7 @@ public sealed class DeviceSettings
     public int Brightness { get; set; } = 200;
 
     /// <summary>What kind of screen the buddy has.</summary>
-    public DisplayType Display { get; set; } = DisplayType.Oled128x32;
+    public DisplayType Display { get; set; } = DisplayType.Auto;
     /// <summary>I2C address of the LCD's PCF8574 backpack (usually 0x27, or 0x3F for the PCF8574A).</summary>
     public int LcdAddress { get; set; } = 0x27;
 
@@ -55,6 +55,8 @@ public enum ConnectionKind
 [JsonConverter(typeof(JsonStringEnumConverter<DisplayType>))]
 public enum DisplayType
 {
+    /// <summary>The buddy uses whichever screen it finds on its I2C bus (OLED preferred).</summary>
+    Auto,
     /// <summary>0.91" SSD1306 128x32 OLED (one, or two for one-eye-per-screen).</summary>
     Oled128x32,
     /// <summary>16x2 HD44780 character LCD with a PCF8574 I2C backpack ("1602 I2C").</summary>
