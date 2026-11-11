@@ -231,6 +231,8 @@ public class ConfigTests
         cfg.Device.ContentScreen = ScreenSide.Left;
         cfg.Device.Display = DisplayType.Lcd1602;
         cfg.Device.LcdAddress = 0x3F;
+        cfg.Device.Connection = ConnectionKind.Usb;
+        cfg.Device.BluetoothName = "Buddy2";
         store.Save(cfg);
 
         var reloaded = new ConfigStore(path).Snapshot();
@@ -240,6 +242,8 @@ public class ConfigTests
         Assert.Equal(ScreenSide.Left, reloaded.Device.ContentScreen);
         Assert.Equal(DisplayType.Lcd1602, reloaded.Device.Display);
         Assert.Equal(0x3F, reloaded.Device.LcdAddress);
+        Assert.Equal(ConnectionKind.Usb, reloaded.Device.Connection);
+        Assert.Equal("Buddy2", reloaded.Device.BluetoothName);
         Assert.Contains("\"Lcd1602\"", File.ReadAllText(path));
         Assert.Contains("\"WhenAbove\"", File.ReadAllText(path));
         Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);

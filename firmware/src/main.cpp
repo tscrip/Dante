@@ -1,5 +1,5 @@
 // DeskBuddy firmware: a tiny desk companion with opinions.
-// ESP32 + one or two SSD1306 128x32 (I2C) + 3 buttons, talking JSON lines over Bluetooth SPP / USB.
+// ESP32-S3 + one or two SSD1306 128x32 OLEDs or a 1602 LCD + 3 buttons, talking JSON lines over Bluetooth LE / USB.
 // Protocol: docs/protocol.md
 #include <Arduino.h>
 #include <Wire.h>

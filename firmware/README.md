@@ -1,25 +1,29 @@
-# DeskBuddy firmware (ESP32)
+# DeskBuddy firmware (ESP32-S3)
 
-A tiny desk companion with opinions: animated robot eyes on a 0.91" 128x32 OLED, three
-buttons, and a Bluetooth link to the DeskBuddy PC app, which does all the thinking and
+A tiny desk companion with opinions: animated robot eyes on a 0.91" 128x32 OLED (or two, or a
+1602 LCD), three buttons, and a Bluetooth LE link to the DeskBuddy PC app, which does all the thinking and
 pushes values, moods and nudges to the device.
 
 Protocol: [`../docs/protocol.md`](../docs/protocol.md)
 
 ## Hardware
 
-| Part                        | ESP32 pin | Notes                                  |
-|-----------------------------|-----------|----------------------------------------|
-| OLED SSD1306 128x32 `SDA`   | GPIO 21   | I2C, 400 kHz                           |
-| OLED SSD1306 128x32 `SCL`   | GPIO 22   |                                        |
-| OLED `VCC` / `GND`          | 3V3 / GND |                                        |
-| LEFT button                 | GPIO 25   | other leg to GND (internal pull-up)    |
-| RIGHT button                | GPIO 26   | other leg to GND                       |
-| SELECT button (top)         | GPIO 27   | other leg to GND                       |
+Board: **ESP32-S3** (built for the ESP32-S3-DevKitC-1; any S3 board works if the pins below
+are free). The S3 has Bluetooth LE but **no Bluetooth Classic**, so the buddy talks to the PC
+over BLE (Nordic UART Service) or over USB.
 
-Any classic ESP32 with Bluetooth Classic works (ESP32-WROOM / `esp32dev`). The ESP32-S2/S3/C3
-have no Bluetooth Classic, so they can only use the USB serial link. All pins and timings
-live in [`src/config.h`](src/config.h).
+| Part                        | ESP32-S3 pin | Notes                                  |
+|-----------------------------|--------------|----------------------------------------|
+| OLED SSD1306 128x32 `SDA`   | GPIO 8       | I2C, 400 kHz (S3 Arduino default pins) |
+| OLED SSD1306 128x32 `SCL`   | GPIO 9       |                                        |
+| OLED `VCC` / `GND`          | 3V3 / GND    |                                        |
+| LEFT button                 | GPIO 4       | other leg to GND (internal pull-up)    |
+| RIGHT button                | GPIO 5       | other leg to GND                       |
+| SELECT button (top)         | GPIO 6       | other leg to GND                       |
+
+The pins avoid the S3's strapping pins (0, 3, 45, 46), native USB (19/20), UART0 (43/44) and
+GPIO 26-37, which the flash/PSRAM use on most S3 modules (octal-PSRAM "R8" modules included).
+All pins and timings live in [`src/config.h`](src/config.h).
 
 ### Alternative screen: 1602 LCD (handy for development)
 
@@ -30,15 +34,15 @@ at boot (OLED preferred), and it reports what it found so the PC app can suggest
 
 | Part              | ESP32 pin | Notes                                                        |
 |-------------------|-----------|--------------------------------------------------------------|
-| LCD backpack `SDA`| GPIO 21   | same bus as the OLED                                         |
-| LCD backpack `SCL`| GPIO 22   |                                                              |
+| LCD backpack `SDA`| GPIO 8    | same bus as the OLED                                         |
+| LCD backpack `SCL`| GPIO 9    |                                                              |
 | LCD `VCC` / `GND` | 5V / GND  | most 1602 modules need 5 V; adjust the contrast pot on the back |
 
 On the LCD the eyes are 2×2 characters each, drawn with custom glyphs from the same eye shapes as
 the OLED face. They blink, glance around (moving across columns) and change shape with the mood.
 Apps use bars, sparklines and scrolling text, and urgent nudges flash the backlight. 5 V backpacks
-pull SDA/SCL up to 5 V; most ESP32 boards tolerate this, but a level shifter (or removing the
-backpack's pull-ups) is the safe option.
+pull SDA/SCL up to 5 V. The ESP32-S3's pins are **not** 5 V tolerant, so use a level shifter
+(or remove the backpack's pull-up resistors and rely on 3.3 V pull-ups).
 
 ### Optional: a second screen (one per eye)
 
@@ -48,12 +52,12 @@ the app on one screen while the other eye *watches it*, or the app on both scree
 
 | Part                          | ESP32 pin | Notes                                              |
 |-------------------------------|-----------|----------------------------------------------------|
-| 2nd OLED `SDA`                | GPIO 18   | second I2C bus (`Wire1`)                           |
-| 2nd OLED `SCL`                | GPIO 19   |                                                    |
+| 2nd OLED `SDA`                | GPIO 17   | second I2C bus (`Wire1`)                           |
+| 2nd OLED `SCL`                | GPIO 18   |                                                    |
 | 2nd OLED `VCC` / `GND`        | 3V3 / GND |                                                    |
 
 Most 0.91" modules are fixed at address `0x3C`, so two of them can't share a bus — hence the second
-bus. If your second module has an address jumper set to `0x3D`, you can put it on GPIO 21/22 instead:
+bus. If your second module has an address jumper set to `0x3D`, you can put it on GPIO 8/9 instead:
 set `DISP2_SAME_BUS 1` and `DISP2_I2C_ADDR 0x3D` in `src/config.h`. Screens mounted the wrong way round
 or upside down are fixed in the PC app (swap / flip), no rewiring needed. The buddy reports whether it
 found the second screen at boot, and the PC app warns you if it didn't.
@@ -68,22 +72,24 @@ pio run -t upload       # flash over USB
 pio device monitor      # watch the JSON lines (115200 baud)
 ```
 
-The `huge_app.csv` partition table is used because the Bluetooth Classic stack is large.
+The environment is `esp32-s3` (board `esp32-s3-devkitc-1`). `ARDUINO_USB_CDC_ON_BOOT=1` makes the
+S3's native **USB** port the main serial port; the DevKit's **UART** port also speaks the protocol.
+If an upload doesn't start, hold **BOOT**, tap **RST**, release **BOOT**, and upload again.
+The `huge_app.csv` partition table leaves room for the Bluetooth stack.
 
 ## Connecting to the PC
 
-The buddy speaks the same JSON-lines protocol over **Bluetooth SPP** (device name
-`DeskBuddy`) and over the **USB serial** port, so you can develop over USB and switch to
-Bluetooth later. It always answers on the link it last heard from.
+The buddy speaks the same JSON-lines protocol over **Bluetooth LE** and over **USB**, and always
+answers on the link it last heard from.
 
-1. Pair with `DeskBuddy` from the OS Bluetooth settings (no PIN).
-2. Find the serial port it created:
-   - **Windows:** Bluetooth settings -> *More Bluetooth options* -> *COM Ports*. Use the
-     **Outgoing** COM port for `DeskBuddy 'ESP32SPP'`.
-   - **Linux:** `sudo rfcomm bind 0 <MAC>` (find the MAC with `bluetoothctl devices`),
-     then use `/dev/rfcomm0`. Add yourself to the `dialout` group if needed.
-   - **macOS:** `/dev/cu.DeskBuddy` appears after pairing.
-3. Select that port in the DeskBuddy PC app.
+* **Bluetooth LE** (default): the buddy advertises as `DeskBuddy` with the Nordic UART Service
+  (`6E400001-B5A3-F393-E0A9-E50E24DCCA9E`; the PC writes to `…0002`, the buddy notifies on `…0003`).
+  **No pairing**: in the PC app pick *Device → Bluetooth LE* (*Scan* finds it). Works from Windows
+  and Linux (BlueZ). Any BLE terminal app (e.g. nRF Connect, "Serial Bluetooth Terminal") can talk
+  to it too, which is handy for debugging.
+* **USB**: pick *Device → USB cable* and the port (Windows `COMx`, Linux `/dev/ttyACM0`,
+  macOS `/dev/cu.usbmodem…`). On macOS use this for now: the PC app's Bluetooth LE support covers
+  Windows and Linux.
 
 If no message arrives from the PC for 30 s the buddy decides it is alone: it gets sleepy
 and blinks a small Bluetooth "no PC" sign in the corner.
@@ -151,7 +157,10 @@ Values tween smoothly, and level-2 (critical) values blink.
 | File                 | Purpose                                                       |
 |----------------------|---------------------------------------------------------------|
 | `src/config.h`       | pins, timings, limits                                         |
-| `src/Link.*`         | JSON-lines over Bluetooth SPP + USB serial, heartbeat         |
+| `src/Link.*`         | JSON-lines over BLE + USB (native + UART port), heartbeat     |
+| `src/BleUart.*`      | Bluetooth LE Nordic UART Service (S3 has no Classic BT)       |
+| `src/Displays.*`     | one/two OLEDs or the LCD, settings stored in flash            |
+| `src/Lcd*.*`         | 1602 LCD driver (PCF8574) and its 16x2 rendering              |
 | `src/Buttons.*`      | debounced short/long presses                                  |
 | `src/Face.*`         | procedural eyes, moods, gags, mini faces                      |
 | `src/Apps.*`         | app store + the six visuals, marquee helper                   |

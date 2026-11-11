@@ -1,8 +1,10 @@
 # DeskBuddy wire protocol (v1)
 
-Transport: Bluetooth Classic **SPP** (the ESP32 advertises as `DeskBuddy`) or USB serial
-(115200 baud) — the firmware accepts the same protocol on both and answers on the link
-it last heard from.
+Transport: **Bluetooth LE**, Nordic UART Service: service `6E400001-B5A3-F393-E0A9-E50E24DCCA9E`,
+the PC writes to RX `6E400002-…`, the buddy notifies on TX `6E400003-…` (lines may be split across
+writes/notifications in any way). Or **USB serial** (115200 baud; on the ESP32-S3 both the native
+USB port and the UART port). The firmware accepts the same protocol on every link and answers on the
+link it last heard from. (The ESP32-S3 has no Bluetooth Classic, so there is no SPP.)
 
 Framing: one compact JSON object per line, terminated by `\n`. Max line length 1024 bytes.
 Every message has a `t` (type) field. Unknown types/fields are ignored by both sides.

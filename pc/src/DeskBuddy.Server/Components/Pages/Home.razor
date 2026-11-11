@@ -15,13 +15,13 @@
         }
         else if (Link.Status == LinkStatus.Connected)
         {
-            <p><span class="warn"><span class="dot"></span>Port open, buddy silent</span> <code>@Link.PortName</code></p>
-            <p class="muted small">Is it powered on and paired?</p>
+            <p><span class="warn"><span class="dot"></span>Connected, buddy silent</span> <code>@Link.PortName</code></p>
+            <p class="muted small">Is it powered on and in range?</p>
         }
         else
         {
             <p><span class="crit"><span class="dot"></span>@Link.Status</span></p>
-            <p class="muted small">@(Link.LastError ?? "Pick a port on the Device page.")</p>
+            <p class="muted small">@(Link.LastError ?? "Set up the connection on the Device page.")</p>
         }
         <a class="btn sm" href="device">Device settings</a>
     </div>

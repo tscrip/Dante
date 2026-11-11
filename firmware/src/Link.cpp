@@ -1,9 +1,12 @@
 #include "Link.h"
 #include "config.h"
-#include <BluetoothSerial.h>
+#include "BleUart.h"
 
+// Links, newest message wins the reply:
+//   BLE   - Nordic UART Service (the normal way: wireless)
+//   USB   - `Serial`: on the ESP32-S3 with USB CDC on boot this is the native USB port
+//   UART  - `Serial0`: the S3 DevKit's second ("UART"/CP210x) USB port, handy while developing
 namespace {
-  BluetoothSerial bt;
   Link::Handler onMsg = nullptr;
 
   struct LineReader {
@@ -11,10 +14,10 @@ namespace {
     size_t len = 0;
     bool overflow = false;
   };
-  LineReader usbRx, btRx;
+  LineReader usbRx, bleRx, uartRx;
 
-  enum Source { SRC_USB, SRC_BT };
-  Source active = SRC_BT;
+  enum Source { SRC_USB, SRC_BLE, SRC_UART };
+  Source active = SRC_BLE;
   uint32_t lastHeard = 0;
   bool everHeard = false;
 
@@ -30,20 +33,27 @@ namespace {
     if (onMsg) onMsg(doc);
   }
 
+  void feed(char c, LineReader& r, Source src) {
+    if (c == '\r') return;
+    if (c == '\n') {
+      if (!r.overflow) dispatch(r, src);
+      r.len = 0;
+      r.overflow = false;
+      return;
+    }
+    if (r.len < RX_LINE_MAX - 1) r.buf[r.len++] = c;
+    else r.overflow = true;   // drop the rest of an oversize line
+  }
+
   void pump(Stream& s, LineReader& r, Source src) {
     int budget = 512;   // keep the frame loop responsive
-    while (s.available() && budget-- > 0) {
-      char c = (char)s.read();
-      if (c == '\r') continue;
-      if (c == '\n') {
-        if (!r.overflow) dispatch(r, src);
-        r.len = 0;
-        r.overflow = false;
-        continue;
-      }
-      if (r.len < RX_LINE_MAX - 1) r.buf[r.len++] = c;
-      else r.overflow = true;   // drop the rest of an oversize line
-    }
+    while (s.available() && budget-- > 0) feed((char)s.read(), r, src);
+  }
+
+  void pumpBle() {
+    int budget = 1024;
+    int c;
+    while (budget-- > 0 && (c = BleUart::read()) >= 0) feed((char)c, bleRx, SRC_BLE);
   }
 }
 
@@ -51,26 +61,34 @@ namespace Link {
   void begin(Handler handler) {
     onMsg = handler;
     Serial.begin(USB_BAUD);
-    bt.begin(DEVICE_NAME);
+#if ARDUINO_USB_CDC_ON_BOOT
+    Serial0.begin(USB_BAUD);
+#endif
+    BleUart::begin(DEVICE_NAME);
   }
 
   void poll() {
     pump(Serial, usbRx, SRC_USB);
-    pump(bt, btRx, SRC_BT);
+#if ARDUINO_USB_CDC_ON_BOOT
+    pump(Serial0, uartRx, SRC_UART);
+#endif
+    pumpBle();
   }
 
   void send(JsonDocument& msg) {
     char out[384];
     size_t n = serializeJson(msg, out, sizeof(out) - 2);
     out[n++] = '\n';
-    if (active == SRC_BT) {
-      if (bt.hasClient()) bt.write((const uint8_t*)out, n);
-    } else {
-      Serial.write((const uint8_t*)out, n);
+    switch (active) {
+      case SRC_BLE: BleUart::write((const uint8_t*)out, n); break;
+#if ARDUINO_USB_CDC_ON_BOOT
+      case SRC_UART: Serial0.write((const uint8_t*)out, n); break;
+#endif
+      default: Serial.write((const uint8_t*)out, n); break;
     }
   }
 
   bool pcAlive() { return everHeard && (millis() - lastHeard) < PC_TIMEOUT_MS; }
-  bool btConnected() { return bt.hasClient(); }
+  bool btConnected() { return BleUart::connected(); }
   uint32_t lastHeardMs() { return lastHeard; }
 }

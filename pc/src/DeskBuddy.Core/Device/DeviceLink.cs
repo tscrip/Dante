@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace DeskBuddy.Core.Device;
 
-/// <summary>Line-oriented byte pipe to the buddy. Bluetooth SPP shows up as a serial port on every OS.</summary>
+/// <summary>Line-oriented byte pipe to the buddy: Bluetooth LE (<see cref="BleTransport"/>) or USB (<see cref="SerialTransport"/>).</summary>
 public interface IDeviceTransport : IDisposable
 {
     void Open();
@@ -24,7 +24,7 @@ public sealed class SerialTransport(string portName, int baud) : IDeviceTranspor
         NewLine = "\n",
         ReadTimeout = 500,
         WriteTimeout = 2000,
-        DtrEnable = false, // don't reset the ESP32 when we connect over USB
+        DtrEnable = false, // don't reset the ESP32(-S3) when we connect over USB
         RtsEnable = false,
     };
 
@@ -40,13 +40,13 @@ public sealed class SerialTransport(string portName, int baud) : IDeviceTranspor
     public void WriteLine(string line) => _port.Write(line + "\n");
     public void Dispose() => _port.Dispose();
 
-    /// <summary>Serial ports plus the Bluetooth device nodes .NET doesn't list on Linux/macOS.</summary>
+    /// <summary>Serial ports plus the USB device nodes .NET doesn't list on Linux/macOS.</summary>
     public static IReadOnlyList<string> ListPorts()
     {
         var ports = new SortedSet<string>(SerialPort.GetPortNames(), StringComparer.OrdinalIgnoreCase);
         if (!OperatingSystem.IsWindows() && Directory.Exists("/dev"))
         {
-            foreach (var pattern in new[] { "rfcomm*", "cu.*", "ttyUSB*", "ttyACM*" })
+            foreach (var pattern in new[] { "cu.usb*", "ttyUSB*", "ttyACM*" })
                 foreach (var f in Directory.EnumerateFiles("/dev", pattern))
                     ports.Add(f);
         }
@@ -66,7 +66,9 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
     private static readonly TimeSpan SilenceTimeout = TimeSpan.FromSeconds(35);
 
     private readonly Func<DeviceSettings, IDeviceTransport> _factory =
-        transportFactory ?? (s => new SerialTransport(s.PortName!, s.BaudRate));
+        transportFactory ?? (s => s.Connection == ConnectionKind.Usb
+            ? new SerialTransport(s.PortName!, s.BaudRate)
+            : new BleTransport(s.BluetoothName));
     private readonly Channel<string> _outbox = Channel.CreateBounded<string>(
         new BoundedChannelOptions(256) { FullMode = BoundedChannelFullMode.DropOldest });
     private readonly LinkedList<LogLine> _log = new();
@@ -89,7 +91,7 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
     public int? LcdDetectedAddress { get; private set; }
     public string? LastError { get; private set; }
     public DateTimeOffset? LastHeard { get; private set; }
-    /// <summary>Port open AND the buddy answered recently (an SPP port can be "open" with the device off).</summary>
+    /// <summary>Link open AND the buddy answered recently.</summary>
     public bool Online => Status == LinkStatus.Connected && LastHeard is { } h && time.GetUtcNow() - h < SilenceTimeout;
 
     public event Action<DeviceEvent>? EventReceived;
@@ -113,13 +115,14 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
         config.Changed += c =>
         {
             // Only a change to the connection itself warrants dropping the link.
-            if (_activeSettings is { } a && (a.PortName != c.Device.PortName || a.BaudRate != c.Device.BaudRate || !c.Device.AutoConnect))
+            if (_activeSettings is { } a && (a.Connection != c.Device.Connection || a.BluetoothName != c.Device.BluetoothName
+                    || a.PortName != c.Device.PortName || a.BaudRate != c.Device.BaudRate || !c.Device.AutoConnect))
                 Reconnect();
         };
         while (!stoppingToken.IsCancellationRequested)
         {
             var settings = config.Snapshot().Device;
-            if (!settings.AutoConnect || string.IsNullOrWhiteSpace(settings.PortName))
+            if (!settings.AutoConnect || string.IsNullOrWhiteSpace(Target(settings)))
             {
                 SetStatus(LinkStatus.Disconnected, null);
                 await WaitForChangeAsync(stoppingToken);
@@ -137,10 +140,10 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
             catch (Exception ex)
             {
                 LastError = ex.Message;
-                log.LogInformation("Buddy link on {Port} failed: {Error}", settings.PortName, ex.Message);
+                log.LogInformation("Buddy link to {Target} failed: {Error}", Target(settings), ex.Message);
             }
 
-            SetStatus(LinkStatus.Disconnected, settings.PortName);
+            SetStatus(LinkStatus.Disconnected, Target(settings));
             try { await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken); } catch (OperationCanceledException) { }
         }
     }
@@ -150,7 +153,7 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
         using var session = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         _sessionCts = session;
         _activeSettings = settings;
-        SetStatus(LinkStatus.Connecting, settings.PortName);
+        SetStatus(LinkStatus.Connecting, Target(settings));
 
         using var transport = _factory(settings);
         await Task.Run(transport.Open, session.Token);
@@ -162,7 +165,7 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
         DeviceDisplay = null;
         OledDetected = null;
         LcdDetectedAddress = null;
-        SetStatus(LinkStatus.Connected, settings.PortName);
+        SetStatus(LinkStatus.Connected, Target(settings));
 
         Write(transport, DeviceProtocol.Hello().ToJsonString());
 
@@ -245,6 +248,11 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
             while (_log.Count > 200) _log.RemoveFirst();
         }
     }
+
+    /// <summary>What we connect to: a serial port, or "Bluetooth: DeskBuddy".</summary>
+    private static string? Target(DeviceSettings s) => s.Connection == ConnectionKind.Usb
+        ? s.PortName
+        : string.IsNullOrWhiteSpace(s.BluetoothName) ? null : $"Bluetooth: {s.BluetoothName}";
 
     private void SetStatus(LinkStatus status, string? port)
     {

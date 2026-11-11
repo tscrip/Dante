@@ -1,13 +1,13 @@
 # DeskBuddy
 
-A little desk companion with a personality: an ESP32 with one or two 0.91" 128×32 OLEDs and three buttons that
+A little desk companion with a personality: an ESP32-S3 with one or two 0.91" 128×32 OLEDs and three buttons that
 sits on your desk, pulls faces, and nudges you when things are waiting on you. All the thinking happens
-on your PC, which pushes simple values to the buddy over Bluetooth.
+on your PC, which pushes simple values to the buddy over Bluetooth LE (or USB).
 
 ```
-┌──────────────── PC (Windows / macOS / Linux) ────────────────┐         Bluetooth SPP
+┌──────────────── PC (Windows / macOS / Linux) ────────────────┐   Bluetooth LE (NUS) / USB
 │  DeskBuddy.Server  (.NET 10, ASP.NET Core + Blazor)          │  ◄──── JSON lines ────►  ┌────────────┐
-│   • Config UI in your browser: http://127.0.0.1:5280         │                          │  ESP32     │
+│   • Config UI in your browser: http://127.0.0.1:5280         │                          │  ESP32-S3  │
 │   • Data sources: Claude Code usage, Claude Code "waiting",  │                          │  ◉ ◉  face │
 │     Azure DevOps PRs, HTTP JSON, command, REST push          │                          │  ◄ ● ►     │
 │   • Engine: levels, quips, mood, take-over nudges            │                          └────────────┘
@@ -52,20 +52,22 @@ on your PC, which pushes simple values to the buddy over Bluetooth.
 ## Quick start
 
 1. **Flash the buddy** — see [firmware/README.md](firmware/README.md) (`pio run -t upload`).
-2. **Pair it** over Bluetooth as `DeskBuddy`.
-3. **Run the PC app** (needs the [.NET 10 SDK](https://dotnet.microsoft.com/download)):
+2. **Run the PC app** (needs the [.NET 10 SDK](https://dotnet.microsoft.com/download)):
    ```bash
    cd pc
    dotnet run --project src/DeskBuddy.Server
    ```
-   Your browser opens <http://127.0.0.1:5280>. Pick the port on **Device**
-   (Windows: the paired device's *Outgoing* COM port · Linux: `/dev/rfcomm0` · macOS: `/dev/cu.DeskBuddy`).
+   Your browser opens <http://127.0.0.1:5280>. On **Device**, choose **Bluetooth LE** (no pairing;
+   *Scan* finds `DeskBuddy`) or **USB cable** and its port. Bluetooth LE works on Windows and Linux
+   (BlueZ); on macOS use USB for now.
+3. **Screens** (same page): OLED or 1602 LCD, one or two OLEDs.
 4. **Claude Code page → Install hooks** so the buddy knows when a session is waiting for you.
 5. **Azure DevOps**: set `DESKBUDDY_ADO_PAT` (PAT with *Code: Read*) in your environment, then edit
    *PRs for me* → organisation URL → enable.
 
 Publish a self-contained build for any OS with e.g.
 `dotnet publish src/DeskBuddy.Server -c Release -r win-x64 --self-contained` (or `osx-arm64`, `linux-x64`).
+Windows builds automatically use the `net10.0-windows10.0.19041.0` target, which is needed for Bluetooth LE.
 Config lives in `%APPDATA%\DeskBuddy\config.json` / `~/.config/DeskBuddy/config.json`
 (override with `DESKBUDDY_CONFIG`).
 

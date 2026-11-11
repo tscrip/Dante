@@ -13,7 +13,11 @@ public sealed class DeskBuddyConfig
 
 public sealed class DeviceSettings
 {
-    /// <summary>COM3, /dev/rfcomm0, /dev/cu.DeskBuddy, /dev/ttyUSB0 ...</summary>
+    /// <summary>How the PC talks to the buddy.</summary>
+    public ConnectionKind Connection { get; set; } = ConnectionKind.Bluetooth;
+    /// <summary>Bluetooth LE: the name the buddy advertises.</summary>
+    public string BluetoothName { get; set; } = "DeskBuddy";
+    /// <summary>USB: COM5, /dev/ttyACM0, /dev/cu.usbmodem1101 ...</summary>
     public string? PortName { get; set; }
     public int BaudRate { get; set; } = 115200;
     public bool AutoConnect { get; set; } = true;
@@ -37,6 +41,15 @@ public sealed class DeviceSettings
     public bool FlipScreen1 { get; set; }
     /// <summary>Rotate screen 2 by 180°.</summary>
     public bool FlipScreen2 { get; set; }
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter<ConnectionKind>))]
+public enum ConnectionKind
+{
+    /// <summary>Bluetooth LE, Nordic UART Service (the ESP32-S3 has no Bluetooth Classic).</summary>
+    Bluetooth,
+    /// <summary>USB cable (serial port).</summary>
+    Usb,
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<DisplayType>))]

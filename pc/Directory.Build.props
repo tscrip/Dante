@@ -1,0 +1,12 @@
+<Project>
+  <!--
+    Bluetooth LE (InTheHand.BluetoothLE) needs the WinRT-flavoured target on Windows; everywhere
+    else plain net10.0 is used (BlueZ on Linux). Building on Windows, or publishing with -r win-*,
+    picks the Windows target automatically, so `dotnet run` works unchanged on every OS.
+  -->
+  <PropertyGroup>
+    <DeskBuddyTfm Condition="'$(DeskBuddyTfm)' == '' And ($([MSBuild]::IsOSPlatform('Windows')) Or $(RuntimeIdentifier.StartsWith('win')))">net10.0-windows10.0.19041.0</DeskBuddyTfm>
+    <DeskBuddyTfm Condition="'$(DeskBuddyTfm)' == ''">net10.0</DeskBuddyTfm>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+</Project>
