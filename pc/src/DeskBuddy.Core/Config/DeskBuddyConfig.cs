@@ -8,6 +8,7 @@ public sealed class DeskBuddyConfig
     public DeviceSettings Device { get; set; } = new();
     public MoodSettings Mood { get; set; } = new();
     public Personality Personality { get; set; } = Personality.Cheerful;
+    public MagicButtonSettings Magic { get; set; } = new();
     public List<AppDefinition> Apps { get; set; } = [];
 }
 
@@ -95,6 +96,43 @@ public enum DualLayout
 
 [JsonConverter(typeof(JsonStringEnumConverter<ScreenSide>))]
 public enum ScreenSide { Left, Right }
+
+/// <summary>What the MAGIC button on top of the buddy does on the PC.</summary>
+public sealed class MagicButtonSettings
+{
+    public MagicAction Press { get; set; } = new() { Kind = MagicActionKind.PlayPause };
+    public MagicAction LongPress { get; set; } = new() { Kind = MagicActionKind.ToggleMicMute };
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter<MagicActionKind>))]
+public enum MagicActionKind
+{
+    Nothing,
+    PlayPause,
+    NextTrack,
+    PreviousTrack,
+    ToggleSpeakerMute,
+    ToggleMicMute,
+    VolumeUp,
+    VolumeDown,
+    /// <summary>Opens <see cref="MagicAction.Target"/>: a web page, a file, or an app link like spotify: or ms-teams:.</summary>
+    OpenUrl,
+    /// <summary>Runs <see cref="MagicAction.Target"/> with <see cref="MagicAction.Arguments"/> (one per line).</summary>
+    RunCommand,
+    /// <summary>Re-polls every app on the buddy right now.</summary>
+    RefreshApps,
+}
+
+public sealed class MagicAction
+{
+    public MagicActionKind Kind { get; set; } = MagicActionKind.Nothing;
+    /// <summary>OpenUrl: the URL. RunCommand: the program.</summary>
+    public string? Target { get; set; }
+    /// <summary>RunCommand: one argument per line.</summary>
+    public string? Arguments { get; set; }
+    /// <summary>Show the result ("Mic muted") in a speech bubble on the buddy.</summary>
+    public bool ConfirmOnBuddy { get; set; } = true;
+}
 
 [JsonConverter(typeof(JsonStringEnumConverter<Personality>))]
 public enum Personality { Cheerful, Sarcastic, Dramatic }

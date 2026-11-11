@@ -32,7 +32,7 @@ Limits on the device: max 12 apps, `id` ≤ 15 chars, `name` ≤ 19 chars, `unit
 |----------|--------|---------|
 | `hello`  | `fw`, `name`, `display`, `screens`, `disp2`, `oled`, `lcd` | Firmware version, device name, screen type in use (`oled`/`lcd1602`/`lcd2004`), screens in use, and what answered at boot: a second OLED (`disp2`), the first OLED (`oled`), and the address of an LCD backpack (`lcd`, 0 = none). PC replies by sending `apps`, every `val`, `mood`, active `alert`s. |
 | `pong`   | –      | Heartbeat reply. |
-| `btn`    | `b` ∈ `sel`,`left`,`right`; `long` (bool); `scr` (app id or `face`) | Button press. Short `sel` on an app = "open it" (PC opens configured URL); long `sel` = "refresh now". |
+| `btn`    | `b` ∈ `sel`,`left`,`right`,`magic`; `long` (bool); `scr` (app id or `face`) | Button press. Short `sel` on an app = "open it" (PC opens configured URL); long `sel` = "refresh now". `magic` = run the action configured in the PC app for a press / long press (mute, play/pause, ...); the PC answers with a `say` describing the result. MAGIC presses are sent even during a takeover and never acknowledge it. |
 | `ack`    | `id`   | User pressed SELECT on a takeover ("I'm on it"). |
 | `snooze` | `id`   | User pressed LEFT/RIGHT on a takeover ("later"). |
 

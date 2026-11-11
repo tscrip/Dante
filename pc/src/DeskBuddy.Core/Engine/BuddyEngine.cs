@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using DeskBuddy.Core.Actions;
 using DeskBuddy.Core.Behavior;
 using DeskBuddy.Core.Config;
 using DeskBuddy.Core.Device;
@@ -54,6 +55,7 @@ public sealed class BuddyEngine : BackgroundService
     private readonly IUrlOpener _urls;
     private readonly TimeProvider _time;
     private readonly ILogger<BuddyEngine> _log;
+    private readonly IPcActions _actions;
     private readonly Random _rng = new();
     private readonly Lock _gate = new();
 
@@ -64,8 +66,9 @@ public sealed class BuddyEngine : BackgroundService
     private (Mood Mood, DateTimeOffset Until)? _moodOverride;
 
     public BuddyEngine(ConfigStore config, SourceRegistry sources, DeviceLink link, IUrlOpener urls,
-        TimeProvider time, ILogger<BuddyEngine> log, PushStore push, ClaudeCodeSessionTracker claude)
+        TimeProvider time, ILogger<BuddyEngine> log, PushStore push, ClaudeCodeSessionTracker claude, IPcActions actions)
     {
+        _actions = actions;
         _config = config;
         _sources = sources;
         _link = link;
@@ -112,6 +115,38 @@ public sealed class BuddyEngine : BackgroundService
 
     public void TestAlert(string text, int level) =>
         _link.Send(DeviceProtocol.Alert("test", "DeskBuddy", text, level));
+
+    /// <summary>Runs the MAGIC button's action (also used by the "Try it" button in the UI).</summary>
+    /// <returns>What happened, e.g. "Mic muted" (also shown on the buddy if configured).</returns>
+    public async Task<string> RunMagicAsync(bool longPress, CancellationToken ct = default)
+    {
+        MagicAction action;
+        lock (_gate) action = longPress ? _cfg.Magic.LongPress : _cfg.Magic.Press;
+        if (action.Kind == MagicActionKind.Nothing) return "";
+
+        string message;
+        try
+        {
+            if (action.Kind == MagicActionKind.RefreshApps)
+            {
+                PollAll();
+                message = "Refreshing apps!";
+            }
+            else
+            {
+                message = await _actions.RunAsync(action, ct);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogWarning(ex, "Magic button action {Action} failed", action.Kind);
+            message = ex is ActionFailedException or PlatformNotSupportedException ? ex.Message : $"Magic failed: {ex.Message}";
+            _link.Send(DeviceProtocol.Say(message));   // always tell the human when it didn't work
+            return message;
+        }
+        if (action.ConfirmOnBuddy && !string.IsNullOrWhiteSpace(message)) _link.Send(DeviceProtocol.Say(message));
+        return message;
+    }
 
     /// <summary>Lets the config UI preview a mood on the device for a little while.</summary>
     public void PreviewMood(Mood mood, TimeSpan duration)
@@ -375,6 +410,9 @@ public sealed class BuddyEngine : BackgroundService
                     break;
                 case "snooze" when runtime is not null:
                     runtime.Takeover.Snooze(runtime.Def.Takeover, now);
+                    break;
+                case "btn" when evt.Button == "magic":
+                    _ = RunMagicAsync(evt.Long);   // never block the device link on a slow action
                     break;
                 case "btn" when evt.Button == "sel" && evt.Long:
                     foreach (var r in _apps) r.NextPoll = DateTimeOffset.MinValue;

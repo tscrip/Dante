@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 // ---- Identity ---------------------------------------------------------------
-#define FW_VERSION      "2.1.0"
+#define FW_VERSION      "2.2.0"
 #define DEVICE_NAME     "DeskBuddy"
 
 // ---- Board: ESP32-S3 (e.g. ESP32-S3-DevKitC-1) --------------------------------
@@ -41,6 +41,7 @@
 #define PIN_BTN_LEFT    4
 #define PIN_BTN_RIGHT   5
 #define PIN_BTN_SELECT  6    // the "top" button
+#define PIN_BTN_MAGIC   7    // also on top: does whatever the PC app says (mute, play/pause, ...)
 
 #define BTN_DEBOUNCE_MS 25
 #define BTN_LONG_MS     800

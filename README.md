@@ -1,6 +1,6 @@
 # DeskBuddy
 
-A little desk companion with a personality: an ESP32-S3 with one or two 0.91" 128×32 OLEDs and three buttons that
+A little desk companion with a personality: an ESP32-S3 with one or two 0.91" 128×32 OLEDs and four buttons that
 sits on your desk, pulls faces, and nudges you when things are waiting on you. All the thinking happens
 on your PC, which pushes simple values to the buddy over Bluetooth LE (or USB).
 
@@ -38,6 +38,9 @@ on your PC, which pushes simple values to the buddy over Bluetooth LE (or USB).
   (e.g. the oldest PR); long-press **SELECT** refreshes everything.
 * **Funny deliveries** — when a value changes the PC picks a line in the buddy's personality
   (Cheerful, Sarcastic, Dramatic, or your own lines) and the buddy pops it up in a speech bubble.
+* **Magic button** — a fourth button on top runs something on the PC: mute/unmute the mic or
+  sound, play/pause, next/previous, volume, open a URL/app, or run any command. Press and long press
+  are set separately on the *Magic button* page; the buddy confirms ("Mic muted").
 * **Take-overs** — an app can take over the face and nudge you ("Claude Code is waiting on you!") after a
   grace period. **SELECT** = "I'm on it" (re-nudges later if still true), **LEFT/RIGHT** = snooze.
 

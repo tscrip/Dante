@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using DeskBuddy.Core.Actions;
 using DeskBuddy.Core.ClaudeCode;
 using DeskBuddy.Core.Config;
 using DeskBuddy.Core.Device;
@@ -17,6 +18,9 @@ builder.Services.AddSingleton(new ConfigStore(configPath));
 builder.Services.AddSingleton<PushStore>();
 builder.Services.AddSingleton<ClaudeCodeSessionTracker>();
 builder.Services.AddSingleton<IUrlOpener, ShellUrlOpener>();
+builder.Services.AddSingleton<ICommandRunner, ProcessCommandRunner>();
+builder.Services.AddSingleton(sp => PcActions.BackendForThisOs(sp.GetRequiredService<ICommandRunner>()));
+builder.Services.AddSingleton<IPcActions, PcActions>();
 
 // Data sources: add a class implementing IDataSource and register it here to get a new kind of app.
 builder.Services.AddSingleton<IDataSource, ClaudeCodeUsageSource>();

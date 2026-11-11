@@ -1,7 +1,7 @@
 # DeskBuddy firmware (ESP32-S3)
 
 A tiny desk companion with opinions: animated robot eyes on a 0.91" 128x32 OLED (or two, or a
-1602 LCD), three buttons, and a Bluetooth LE link to the DeskBuddy PC app, which does all the thinking and
+1602/2004 LCD), four buttons (incl. a MAGIC button), and a Bluetooth LE link to the DeskBuddy PC app, which does all the thinking and
 pushes values, moods and nudges to the device.
 
 Protocol: [`../docs/protocol.md`](../docs/protocol.md)
@@ -20,6 +20,7 @@ over BLE (Nordic UART Service) or over USB.
 | LEFT button                 | GPIO 4       | other leg to GND (internal pull-up)    |
 | RIGHT button                | GPIO 5       | other leg to GND                       |
 | SELECT button (top)         | GPIO 6       | other leg to GND                       |
+| MAGIC button (top)          | GPIO 7       | other leg to GND; action set in the PC app |
 
 The pins avoid the S3's strapping pins (0, 3, 45, 46), native USB (19/20), UART0 (43/44) and
 GPIO 26-37, which the flash/PSRAM use on most S3 modules (octal-PSRAM "R8" modules included).
@@ -129,6 +130,7 @@ and blinks a small Bluetooth "no PC" sign in the corner.
 | Speech bubble    | any                  | Dismiss it.                                                     |
 | Takeover (nudge) | SELECT               | "I'm on it" -> `ack` to the PC, buddy winks.                    |
 | Takeover (nudge) | LEFT / RIGHT         | "Later" -> `snooze` to the PC.                                  |
+| Anywhere         | MAGIC / long MAGIC   | Runs what the PC app's *Magic button* page says (mute mic, play/pause, ...); the buddy sparkles and shows the result. |
 
 Every press is reported to the PC as a `btn` event (takeover presses are reported as
 `ack` / `snooze` instead).

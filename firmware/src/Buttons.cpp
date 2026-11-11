@@ -2,7 +2,7 @@
 #include "config.h"
 
 namespace {
-  const uint8_t pins[BTN_COUNT] = { PIN_BTN_LEFT, PIN_BTN_RIGHT, PIN_BTN_SELECT };
+  const uint8_t pins[BTN_COUNT] = { PIN_BTN_LEFT, PIN_BTN_RIGHT, PIN_BTN_SELECT, PIN_BTN_MAGIC };
 
   struct State {
     bool raw = false, stable = false;

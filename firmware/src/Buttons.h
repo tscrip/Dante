@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
-enum ButtonId : uint8_t { BTN_LEFT = 0, BTN_RIGHT = 1, BTN_SELECT = 2, BTN_COUNT = 3 };
+enum ButtonId : uint8_t { BTN_LEFT = 0, BTN_RIGHT = 1, BTN_SELECT = 2, BTN_MAGIC = 3, BTN_COUNT = 4 };
 
 struct ButtonEvent {
   ButtonId id;

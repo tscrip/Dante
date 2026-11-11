@@ -214,6 +214,12 @@ void gagBehaviour(uint32_t now) {
       tgtLookX = 0; tgtLookY = 0;
       decor |= DEC_BOOP;
       break;
+    case GAG_MAGIC:              // "abracadabra": happy squint up at the sparkles
+      tgt[0] = tgt[1] = style(24, 20, 0, 0, 0, 0.5f);
+      tgtLookX = 0; tgtLookY = -4;
+      offY = -fabsf(sinf(t * 0.02f)) * 2.0f;
+      decor |= DEC_STARS;
+      break;
     default: break;
   }
 }

@@ -68,7 +68,8 @@ public class EngineIntegrationTests : IAsyncLifetime
         var claude = new ClaudeCodeSessionTracker(time);
         var registry = new SourceRegistry([new PushSource(_push)]);
         _link = new DeviceLink(_store, NullLogger<DeviceLink>.Instance, time, _ => _buddy);
-        _engine = new BuddyEngine(_store, registry, _link, _opener, time, NullLogger<BuddyEngine>.Instance, _push, claude);
+        _engine = new BuddyEngine(_store, registry, _link, _opener, time, NullLogger<BuddyEngine>.Instance, _push, claude,
+            new DeskBuddy.Core.Actions.PcActions(new DeskBuddy.Core.Actions.LinuxMediaBackend(new FakeRunner()), new FakeRunner(), _opener));
         await _link.StartAsync(default);
         await _engine.StartAsync(default);
     }

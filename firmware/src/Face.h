@@ -19,7 +19,8 @@ enum Gag : uint8_t {
   GAG_LAUGH,
   GAG_SURPRISED,
   GAG_BOOP,
-  GAG_COUNT
+  GAG_COUNT,
+  GAG_MAGIC,        // not a random gag: played when the MAGIC button is pressed
 };
 
 // Decorations around the eyes ("z", sweat, "!!", ...). Exposed so other renderers (the

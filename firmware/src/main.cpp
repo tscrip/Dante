@@ -1,5 +1,5 @@
 // DeskBuddy firmware: a tiny desk companion with opinions.
-// ESP32-S3 + one or two SSD1306 128x32 OLEDs or a 1602 LCD + 3 buttons, talking JSON lines over Bluetooth LE / USB.
+// ESP32-S3 + one or two SSD1306 128x32 OLEDs or a 1602/2004 LCD + 4 buttons, talking JSON lines over Bluetooth LE / USB.
 // Protocol: docs/protocol.md
 #include <Arduino.h>
 #include <Wire.h>
@@ -100,7 +100,7 @@ static const char* screenId(int s) {
 static void sendButton(ButtonId b, bool longPress, int scr) {
   JsonDocument d;
   d["t"] = "btn";
-  d["b"] = b == BTN_SELECT ? "sel" : (b == BTN_LEFT ? "left" : "right");
+  d["b"] = b == BTN_SELECT ? "sel" : b == BTN_LEFT ? "left" : b == BTN_RIGHT ? "right" : "magic";
   d["long"] = longPress;
   d["scr"] = screenId(scr);
   Link::send(d);
@@ -164,6 +164,14 @@ static void goTo(int target, int dir) {
 }
 
 static void handleButton(const ButtonEvent& ev) {
+  // 0) MAGIC always goes to the PC, whatever is on screen; the PC does the configured thing
+  //    and answers with a `say` ("Mic muted").
+  if (ev.id == BTN_MAGIC) {
+    if (!Link::pcAlive()) { showToast("", "No PC, no magic :("); return; }
+    Face::playGag(GAG_MAGIC, 900);
+    sendButton(ev.id, ev.longPress, screen);
+    return;
+  }
   // 1) A takeover owns the buttons: SELECT = "on it", LEFT/RIGHT = "later".
   if (Alert* a = currentAlert()) {
     if (ev.longPress && ev.id != BTN_SELECT) return;   // ignore long side presses

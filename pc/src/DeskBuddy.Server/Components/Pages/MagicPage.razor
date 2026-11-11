@@ -1,0 +1,125 @@
+@page "/magic"
+@inject ConfigStore Store
+@inject BuddyEngine Engine
+@using DeskBuddy.Core.Actions
+
+<PageTitle>Magic button · DeskBuddy</PageTitle>
+
+<h1>Magic button</h1>
+<p class="muted">The MAGIC button on top of the buddy does something on this PC. Pick what a press and a long
+    press (hold about a second) do. The buddy confirms with a speech bubble, like "Mic muted".</p>
+
+@if (_saved) { <div class="notice">Saved. Press the button on the buddy to try it.</div> }
+
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr))">
+    @foreach (var (title, action, isLong) in new[] { ("Press", _cfg.Magic.Press, false), ("Long press", _cfg.Magic.LongPress, true) })
+    {
+        <div class="panel">
+            <h2>@title</h2>
+            <label class="field"><span>Does</span>
+                <select value="@action.Kind" @onchange="e => SetKind(action, e)">
+                    @foreach (var group in Choices)
+                    {
+                        <optgroup label="@group.Key">
+                            @foreach (var (kind, label) in group) { <option value="@kind">@label</option> }
+                        </optgroup>
+                    }
+                </select>
+                <span class="help">@Help(action.Kind)</span>
+            </label>
+
+            @if (action.Kind == MagicActionKind.OpenUrl)
+            {
+                <label class="field"><span>URL or app link</span>
+                    <input type="text" @bind="action.Target" placeholder="https://… · spotify: · msteams: · zoommtg:" />
+                </label>
+            }
+            @if (action.Kind == MagicActionKind.RunCommand)
+            {
+                <label class="field"><span>Program</span>
+                    <input type="text" @bind="action.Target" placeholder="pwsh · /usr/bin/xdotool · /usr/local/bin/myscript" />
+                </label>
+                <label class="field"><span>Arguments (one per line)</span>
+                    <textarea @bind="action.Arguments" placeholder="key&#10;ctrl+shift+m"></textarea>
+                    <span class="help">Its first line of output is shown on the buddy. Handy for app shortcuts, e.g. xdotool / AutoHotkey to press Ctrl+Shift+M in Teams.</span>
+                </label>
+            }
+            @if (action.Kind != MagicActionKind.Nothing)
+            {
+                <label class="check"><input type="checkbox" @bind="action.ConfirmOnBuddy" /> Show the result on the buddy</label>
+                <div class="row">
+                    <button class="btn" @onclick="() => Try(isLong)" disabled="@_running">Try it now</button>
+                    @if (_results.TryGetValue(isLong, out var r)) { <span class="small">@r</span> }
+                </div>
+                <p class="muted small">"Try it" runs the saved setting; save first if you changed it.</p>
+            }
+        </div>
+    }
+</div>
+
+<button class="btn primary" @onclick="Save">Save</button>
+
+<div class="panel" style="margin-top:1rem">
+    <h2>What it needs on this computer</h2>
+    <ul class="small">
+        <li><strong>Windows:</strong> nothing extra. Media keys work with any player that listens to them; mute and volume use the default devices (for the mic: the default communications microphone, the one Teams/Zoom use).</li>
+        <li><strong>macOS:</strong> mute and volume work out of the box. For play/pause and next/previous, allow the app running DeskBuddy (Terminal, or the published DeskBuddy app) in <em>System Settings → Privacy &amp; Security → Accessibility</em>. "Mic mute" sets the input volume to 0 and restores it afterwards.</li>
+        <li><strong>Linux:</strong> <code>wpctl</code> (PipeWire) or <code>pactl</code> (PulseAudio) for audio, and <code>playerctl</code> for media keys.</li>
+    </ul>
+</div>
+
+@code {
+    private DeskBuddyConfig _cfg = new();
+    private bool _saved;
+    private bool _running;
+    private readonly Dictionary<bool, string> _results = [];
+
+    private static readonly ILookup<string, (MagicActionKind Kind, string Label)> Choices = new (string Group, MagicActionKind Kind, string Label)[]
+    {
+        ("", MagicActionKind.Nothing, "Nothing"),
+        ("Media", MagicActionKind.PlayPause, "Play / pause"),
+        ("Media", MagicActionKind.NextTrack, "Next track"),
+        ("Media", MagicActionKind.PreviousTrack, "Previous track"),
+        ("Audio", MagicActionKind.ToggleMicMute, "Mute / unmute microphone"),
+        ("Audio", MagicActionKind.ToggleSpeakerMute, "Mute / unmute sound"),
+        ("Audio", MagicActionKind.VolumeUp, "Volume up"),
+        ("Audio", MagicActionKind.VolumeDown, "Volume down"),
+        ("Other", MagicActionKind.OpenUrl, "Open a URL or app"),
+        ("Other", MagicActionKind.RunCommand, "Run a command"),
+        ("Other", MagicActionKind.RefreshApps, "Refresh the buddy's apps"),
+    }.ToLookup(c => c.Group == "" ? "General" : c.Group, c => (c.Kind, c.Label));
+
+    protected override void OnInitialized() => _cfg = Store.Snapshot();
+
+    private static void SetKind(MagicAction action, ChangeEventArgs e)
+    {
+        if (Enum.TryParse<MagicActionKind>(e.Value?.ToString(), out var kind)) action.Kind = kind;
+    }
+
+    private static string Help(MagicActionKind kind) => kind switch
+    {
+        MagicActionKind.PlayPause or MagicActionKind.NextTrack or MagicActionKind.PreviousTrack => "Like the media keys on a keyboard: works with Spotify, browsers, music apps…",
+        MagicActionKind.ToggleMicMute => "Mutes the microphone for every app, so it works whatever meeting app you use.",
+        MagicActionKind.ToggleSpeakerMute => "Mutes the PC's sound output.",
+        MagicActionKind.VolumeUp or MagicActionKind.VolumeDown => "Changes the PC's volume a step.",
+        MagicActionKind.RefreshApps => "Same as long-pressing SELECT: polls every app now.",
+        _ => "",
+    };
+
+    private void Save()
+    {
+        Store.Save(_cfg);
+        _saved = true;
+    }
+
+    private async Task Try(bool longPress)
+    {
+        _running = true;
+        try
+        {
+            var result = await Engine.RunMagicAsync(longPress);
+            _results[longPress] = string.IsNullOrEmpty(result) ? "(nothing to do)" : $"→ {result}";
+        }
+        finally { _running = false; }
+    }
+}
