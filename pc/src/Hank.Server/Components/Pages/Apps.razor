@@ -1,0 +1,61 @@
+@page "/apps"
+@inject ConfigStore Store
+@inject SourceRegistry Sources
+
+<PageTitle>Apps · HANK</PageTitle>
+
+<div class="row spread"><h1>Apps</h1><a class="btn primary" href="apps/new">+ New app</a></div>
+<p class="muted">Each app is a screen on HANK (LEFT/RIGHT to browse). The PC does the work and pushes the result.
+    Order here = order on the device. The face is always first.</p>
+
+<div class="panel">
+    <table>
+        <thead><tr><th></th><th>Name</th><th>Visual</th><th>Source</th><th>Behavior</th><th></th></tr></thead>
+        <tbody>
+        @for (var i = 0; i < _cfg.Apps.Count; i++)
+        {
+            var index = i;
+            var a = _cfg.Apps[i];
+            <tr>
+                <td><input type="checkbox" checked="@a.Enabled" @onchange="e => Toggle(a, (bool)e.Value!)" title="Enabled" /></td>
+                <td><a href="apps/@a.Id"><strong>@a.Name</strong></a><div class="muted small"><code>@a.Id</code></div></td>
+                <td>@a.Visual</td>
+                <td>@(Sources.Find(a.SourceType)?.DisplayName ?? a.SourceType)</td>
+                <td class="small">
+                    @if (a.ShowInCarousel) { <div>on carousel</div> }
+                    @if (a.CountsTowardMood) { <div>affects mood</div> }
+                    @if (a.Takeover.Mode != TakeoverMode.Never) { <div>takes over: @a.Takeover.Mode</div> }
+                </td>
+                <td class="row" style="flex-wrap:nowrap">
+                    <button class="btn sm" disabled="@(index == 0)" @onclick="() => Move(index, -1)" title="Move up">↑</button>
+                    <button class="btn sm" disabled="@(index == _cfg.Apps.Count - 1)" @onclick="() => Move(index, 1)" title="Move down">↓</button>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    @if (_cfg.Apps.Count > DeviceProtocol.MaxApps)
+    {
+        <p class="warn small">HANK shows at most @DeviceProtocol.MaxApps apps.</p>
+    }
+</div>
+
+@code {
+    private HankConfig _cfg = new();
+
+    protected override void OnInitialized() => _cfg = Store.Snapshot();
+
+    private void Toggle(AppDefinition app, bool enabled)
+    {
+        app.Enabled = enabled;
+        Store.Save(_cfg);
+    }
+
+    private void Move(int index, int delta)
+    {
+        var app = _cfg.Apps[index];
+        _cfg.Apps.RemoveAt(index);
+        _cfg.Apps.Insert(index + delta, app);
+        Store.Save(_cfg);
+    }
+}

@@ -1,9 +1,0 @@
-<Solution>
-  <Folder Name="/src/">
-    <Project Path="src/DeskBuddy.Core/DeskBuddy.Core.csproj" />
-    <Project Path="src/DeskBuddy.Server/DeskBuddy.Server.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/DeskBuddy.Core.Tests/DeskBuddy.Core.Tests.csproj" />
-  </Folder>
-</Solution>

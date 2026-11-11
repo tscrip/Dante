@@ -1,7 +1,7 @@
-# DeskBuddy firmware (ESP32-S3)
+# HANK firmware (ESP32-S3)
 
 A tiny desk companion with opinions: animated robot eyes on a 0.91" 128x32 OLED (or two, or a
-1602/2004 LCD), four buttons (incl. a MAGIC button), and a Bluetooth LE link to the DeskBuddy PC app, which does all the thinking and
+1602/2004 LCD), four buttons (incl. a MAGIC button), and a Bluetooth LE link to the HANK PC app, which does all the thinking and
 pushes values, moods and nudges to the device.
 
 Protocol: [`../docs/protocol.md`](../docs/protocol.md)
@@ -9,7 +9,7 @@ Protocol: [`../docs/protocol.md`](../docs/protocol.md)
 ## Hardware
 
 Board: **ESP32-S3** (built for the ESP32-S3-DevKitC-1; any S3 board works if the pins below
-are free). The S3 has Bluetooth LE but **no Bluetooth Classic**, so the buddy talks to the PC
+are free). The S3 has Bluetooth LE but **no Bluetooth Classic**, so HANK talks to the PC
 over BLE (Nordic UART Service) or over USB.
 
 | Part                        | ESP32-S3 pin | Notes                                  |
@@ -31,7 +31,7 @@ All pins and timings live in [`src/config.h`](src/config.h).
 A standard character LCD with a PCF8574 I2C backpack works instead of the OLED: 16×2 ("1602")
 or 20×4 ("2004"). Pick **Screen type → LCD 1602** or **LCD 2004** in the PC app (*Device →
 Screens*) and set its address (0x27 for PCF8574
-backpacks, 0x3F for PCF8574A). Before it has been configured, the buddy uses whichever screen it finds
+backpacks, 0x3F for PCF8574A). Before it has been configured, HANK uses whichever screen it finds
 at boot (OLED preferred), and it reports what it found so the PC app can suggest the address.
 Both LCD sizes look the same on the I2C bus, so with *Automatic* the PC app also says which size
 to expect (it remembers the last LCD type you picked).
@@ -52,7 +52,7 @@ pull SDA/SCL up to 5 V. The ESP32-S3's pins are **not** 5 V tolerant, so use a l
 
 ### Optional: a second screen (one per eye)
 
-Choose **1 or 2 screens** in the PC app (*Device → Screens*); the buddy stores the choice in flash.
+Choose **1 or 2 screens** in the PC app (*Device → Screens*); HANK stores the choice in flash.
 With two screens each display shows one big eye. On app screens the PC app picks the layout:
 the app on one screen while the other eye *watches it*, or the app on both screens.
 
@@ -65,7 +65,7 @@ the app on one screen while the other eye *watches it*, or the app on both scree
 Most 0.91" modules are fixed at address `0x3C`, so two of them can't share a bus — hence the second
 bus. If your second module has an address jumper set to `0x3D`, you can put it on GPIO 8/9 instead:
 set `DISP2_SAME_BUS 1` and `DISP2_I2C_ADDR 0x3D` in `src/config.h`. Screens mounted the wrong way round
-or upside down are fixed in the PC app (swap / flip), no rewiring needed. The buddy reports whether it
+or upside down are fixed in the PC app (swap / flip), no rewiring needed. HANK reports whether it
 found the second screen at boot, and the PC app warns you if it didn't.
 
 ## Build and flash
@@ -86,16 +86,16 @@ The `huge_app.csv` partition table leaves room for the Bluetooth stack.
 ## Blank screen?
 
 Open the serial monitor (`pio device monitor`, then press **RST**). The first line says what the
-buddy found on the I2C bus and which screen it is driving, e.g.
+HANK found on the I2C bus and which screen it is driving, e.g.
 
 ```
-DeskBuddy 2.0.1: I2C SDA=8 SCL=9 | OLED@0x3C not found | LCD 0x27 | screen: lcd1602 (auto)
+HANK 2.0.1: I2C SDA=8 SCL=9 | OLED@0x3C not found | LCD 0x27 | screen: lcd1602 (auto)
 ```
 
 * **Nothing found:** check SDA → GPIO 8, SCL → GPIO 9, power and GND (the old ESP32 build used
   21/22).
 * **Found, but the other screen is used:** in the PC app set *Device → Screen type* to
-  *Automatic* or the right type and save; the buddy remembers it.
+  *Automatic* or the right type and save; HANK remembers it.
 * **1602 found but blank:** turn the contrast potentiometer on the backpack. The LCD needs 5 V,
   and check the I2C level shifting described above.
 * **1602 shows a row of solid blocks:** it has power but never got initialised. Usually the wrong
@@ -103,11 +103,11 @@ DeskBuddy 2.0.1: I2C SDA=8 SCL=9 | OLED@0x3C not found | LCD 0x27 | screen: lcd1
 
 ## Connecting to the PC
 
-The buddy speaks the same JSON-lines protocol over **Bluetooth LE** and over **USB**, and always
+HANK speaks the same JSON-lines protocol over **Bluetooth LE** and over **USB**, and always
 answers on the link it last heard from.
 
-* **Bluetooth LE** (default): the buddy advertises as `DeskBuddy` with the Nordic UART Service
-  (`6E400001-B5A3-F393-E0A9-E50E24DCCA9E`; the PC writes to `…0002`, the buddy notifies on `…0003`).
+* **Bluetooth LE** (default): HANK advertises as `HANK` with the Nordic UART Service
+  (`6E400001-B5A3-F393-E0A9-E50E24DCCA9E`; the PC writes to `…0002`, HANK notifies on `…0003`).
   **No pairing**: in the PC app pick *Device → Bluetooth LE* (*Scan* finds it). Works from Windows
   and Linux (BlueZ). Any BLE terminal app (e.g. nRF Connect, "Serial Bluetooth Terminal") can talk
   to it too, which is handy for debugging.
@@ -115,7 +115,7 @@ answers on the link it last heard from.
   macOS `/dev/cu.usbmodem…`). On macOS use this for now: the PC app's Bluetooth LE support covers
   Windows and Linux.
 
-If no message arrives from the PC for 30 s the buddy decides it is alone: it gets sleepy
+If no message arrives from the PC for 30 s HANK decides it is alone: it gets sleepy
 and blinks a small Bluetooth "no PC" sign in the corner.
 
 ## Controls
@@ -128,9 +128,9 @@ and blinks a small Bluetooth "no PC" sign in the corner.
 | App screen       | SELECT               | Tells the PC "open this" (e.g. it opens the PR list).           |
 | Any screen       | long SELECT          | Tells the PC "refresh now".                                     |
 | Speech bubble    | any                  | Dismiss it.                                                     |
-| Takeover (nudge) | SELECT               | "I'm on it" -> `ack` to the PC, buddy winks.                    |
+| Takeover (nudge) | SELECT               | "I'm on it" -> `ack` to the PC, HANK winks.                     |
 | Takeover (nudge) | LEFT / RIGHT         | "Later" -> `snooze` to the PC.                                  |
-| Anywhere         | MAGIC / long MAGIC   | Runs what the PC app's *Magic button* page says (mute mic, play/pause, ...); the buddy sparkles and shows the result. |
+| Anywhere         | MAGIC / long MAGIC   | Runs what the PC app's *Magic button* page says (mute mic, play/pause, ...); HANK sparkles and shows the result. |
 
 Every press is reported to the PC as a `btn` event (takeover presses are reported as
 `ack` / `snooze` instead).
@@ -158,7 +158,7 @@ A small badge in the top-right corner shows how many items are pending.
 up with a scrolling speech bubble for ~4.5 s, and the big face does a double-take afterwards.
 
 **Takeovers**: an `alert` takes over the whole screen: a mini face bounces and stares at you,
-the message scrolls, and every 3 s the buddy "knocks" (shakes the screen). Level-2 alerts
+the message scrolls, and every 3 s HANK "knocks" (shakes the screen). Level-2 alerts
 also flash the screen. Several alerts can be queued; the highest level (then the newest)
 is shown first.
 

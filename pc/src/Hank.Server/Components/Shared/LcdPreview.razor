@@ -1,0 +1,81 @@
+@* Approximation of the character LCD rendering (the real one uses custom 5x8 glyphs). *@
+<div class="lcd" title="Preview of the @(Cols)x@(RowCount) LCD">
+    @foreach (var row in Rows())
+    {
+        <div class="lcd-row">@foreach (var ch in row) { <span>@ch</span> }</div>
+    }
+</div>
+
+@code {
+    [Parameter] public bool Face { get; set; }
+    [Parameter] public LcdSize Size { get; set; } = LcdSize.Size16x2;
+    /// <summary>Position on HANK's carousel ("2/5" on a 20x4).</summary>
+    [Parameter] public int Page { get; set; } = 1;
+    [Parameter] public int Pages { get; set; } = 1;
+    [Parameter] public VisualKind Visual { get; set; }
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public double? Value { get; set; }
+    [Parameter] public double Min { get; set; }
+    [Parameter] public double Max { get; set; } = 100;
+    [Parameter] public string Unit { get; set; } = "";
+    [Parameter] public string? Text { get; set; }
+    [Parameter] public int Level { get; set; }
+    [Parameter] public bool Sample { get; set; } = true;
+
+    private int Cols => Size == LcdSize.Size20x4 ? 20 : 16;
+    private int RowCount => Size == LcdSize.Size20x4 ? 4 : 2;
+    private string Center(string s) => (new string(' ', Math.Max(0, (Cols - s.Length) / 2)) + s).PadRight(Cols);
+
+    private double? Shown => Value ?? (Sample ? Min + (Max - Min) * 0.6 : null);
+    private double Fraction => Shown is { } v && Max > Min ? Math.Clamp((v - Min) / (Max - Min), 0, 1) : 0;
+
+    private string Fit(string s) => (s.Length > Cols ? s[..Cols] : s).PadRight(Cols);
+
+    private IEnumerable<string> Rows()
+    {
+        if (Face)
+        {
+            var eyes = Center("██    ██");
+            if (RowCount == 4) yield return Fit("");
+            yield return eyes;
+            yield return eyes;
+            if (RowCount == 4) yield return Center("`--'");
+            yield break;
+        }
+
+        var right = Visual is VisualKind.Text or VisualKind.Status ? "" : Format.Number(Shown) + Unit;
+        if (Visual == VisualKind.Counter && Shown is { } c) right = Format.Number(Math.Round(c));
+        var nameRoom = Cols - right.Length - (right.Length > 0 ? 1 : 0);
+        var name = Name.Length > nameRoom ? Name[..Math.Max(0, nameRoom)] : Name;
+        yield return name + right.PadLeft(Cols - name.Length);
+
+        var text = Text ?? (Sample ? "some text here" : "");
+        yield return Fit(Visual switch
+        {
+            VisualKind.Gauge or VisualKind.Bar => Bar(),
+            VisualKind.Sparkline => "▂▃▅▄▆▅▃▄▆▇▅▆▄▅▆▇▃▅▆▇"[..Cols],
+            VisualKind.Status => (Level == 0 ? "✓ " : Level == 1 ? "! " : "X ") + (Text ?? (Level == 0 ? "all good" : "needs a look")),
+            _ => text,
+        });
+
+        if (RowCount == 4)
+        {
+            // Extra text on row 3 (where 16x2 has no room), page indicator on row 4.
+            yield return Fit(Visual is VisualKind.Text or VisualKind.Status ? "" : Text ?? (Sample ? "resets 2h10m" : ""));
+            yield return Center($"<  {Page}/{Math.Max(Page, Pages)}  >");
+        }
+    }
+
+    private string Bar()
+    {
+        var px = (int)Math.Round(Fraction * Cols * 5);
+        var partial = "▏▎▍▌▋";
+        var chars = new char[Cols];
+        for (var c = 0; c < Cols; c++)
+        {
+            var lit = px - c * 5;
+            chars[c] = lit >= 5 ? '█' : lit > 0 ? partial[lit - 1] : (Visual == VisualKind.Gauge && c % 4 == 3 ? '.' : ' ');
+        }
+        return new string(chars);
+    }
+}

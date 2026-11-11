@@ -1,4 +1,4 @@
-// DeskBuddy firmware: a tiny desk companion with opinions.
+// HANK firmware: a tiny desk companion with opinions.
 // ESP32-S3 + one or two SSD1306 128x32 OLEDs or a 1602/2004 LCD + 4 buttons, talking JSON lines over Bluetooth LE / USB.
 // Protocol: docs/protocol.md
 #include <Arduino.h>

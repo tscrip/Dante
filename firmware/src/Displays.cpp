@@ -17,7 +17,7 @@
 #define BUS2_SCL PIN_SCL2
 #endif
 
-extern "C" uint8_t deskbuddy_bus2_byte(u8x8_t* u8x8, uint8_t msg, uint8_t argInt, void* argPtr) {
+extern "C" uint8_t hank_bus2_byte(u8x8_t* u8x8, uint8_t msg, uint8_t argInt, void* argPtr) {
   switch (msg) {
     case U8X8_MSG_BYTE_SEND:
       BUS2.write((uint8_t*)argPtr, (size_t)argInt);
@@ -47,7 +47,7 @@ class SecondPanel : public U8G2 {
  public:
   SecondPanel() : U8G2() {
     u8g2_SetupDisplay(&u8g2, u8x8_d_ssd1306_128x32_univision, u8x8_cad_ssd13xx_fast_i2c,
-                      deskbuddy_bus2_byte, u8x8_gpio_and_delay_arduino);
+                      hank_bus2_byte, u8x8_gpio_and_delay_arduino);
     u8g2_SetupBuffer(&u8g2, frame, 4, u8g2_ll_hvline_vertical_top_lsb, U8G2_R0);
     u8x8_SetPin_HW_I2C(getU8x8(), U8X8_PIN_NONE);
   }
@@ -71,7 +71,8 @@ U8G2* physical(int i) { return i == 0 ? (U8G2*)&panel1 : (U8G2*)&panel2; }
 void load() {
   // Note: opening a namespace read-only fails on a freshly flashed chip (it doesn't exist
   // yet). The defaults in Settings (KIND_AUTO etc.) then stand, which is what we want.
-  if (!prefs.begin("deskbuddy", true)) return;
+  // Settings live in the "hank" namespace; firmware before the rename used "deskbuddy".
+  if (!prefs.begin("hank", true) && !prefs.begin("deskbuddy", true)) return;
   uint8_t kind = prefs.getUChar("display", Displays::KIND_AUTO);
   cfg.kind = kind == Displays::KIND_LCD ? Displays::KIND_LCD
            : kind == Displays::KIND_OLED ? Displays::KIND_OLED : Displays::KIND_AUTO;
@@ -88,7 +89,7 @@ void load() {
 }
 
 void save() {
-  if (!prefs.begin("deskbuddy", false)) return;
+  if (!prefs.begin("hank", false)) return;
   prefs.putUChar("display", cfg.kind);
   prefs.putUChar("lcdAddr", cfg.lcdAddr);
   prefs.putUChar("lcdSize", cfg.lcdSize);
@@ -210,7 +211,7 @@ bool applyConfig(JsonDocument& m) {
 void describe(char* out, size_t n) {
   char lcd[8] = "none";
   if (lcdFound) snprintf(lcd, sizeof(lcd), "0x%02X", lcdFound);
-  snprintf(out, n, "DeskBuddy " FW_VERSION ": I2C SDA=%d SCL=%d | OLED@0x%02X %s | LCD %s | screen: %s%s",
+  snprintf(out, n, "HANK " FW_VERSION ": I2C SDA=%d SCL=%d | OLED@0x%02X %s | LCD %s | screen: %s%s",
            PIN_SDA, PIN_SCL, DISP1_I2C_ADDR, detected1 ? "found" : "not found", lcd,
            kindName(), cfg.kind == KIND_AUTO ? " (auto)" : " (set by PC app)");
 }

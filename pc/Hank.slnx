@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Hank.Core/Hank.Core.csproj" />
+    <Project Path="src/Hank.Server/Hank.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Hank.Core.Tests/Hank.Core.Tests.csproj" />
+  </Folder>
+</Solution>

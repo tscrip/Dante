@@ -1,12 +1,14 @@
-# DeskBuddy
+# HANK
 
-A little desk companion with a personality: an ESP32-S3 with one or two 0.91" 128×32 OLEDs and four buttons that
+**H**ackable **A**ssistant that **N**udges & **K**nocks.
+
+"What's that on your desk?" "Oh, that's HANK." A little desk companion with a personality: an ESP32-S3 with one or two 0.91" 128×32 OLEDs and four buttons that
 sits on your desk, pulls faces, and nudges you when things are waiting on you. All the thinking happens
-on your PC, which pushes simple values to the buddy over Bluetooth LE (or USB).
+on your PC, which pushes simple values to HANK over Bluetooth LE (or USB).
 
 ```
 ┌──────────────── PC (Windows / macOS / Linux) ────────────────┐   Bluetooth LE (NUS) / USB
-│  DeskBuddy.Server  (.NET 10, ASP.NET Core + Blazor)          │  ◄──── JSON lines ────►  ┌────────────┐
+│  Hank.Server  (.NET 10, ASP.NET Core + Blazor)          │  ◄──── JSON lines ────►  ┌────────────┐
 │   • Config UI in your browser: http://127.0.0.1:5280         │                          │  ESP32-S3  │
 │   • Data sources: Claude Code usage, Claude Code "waiting",  │                          │  ◉ ◉  face │
 │     Azure DevOps PRs, HTTP JSON, command, REST push          │                          │  ◄ ● ►     │
@@ -17,7 +19,7 @@ on your PC, which pushes simple values to the buddy over Bluetooth LE (or USB).
 | Folder | What |
 |---|---|
 | [`firmware/`](firmware/README.md) | PlatformIO / Arduino firmware: animated face, moods, gags, app screens, nudges. Wiring + flashing. |
-| [`pc/`](pc) | .NET 10 solution: `DeskBuddy.Core` (engine, sources, protocol), `DeskBuddy.Server` (web config UI + REST API), tests. |
+| [`pc/`](pc) | .NET 10 solution: `Hank.Core` (engine, sources, protocol), `Hank.Server` (web config UI + REST API), tests. |
 | [`docs/protocol.md`](docs/protocol.md) | The wire protocol between the two. |
 
 ## How it behaves
@@ -26,7 +28,7 @@ on your PC, which pushes simple values to the buddy over Bluetooth LE (or USB).
   (PCF8574 I2C); chosen on the *Device* page (or *Automatic*) and switched live.
 * **One or two screens** — use a single display for both eyes, or give each eye its own display.
   With two, app screens either show the app on one display while the other eye watches it, or on both.
-  Pick it (plus swap/upside-down fixes for mounting) on the *Device* page; the buddy remembers it.
+  Pick it (plus swap/upside-down fixes for mounting) on the *Device* page; HANK remembers it.
 
 * **Face screen** — procedural robot eyes that blink, glance around and react. Press **SELECT** (top) for a
   random gag: heart eyes, dizzy, wink, laughing `> <`, surprised, "boop!".
@@ -36,11 +38,11 @@ on your PC, which pushes simple values to the buddy over Bluetooth LE (or USB).
 * **Apps** — **LEFT/RIGHT** browse app screens. Each app has a name, a visual (gauge, bar, counter, text,
   sparkline, status) and a data source that runs on the PC. **SELECT** on an app opens its link on the PC
   (e.g. the oldest PR); long-press **SELECT** refreshes everything.
-* **Funny deliveries** — when a value changes the PC picks a line in the buddy's personality
-  (Cheerful, Sarcastic, Dramatic, or your own lines) and the buddy pops it up in a speech bubble.
+* **Funny deliveries** — when a value changes the PC picks a line in HANK's personality
+  (Cheerful, Sarcastic, Dramatic, or your own lines) and HANK pops it up in a speech bubble.
 * **Magic button** — a fourth button on top runs something on the PC: mute/unmute the mic or
   sound, play/pause, next/previous, volume, open a URL/app, or run any command. Press and long press
-  are set separately on the *Magic button* page; the buddy confirms ("Mic muted").
+  are set separately on the *Magic button* page; HANK confirms ("Mic muted").
 * **Take-overs** — an app can take over the face and nudge you ("Claude Code is waiting on you!") after a
   grace period. **SELECT** = "I'm on it" (re-nudges later if still true), **LEFT/RIGHT** = snooze.
 
@@ -54,25 +56,25 @@ on your PC, which pushes simple values to the buddy over Bluetooth LE (or USB).
 
 ## Quick start
 
-1. **Flash the buddy** — see [firmware/README.md](firmware/README.md) (`pio run -t upload`).
+1. **Flash HANK** — see [firmware/README.md](firmware/README.md) (`pio run -t upload`).
 2. **Run the PC app** (needs the [.NET 10 SDK](https://dotnet.microsoft.com/download)):
    ```bash
    cd pc
-   dotnet run --project src/DeskBuddy.Server
+   dotnet run --project src/Hank.Server
    ```
    Your browser opens <http://127.0.0.1:5280>. On **Device**, choose **Bluetooth LE** (no pairing;
-   *Scan* finds `DeskBuddy`) or **USB cable** and its port. Bluetooth LE works on Windows and Linux
+   *Scan* finds `HANK`) or **USB cable** and its port. Bluetooth LE works on Windows and Linux
    (BlueZ); on macOS use USB for now.
 3. **Screens** (same page): Automatic, OLED (one or two), LCD 1602 or LCD 2004.
-4. **Claude Code page → Install hooks** so the buddy knows when a session is waiting for you.
-5. **Azure DevOps**: set `DESKBUDDY_ADO_PAT` (PAT with *Code: Read*) in your environment, then edit
+4. **Claude Code page → Install hooks** so HANK knows when a session is waiting for you.
+5. **Azure DevOps**: set `HANK_ADO_PAT` (PAT with *Code: Read*) in your environment, then edit
    *PRs for me* → organisation URL → enable.
 
 Publish a self-contained build for any OS with e.g.
-`dotnet publish src/DeskBuddy.Server -c Release -r win-x64 --self-contained` (or `osx-arm64`, `linux-x64`).
+`dotnet publish src/Hank.Server -c Release -r win-x64 --self-contained` (or `osx-arm64`, `linux-x64`).
 Windows builds automatically use the `net10.0-windows10.0.19041.0` target, which is needed for Bluetooth LE.
-Config lives in `%APPDATA%\DeskBuddy\config.json` / `~/.config/DeskBuddy/config.json`
-(override with `DESKBUDDY_CONFIG`).
+Config lives in `%APPDATA%\HANK\config.json` / `~/.config/HANK/config.json`
+(override with `HANK_CONFIG`).
 
 ## Feeding your own apps
 
@@ -84,9 +86,9 @@ Config lives in `%APPDATA%\DeskBuddy\config.json` / `~/.config/DeskBuddy/config.
   `pending` items are what drive the mood and "waiting" take-overs.
 * **HTTP JSON** — poll a URL and pick fields with a dotted path (`data.items[0].count`, `$count:items`).
 * **Command** — run any program; it prints `3`, `3 some text`, or `{"value":3,"text":"..."}`.
-* **New source type** — implement `IDataSource` in `DeskBuddy.Core` and register it in `Program.cs`;
+* **New source type** — implement `IDataSource` in `Hank.Core` and register it in `Program.cs`;
   the UI renders its settings automatically.
-* `POST /api/say {"text":"..."}` makes the buddy say something; `GET /api/state` returns everything.
+* `POST /api/say {"text":"..."}` makes HANK say something; `GET /api/state` returns everything.
 
 ## Notes
 
@@ -95,9 +97,16 @@ Config lives in `%APPDATA%\DeskBuddy\config.json` / `~/.config/DeskBuddy/config.
 * The Claude Code usage source uses the same (undocumented) OAuth usage endpoint Claude Code itself
   calls; if it changes, point that app at the *push* or *command* source instead.
 
+## Coming from DeskBuddy?
+
+HANK used to be called DeskBuddy. The PC app copies your old config (`DeskBuddy/config.json`) to the
+new `Hank` folder on first start. `DESKBUDDY_*` environment variables still work (as do the new
+`HANK_*` names), and a saved Bluetooth name of "DeskBuddy" becomes "HANK". After reflashing,
+the device advertises as `HANK` and keeps its saved screen settings.
+
 ## Development
 
 ```bash
-cd pc && dotnet test        # engine, mood, nudges, quips, protocol, sources, hook installer + end-to-end with a fake buddy
+cd pc && dotnet test        # engine, mood, nudges, quips, protocol, sources, hook installer + end-to-end with a fake HANK
 cd firmware && pio run      # build firmware
 ```

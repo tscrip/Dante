@@ -6,7 +6,7 @@
 // so this replaces the old SPP link.
 //   service 6E400001-B5A3-F393-E0A9-E50E24DCCA9E
 //   RX      6E400002-...  (PC writes here)
-//   TX      6E400003-...  (buddy notifies here)
+//   TX      6E400003-...  (HANK notifies here)
 namespace BleUart {
   void begin(const char* name);
   bool connected();
