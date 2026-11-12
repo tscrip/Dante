@@ -98,7 +98,7 @@ public class EngineIntegrationTests : IAsyncLifetime
     public async Task Screen_settings_from_the_client_reach_the_buddy()
     {
         var initial = await WaitFor(m => Is(m, "cfg"));
-        Assert.Equal(1, initial["screens"]!.GetValue<int>());
+        Assert.Equal(0, initial["screens"]!.GetValue<int>());   // automatic by default
         for (var i = 0; i < 40 && _link.SecondScreenDetected is null; i++) await Task.Delay(50);
         Assert.True(_link.SecondScreenDetected);
         Assert.Equal("oled", _link.DeviceDisplay);

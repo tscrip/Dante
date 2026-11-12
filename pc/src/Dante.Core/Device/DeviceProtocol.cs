@@ -68,7 +68,7 @@ public static class DeviceProtocol
         },
         ["lcdSize"] = d.EffectiveLcdSize == LcdSize.Size20x4 ? "2004" : "1602",
         ["lcdAddr"] = Math.Clamp(d.LcdAddress, 0x08, 0x77),
-        ["screens"] = d.ScreenCount == 2 ? 2 : 1,
+        ["screens"] = d.ScreenCount is 1 or 2 ? d.ScreenCount : 0,   // 0 = automatic
         ["layout"] = d.DualLayout == DualLayout.Mirror ? "mirror" : "watch",
         ["content"] = d.ContentScreen == ScreenSide.Left ? "left" : "right",
         ["swap"] = d.SwapScreens,

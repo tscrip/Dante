@@ -344,7 +344,7 @@ void setup() {
   Link::begin(onMessage);
 
   // A plain-text line for `pio device monitor` (the PC app ignores non-JSON lines).
-  char diag[160];
+  char diag[256];
   Displays::describe(diag, sizeof(diag));
   Serial.println(diag);
 

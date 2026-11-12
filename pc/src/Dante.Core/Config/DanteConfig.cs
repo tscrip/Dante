@@ -46,8 +46,11 @@ public sealed class DeviceSettings
         _ => LcdSize,
     };
 
-    /// <summary>OLED only: 1 = both eyes on one screen; 2 = one screen per eye.</summary>
-    public int ScreenCount { get; set; } = 1;
+    /// <summary>
+    /// OLED only: 1 = both eyes on one screen; 2 = one screen per eye; 0 = automatic (DANTE uses a second
+    /// screen if one answers when it starts).
+    /// </summary>
+    public int ScreenCount { get; set; } = 0;
     /// <summary>Two screens only: what app screens look like.</summary>
     public DualLayout DualLayout { get; set; } = DualLayout.Watch;
     /// <summary>Two screens, <see cref="DualLayout.Watch"/>: which screen shows the app (the other one watches it).</summary>

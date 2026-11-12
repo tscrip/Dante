@@ -78,7 +78,7 @@ void load() {
            : kind == Displays::KIND_OLED ? Displays::KIND_OLED : Displays::KIND_AUTO;
   cfg.lcdAddr = prefs.getUChar("lcdAddr", LCD_DEFAULT_ADDR);
   cfg.lcdSize = prefs.getUChar("lcdSize", Displays::LCD_1602) == Displays::LCD_2004 ? Displays::LCD_2004 : Displays::LCD_1602;
-  cfg.screens = prefs.getUChar("screens", 1);
+  cfg.screens = prefs.getUChar("screens", 0);
   cfg.layout = (Displays::Layout)prefs.getUChar("layout", Displays::LAYOUT_WATCH);
   cfg.contentSide = prefs.getUChar("content", 1);
   cfg.swap = prefs.getBool("swap", false);
@@ -121,7 +121,7 @@ void apply() {
     physical(i)->setContrast(cfg.bright);
   }
   panel1.setPowerSave(lcd ? 1 : 0);
-  bool want2 = !lcd && cfg.screens == 2;
+  bool want2 = !lcd && Displays::count() == 2;
   if (want2 != panel2Awake) {
     if (!want2) { panel2.clearBuffer(); panel2.sendBuffer(); }
     panel2.setPowerSave(want2 ? 0 : 1);
@@ -173,7 +173,11 @@ bool oledDetected() { return detected1; }
 uint8_t lcdDetected() { return lcdFound; }
 bool isLcd() { return active == KIND_LCD; }
 const char* kindName() { return !isLcd() ? "oled" : cfg.lcdSize == LCD_2004 ? "lcd2004" : "lcd1602"; }
-int count() { return !isLcd() && cfg.screens == 2 ? 2 : 1; }
+int count() {
+  if (isLcd()) return 1;
+  if (cfg.screens == 0) return detected2 ? 2 : 1;   // automatic
+  return cfg.screens == 2 ? 2 : 1;
+}
 
 U8G2& side(int s) {
   if (count() != 2) return panel1;
@@ -194,7 +198,10 @@ bool applyConfig(JsonDocument& m) {
     cfg.lcdSize = strcmp(m["lcdSize"], "2004") == 0 ? LCD_2004 : LCD_1602;
   }
   if (m["lcdAddr"].is<int>()) cfg.lcdAddr = (uint8_t)constrain(m["lcdAddr"].as<int>(), 0x08, 0x77);
-  if (m["screens"].is<int>()) cfg.screens = m["screens"].as<int>() == 2 ? 2 : 1;
+  if (m["screens"].is<int>()) {
+    int sc = m["screens"].as<int>();
+    cfg.screens = sc == 1 || sc == 2 ? (uint8_t)sc : 0;   // anything else = automatic
+  }
   if (m["layout"].is<const char*>()) cfg.layout = strcmp(m["layout"], "mirror") == 0 ? LAYOUT_MIRROR : LAYOUT_WATCH;
   if (m["content"].is<const char*>()) cfg.contentSide = strcmp(m["content"], "left") == 0 ? 0 : 1;
   if (m["swap"].is<bool>()) cfg.swap = m["swap"];
@@ -211,9 +218,12 @@ bool applyConfig(JsonDocument& m) {
 void describe(char* out, size_t n) {
   char lcd[8] = "none";
   if (lcdFound) snprintf(lcd, sizeof(lcd), "0x%02X", lcdFound);
-  snprintf(out, n, "DANTE " FW_VERSION ": I2C SDA=%d SCL=%d | OLED@0x%02X %s | LCD %s | screen: %s%s",
+  snprintf(out, n, "DANTE " FW_VERSION ": I2C SDA=%d SCL=%d | OLED@0x%02X %s | LCD %s | 2nd OLED (SDA=%d SCL=%d) %s"
+                   " | screen: %s%s x%d%s",
            PIN_SDA, PIN_SCL, DISP1_I2C_ADDR, detected1 ? "found" : "not found", lcd,
-           kindName(), cfg.kind == KIND_AUTO ? " (auto)" : " (set by PC app)");
+           BUS2_SDA, BUS2_SCL, detected2 ? "found" : "not found",
+           kindName(), cfg.kind == KIND_AUTO ? " (auto)" : " (set by PC app)",
+           count(), cfg.screens == 0 ? " (auto)" : " (set by PC app)");
 }
 
 } // namespace Displays

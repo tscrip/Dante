@@ -54,7 +54,8 @@ pull SDA/SCL up to 5 V. The ESP32-S3's pins are **not** 5 V tolerant, so use a l
 
 ### Optional: a second screen (one per eye)
 
-Choose **1 or 2 screens** in the PC app (*Device → Screens*); DANTE stores the choice in flash.
+By default (*Automatic*) DANTE uses the second screen whenever it answers at boot; you can also force
+**1 or 2 screens** in the PC app (*Device → Screens*). DANTE stores the choice in flash.
 With two screens each display shows one big eye. On app screens the PC app picks the layout:
 the app on one screen while the other eye *watches it*, or the app on both screens.
 
@@ -87,13 +88,16 @@ The `huge_app.csv` partition table leaves room for the Bluetooth stack.
 
 ## Blank screen?
 
-Open the serial monitor (`pio device monitor`, then press **RST**). The first line says what the
-DANTE found on the I2C bus and which screen it is driving, e.g.
+Open the serial monitor (`pio device monitor`, then press **RST**). The first line says what
+DANTE found on both I2C buses and which screens it is driving, e.g.
 
 ```
-DANTE 2.0.1: I2C SDA=8 SCL=9 | OLED@0x3C not found | LCD 0x27 | screen: lcd1602 (auto)
+DANTE 2.4.1: I2C SDA=8 SCL=9 | OLED@0x3C found | LCD none | 2nd OLED (SDA=17 SCL=18) found | screen: oled (auto) x2 (auto)
 ```
 
+* **Second screen dark:** the line says `2nd OLED (SDA=17 SCL=18) found` or `not found`. If found but
+  the line ends in `x1 (set by PC app)`, set *Device → Screens* to *Automatic* or *2 screens*. If not
+  found, check SDA → GPIO 17, SCL → GPIO 18 (not swapped), 3V3 and GND, and press **RST** after wiring.
 * **Nothing found:** check SDA → GPIO 8, SCL → GPIO 9, power and GND (the old ESP32 build used
   21/22).
 * **Found, but the other screen is used:** in the PC app set *Device → Screen type* to

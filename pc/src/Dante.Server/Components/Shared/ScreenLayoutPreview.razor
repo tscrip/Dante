@@ -23,12 +23,15 @@
     [Parameter, EditorRequired] public DeviceSettings Settings { get; set; } = new();
     /// <summary>With Automatic: the LCD DANTE reported it's using, if any.</summary>
     [Parameter] public LcdSize? DetectedLcd { get; set; }
+    /// <summary>With an automatic screen count: how many screens DANTE reported it's using.</summary>
+    [Parameter] public int? DetectedScreens { get; set; }
 
     private const int Scale = 2;
 
     private IEnumerable<string> Panels(bool face)
     {
-        if (Settings.ScreenCount != 2)
+        var two = Settings.ScreenCount == 2 || (Settings.ScreenCount == 0 && DetectedScreens == 2);
+        if (!two)
         {
             yield return Svg(face ? Eye(40, 0) + Eye(88, 0) : Gauge());
             yield break;

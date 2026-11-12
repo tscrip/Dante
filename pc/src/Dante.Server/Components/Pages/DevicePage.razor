@@ -137,19 +137,27 @@
             }
             else
             {
-                <label class="check"><input type="radio" name="screens" checked="@(_cfg.Device.ScreenCount != 2)" @onchange="() => _cfg.Device.ScreenCount = 1" />
+                <label class="check"><input type="radio" name="screens" checked="@(_cfg.Device.ScreenCount == 0)" @onchange="() => _cfg.Device.ScreenCount = 0" />
+                    <span><strong>Automatic</strong> <span class="muted small">— one eye per display if a second screen is connected</span></span></label>
+                @if (_cfg.Device.ScreenCount == 0 && Link.Online && Link.SecondScreenDetected is not null)
+                {
+                    <p class="help" style="margin:-.3rem 0 .6rem 1.6rem">@(Link.SecondScreenDetected == true
+                        ? "DANTE found a second screen: using two."
+                        : "No second screen found when DANTE started (SDA 17 / SCL 18): using one.")</p>
+                }
+                <label class="check"><input type="radio" name="screens" checked="@(_cfg.Device.ScreenCount == 1)" @onchange="() => _cfg.Device.ScreenCount = 1" />
                     <span><strong>1 screen</strong> <span class="muted small">— both eyes on one display</span></span></label>
                 <label class="check"><input type="radio" name="screens" checked="@(_cfg.Device.ScreenCount == 2)" @onchange="() => _cfg.Device.ScreenCount = 2" />
                     <span><strong>2 screens</strong> <span class="muted small">— one big eye per display</span></span></label>
 
-                @if (_cfg.Device.ScreenCount == 2)
+                @if (_cfg.Device.ScreenCount != 1)
                 {
-                    @if (Link.Online && Link.SecondScreenDetected == false)
+                    @if (_cfg.Device.ScreenCount == 2 && Link.Online && Link.SecondScreenDetected == false)
                     {
                         <div class="notice error small">DANTE didn't find a second screen when it started. Check the wiring
                             (second screen on SDA 17 / SCL 18 by default) and restart it.</div>
                     }
-                    <h3 class="small muted">On app screens</h3>
+                    <h3 class="small muted">On app screens@(_cfg.Device.ScreenCount == 0 ? " (when there are two)" : "")</h3>
                     <label class="check"><input type="radio" name="layout" checked="@(_cfg.Device.DualLayout == DualLayout.Watch)" @onchange="() => _cfg.Device.DualLayout = DualLayout.Watch" />
                         <span>App on one screen, the other eye watches it</span></label>
                     <label class="check"><input type="radio" name="layout" checked="@(_cfg.Device.DualLayout == DualLayout.Mirror)" @onchange="() => _cfg.Device.DualLayout = DualLayout.Mirror" />
@@ -167,8 +175,8 @@
                     <h3 class="small muted">Mounting</h3>
                     <label class="check"><input type="checkbox" @bind="_cfg.Device.SwapScreens" /> Swap left and right screens</label>
                 }
-                <label class="check"><input type="checkbox" @bind="_cfg.Device.FlipScreen1" /> Upside down: @(_cfg.Device.ScreenCount == 2 ? "screen 1" : "screen")</label>
-                @if (_cfg.Device.ScreenCount == 2)
+                <label class="check"><input type="checkbox" @bind="_cfg.Device.FlipScreen1" /> Upside down: @(_cfg.Device.ScreenCount == 1 ? "screen" : "screen 1")</label>
+                @if (_cfg.Device.ScreenCount != 1)
                 {
                     <label class="check"><input type="checkbox" @bind="_cfg.Device.FlipScreen2" /> Upside down: screen 2</label>
                 }
@@ -180,7 +188,7 @@
             }
         </div>
         <div>
-            <ScreenLayoutPreview Settings="_cfg.Device" DetectedLcd="@Link.DeviceLcd" />
+            <ScreenLayoutPreview Settings="_cfg.Device" DetectedLcd="@Link.DeviceLcd" DetectedScreens="@Link.DeviceScreens" />
             <p class="muted small">DANTE remembers this, so it starts up in the right mode even before the PC connects.
                 Before it has ever been configured it uses whichever screen it finds.</p>
         </div>

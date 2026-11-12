@@ -51,7 +51,11 @@ public class ProtocolTests
         });
         Assert.Equal("""{"t":"cfg","bright":255,"display":"auto","lcdSize":"1602","lcdAddr":39,"screens":2,"layout":"mirror","content":"left","swap":true,"flip1":false,"flip2":true}""",
             msg.ToJsonString());
-        Assert.Equal(1, DeviceProtocol.Cfg(new DeviceSettings { ScreenCount = 7 })["screens"]!.GetValue<int>());
+        Assert.Equal(1, DeviceProtocol.Cfg(new DeviceSettings { ScreenCount = 1 })["screens"]!.GetValue<int>());
+        // Default and anything unexpected = automatic (0): DANTE uses a second screen if it finds one.
+        Assert.Equal(0, new DeviceSettings().ScreenCount);
+        Assert.Equal(0, DeviceProtocol.Cfg(new DeviceSettings())["screens"]!.GetValue<int>());
+        Assert.Equal(0, DeviceProtocol.Cfg(new DeviceSettings { ScreenCount = 7 })["screens"]!.GetValue<int>());
     }
 
     [Fact]
