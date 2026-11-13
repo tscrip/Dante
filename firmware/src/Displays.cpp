@@ -243,4 +243,22 @@ void describe(char* out, size_t n) {
            count(), cfg.screens == 0 ? " (auto)" : " (set by PC app)");
 }
 
+void scanNow(char* out, size_t n) {
+  TwoWire* buses[2] = { &Wire, &BUS2 };
+  const int sdas[2] = { PIN_SDA, BUS2_SDA }, scls[2] = { PIN_SCL, BUS2_SCL };
+  size_t used = snprintf(out, n, "I2C scan now:");
+  for (int b = 0; b < 2 && used < n; b++) {
+    used += snprintf(out + used, n - used, "%s bus %d (SDA=%d SCL=%d):", b ? " |" : "", b + 1, sdas[b], scls[b]);
+    int found = 0;
+    for (uint8_t a = 0x08; a <= 0x77 && used < n; a++) {
+      buses[b]->beginTransmission(a);
+      if (buses[b]->endTransmission() != 0) continue;
+      const char* what = a == 0x3C || a == 0x3D ? " (OLED)" : (a >= 0x20 && a <= 0x27) || (a >= 0x38 && a <= 0x3F) ? " (LCD)" : "";
+      used += snprintf(out + used, n - used, " 0x%02X%s", a, what);
+      found++;
+    }
+    if (!found && used < n) used += snprintf(out + used, n - used, " nothing");
+  }
+}
+
 } // namespace Displays

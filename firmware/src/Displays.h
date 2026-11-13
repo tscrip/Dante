@@ -42,6 +42,8 @@ namespace Displays {
   const char* kindName();       // "oled" / "lcd1602" / "lcd2004" (in use)
   // One human-readable line about the I2C bus and the chosen screen, for the USB log.
   void describe(char* out, size_t n);
+  // Probes every I2C address on both buses right now: "bus 1 (SDA=8 SCL=9): 0x27 | bus 2 (...): nothing".
+  void scanNow(char* out, size_t n);
 
   // Applies the display-related fields of a `cfg` message. Returns true if anything changed.
   bool applyConfig(JsonDocument& msg);

@@ -7,7 +7,12 @@
 namespace Link {
   typedef void (*Handler)(JsonDocument& msg);
 
+  typedef void (*TextHandler)(const char* line);
+
   void begin(Handler handler);
+  // Plain-text lines (not JSON), e.g. "?" typed into a serial monitor.
+  void onText(TextHandler handler);
+  void sendText(const char* line);   // + "\r\n" on the link the last line came from
   void poll();                       // read both links, dispatch complete lines
   void send(JsonDocument& msg);      // serialize + '\n' on the active link
   bool pcAlive();                    // heard from the PC recently?

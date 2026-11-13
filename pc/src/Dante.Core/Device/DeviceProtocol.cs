@@ -11,6 +11,8 @@ public static class DeviceProtocol
 
     public static JsonObject Hello() => new() { ["t"] = "hello" };
     public static JsonObject Ping() => new() { ["t"] = "ping" };
+    /// <summary>Asks DANTE what it found at boot plus a live I2C scan of both buses.</summary>
+    public static JsonObject Diag() => new() { ["t"] = "diag" };
 
     public static JsonObject Apps(IEnumerable<AppDefinition> apps) => new()
     {

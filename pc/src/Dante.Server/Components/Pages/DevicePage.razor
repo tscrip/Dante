@@ -66,6 +66,25 @@
     </div>
 
     <div class="panel">
+        <h2>Check wiring</h2>
+        <p class="small muted">Asks DANTE which I2C devices answer on each bus right now: bus 1 = SDA 8 / SCL 9,
+            bus 2 = SDA 17 / SCL 18. No restart needed, so you can rewire and check again.</p>
+        <button class="btn" @onclick="CheckWiring" disabled="@(!Link.Online)">Check wiring</button>
+        @if (!Link.Online) { <span class="muted small"> (DANTE needs to be connected)</span> }
+        @if (Link.LastDiag is { } diag && _diagAsked is { } asked && diag.At >= asked)
+        {
+            <ul class="small" style="margin:.75rem 0 .25rem 1.1rem;padding:0">
+                @foreach (var hint in diag.Explain(_cfg.Device)) { <li>@hint</li> }
+            </ul>
+            <pre class="small" style="white-space:pre-wrap">@(diag.Scan.Replace(" | ", "\n"))</pre>
+        }
+        else if (_diagAsked is not null)
+        {
+            <p class="muted small">Asking...</p>
+        }
+    </div>
+
+    <div class="panel">
         <h2>Poke it</h2>
         <label class="field"><span>Say</span><input type="text" @bind="_say" maxlength="63" /></label>
         <div class="row">
@@ -243,6 +262,14 @@
     private string? _scanError;
 
     private DateTimeOffset? _savedAt;
+
+    private DateTimeOffset? _diagAsked;
+
+    private void CheckWiring()
+    {
+        _diagAsked = DateTimeOffset.UtcNow.AddSeconds(-1);
+        Link.Send(DeviceProtocol.Diag());
+    }
 
     // 0x20-0x27 = PCF8574, 0x38-0x3F = PCF8574A (set by the A0-A2 jumpers on the backpack).
     private static string Hex(int a) => $"0x{a:X2}";

@@ -112,6 +112,15 @@ static void onMessage(JsonDocument& m) {
   const char* t = m["t"];
   if (!strcmp(t, "hello")) {
     sendHello();
+  } else if (!strcmp(t, "diag")) {             // "Check wiring" in the PC app
+    JsonDocument d;
+    char buf[320];
+    d["t"] = "diag";
+    Displays::describe(buf, sizeof(buf));
+    d["boot"] = buf;                            // ArduinoJson copies char arrays
+    Displays::scanNow(buf, sizeof(buf));
+    d["scan"] = buf;
+    Link::send(d);
   } else if (!strcmp(t, "ping")) {
     sendSimple("pong", nullptr);
   } else if (!strcmp(t, "apps")) {
@@ -149,6 +158,16 @@ static void onMessage(JsonDocument& m) {
   } else if (!strcmp(t, "cfg")) {
     if (Displays::applyConfig(m)) sliding = false;
   }
+}
+
+// "?" (or "diag") typed in a serial monitor: what DANTE found at boot, plus a live I2C scan.
+static void onText(const char* line) {
+  if (strcmp(line, "?") != 0 && strcasecmp(line, "diag") != 0) return;
+  char buf[320];
+  Displays::describe(buf, sizeof(buf));
+  Link::sendText(buf);
+  Displays::scanNow(buf, sizeof(buf));
+  Link::sendText(buf);
 }
 
 // ---- input --------------------------------------------------------------------------
@@ -362,6 +381,7 @@ void setup() {
   Displays::begin();
   Face::begin();
   Link::begin(onMessage);
+  Link::onText(onText);
 
   // A plain-text line for `pio device monitor` (the PC app ignores non-JSON lines).
   char diag[256];

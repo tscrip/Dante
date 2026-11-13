@@ -98,6 +98,8 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
     public int? LcdDetectedAddress { get; private set; }
     /// <summary>I2C address an LCD answered at on the second bus (GPIO 17/18) during boot (0 = none).</summary>
     public int? Lcd2DetectedAddress { get; private set; }
+    /// <summary>Latest reply to <see cref="DeviceProtocol.Diag"/>.</summary>
+    public WiringReport? LastDiag { get; private set; }
     public string? LastError { get; private set; }
     public DateTimeOffset? LastHeard { get; private set; }
     /// <summary>Link open AND DANTE answered recently.</summary>
@@ -223,6 +225,8 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
                 if (DeviceEvent.TryParse(line) is not { } evt) continue;
 
                 LastHeard = time.GetUtcNow();
+                if (evt.Type == "diag")
+                    LastDiag = new WiringReport(time.GetUtcNow(), evt.Raw["boot"]?.GetValue<string>() ?? "", evt.Raw["scan"]?.GetValue<string>() ?? "");
                 if (evt.Type == "hello")
                 {
                     Firmware = evt.Raw["fw"]?.GetValue<string>();

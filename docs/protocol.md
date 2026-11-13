@@ -18,6 +18,7 @@ Limits on the device: max 12 apps, `id` ≤ 15 chars, `name` ≤ 19 chars, `unit
 |---------|--------|---------|
 | `hello` | –      | PC (re)connected. Device answers with its own `hello`. |
 | `ping`  | –      | Heartbeat (PC sends every ~10 s). Device answers `pong`. If no message arrives for 30 s DANTE considers itself alone (sleepy + "no PC" icon). |
+| `diag`  | –      | "Check wiring": DANTE answers with a `diag` (what it found at boot plus a live scan of both I2C buses). |
 | `apps`  | `apps`: array of `{id, name, vis, min, max, unit}` | Replaces the list of app screens. `vis` ∈ `gauge`, `bar`, `counter`, `text`, `spark`, `status`. Screen order = array order; the face is always screen 0. |
 | `val`   | `id`, `v` (number, optional), `txt` (optional), `lvl` (0 ok, 1 warn, 2 crit), `quip` (optional) | New value for an app. If `quip` is present DANTE "delivers" it: a speech-bubble toast with a reaction face. |
 | `mood`  | `m` ∈ `happy`,`curious`,`antsy`,`grumpy`,`meltdown`; `n` pending count; `age` oldest wait in minutes | Personality baseline for the face. |
@@ -32,6 +33,7 @@ Limits on the device: max 12 apps, `id` ≤ 15 chars, `name` ≤ 19 chars, `unit
 |----------|--------|---------|
 | `hello`  | `fw`, `name`, `display`, `screens`, `disp2`, `oled`, `lcd`, `lcd2` | Firmware version, device name, screen type in use (`oled`/`lcd1602`/`lcd2004`), screens in use, and what answered at boot: a second screen of the type in use (`disp2`), the first OLED (`oled`), the address of an LCD backpack (`lcd`, 0 = none), and of one on the second bus (`lcd2`, 0 = none). PC replies by sending `apps`, every `val`, `mood`, active `alert`s. |
 | `pong`   | –      | Heartbeat reply. |
+| `diag`   | `boot`, `scan` | `boot` = the startup report line; `scan` = live I2C scan, e.g. `I2C scan now: bus 1 (SDA=8 SCL=9): 0x27 (LCD) \| bus 2 (SDA=17 SCL=18): nothing`. Typing `?` in a serial monitor prints the same two lines as plain text. |
 | `btn`    | `b` ∈ `sel`,`left`,`right`,`magic`; `long` (bool); `scr` (app id or `face`) | Button press. Short `sel` on an app = "open it" (PC opens configured URL); long `sel` = "refresh now". `magic` = run the action configured in the PC app for a press / long press (mute, play/pause, ...); the PC answers with a `say` describing the result. MAGIC presses are sent even during a takeover and never acknowledge it. |
 | `ack`    | `id`   | User pressed SELECT on a takeover ("I'm on it"). |
 | `snooze` | `id`   | User pressed LEFT/RIGHT on a takeover ("later"). |

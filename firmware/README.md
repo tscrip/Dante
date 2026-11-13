@@ -91,11 +91,15 @@ The `huge_app.csv` partition table leaves room for the Bluetooth stack.
 
 ## Blank screen?
 
-Open the serial monitor (`pio device monitor`, then press **RST**). The first line says what
+Easiest: **Device → Check wiring** in the PC app. It asks DANTE to scan both I2C buses *right now*
+(no reset needed) and explains the result. Without the PC app, open `pio device monitor`, type `?` and
+press Enter. (After **RST** the startup line itself is often missed, because the S3's native USB
+reconnects; `?` prints it again.) The first line says what
 DANTE found on both I2C buses and which screens it is driving, e.g.
 
 ```
-DANTE 2.5.0: bus 1 (SDA=8 SCL=9): OLED none, LCD 0x27 | bus 2 (SDA=17 SCL=18): OLED none, LCD 0x27 | screen: lcd1602 (auto) x2 (auto)
+DANTE 2.5.1: bus 1 (SDA=8 SCL=9): OLED none, LCD 0x27 | bus 2 (SDA=17 SCL=18): OLED none, LCD 0x27 | screen: lcd1602 (auto) x2 (auto)
+I2C scan now: bus 1 (SDA=8 SCL=9): 0x27 (LCD) | bus 2 (SDA=17 SCL=18): 0x27 (LCD)
 ```
 
 * **Second screen dark:** the `bus 2 (SDA=17 SCL=18)` part says whether an OLED or LCD answered there.
