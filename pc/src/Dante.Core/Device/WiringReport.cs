@@ -52,8 +52,12 @@ public sealed partial record WiringReport(DateTimeOffset At, string Boot, string
             else if (lcd)
                 hints.Add("Both LCDs answer and DANTE is using two. If the second one still looks blank, turn the contrast screw on its backpack slowly until the characters appear.");
             else
-                hints.Add("Both OLEDs answer and DANTE is using two.");
+                hints.Add("Both OLEDs answer and DANTE is using two. If one still stays dark, swap the two screens: " +
+                          "if the dark one moves with the screen, that module is faulty; if it stays on the same side, it's that side's wiring.");
         }
+        if (Boot.Contains("BROWNOUT", StringComparison.Ordinal))
+            hints.Insert(0, "DANTE last restarted because its supply voltage dipped (brownout). That is a power problem: " +
+                            "try a different USB cable or port (or a powered hub), and check for a short on the 3V3/5V lines.");
         if (hints.Count == 0) hints.Add("Wiring looks right.");
         return hints;
     }

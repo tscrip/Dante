@@ -68,7 +68,7 @@ is 4×2 characters instead of 2×2, because every LCD has its own 8 custom chara
 | 2nd screen `SCL`              | GPIO 18   |                                                    |
 | 2nd screen `VCC` / `GND`      | 3V3 / GND (OLED), 5V / GND (LCD) | same level-shifting advice as the first LCD |
 
-Most 0.91" modules are fixed at address `0x3C`, and two LCD backpacks usually both sit at `0x27`, so
+Most 0.91" modules are at address `0x3C` (some are set to `0x3D`; both are found automatically), and two LCD backpacks usually both sit at `0x27`, so
 two screens can't share a bus — hence the second bus. Each LCD's address is found automatically. If your second module has an address jumper set to `0x3D`, you can put it on GPIO 8/9 instead:
 set `DISP2_SAME_BUS 1` and `DISP2_I2C_ADDR 0x3D` in `src/config.h`. Screens mounted the wrong way round
 or upside down are fixed in the PC app (swap / flip), no rewiring needed. DANTE reports whether it
@@ -98,10 +98,13 @@ reconnects; `?` prints it again.) The first line says what
 DANTE found on both I2C buses and which screens it is driving, e.g.
 
 ```
-DANTE 2.5.1: bus 1 (SDA=8 SCL=9): OLED none, LCD 0x27 | bus 2 (SDA=17 SCL=18): OLED none, LCD 0x27 | screen: lcd1602 (auto) x2 (auto)
+DANTE 2.5.2: bus 1 (SDA=8 SCL=9): OLED none, LCD 0x27 | bus 2 (SDA=17 SCL=18): OLED none, LCD 0x27 | screen: lcd1602 (auto) x2 (auto) | last reset: power on
 I2C scan now: bus 1 (SDA=8 SCL=9): 0x27 (LCD) | bus 2 (SDA=17 SCL=18): 0x27 (LCD)
 ```
 
+* **Power?** Two 0.91" OLEDs draw about 40 mA together, well within what the board's 3V3 pin can supply,
+  so running both from 3V3 is fine. If the power ever does dip, the line ends in `last reset: BROWNOUT`.
+  Try another USB cable or port then.
 * **Second screen dark:** the `bus 2 (SDA=17 SCL=18)` part says whether an OLED or LCD answered there.
   It must be the same kind as the first screen (two OLEDs, or two LCDs of the same size). If it was found
   but the line ends in `x1 (set by PC app)`, set *Device → Screens* to *Automatic* or *2 screens*. If

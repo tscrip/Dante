@@ -50,6 +50,24 @@ public class WiringReportTests
     }
 
     [Fact]
+    public void Brownout_is_reported_as_a_power_problem()
+    {
+        var boot = BootTwo + " | last reset: BROWNOUT (power dipped)";
+        var hints = Report("I2C scan now: bus 1 (SDA=8 SCL=9): 0x3C (OLED) | bus 2 (SDA=17 SCL=18): 0x3C (OLED)", boot)
+            .Explain(new DeviceSettings { Display = DisplayType.Oled128x32, ScreenCount = 2 });
+        Assert.Contains("brownout", hints[0]);
+        Assert.Equal(2, hints.Count);
+    }
+
+    [Fact]
+    public void Second_oled_at_0x3D_counts()
+    {
+        var hints = Report("I2C scan now: bus 1 (SDA=8 SCL=9): 0x3C (OLED) | bus 2 (SDA=17 SCL=18): 0x3D (OLED)")
+            .Explain(new DeviceSettings { Display = DisplayType.Oled128x32, ScreenCount = 0 });
+        Assert.StartsWith("Both OLEDs answer", Assert.Single(hints));
+    }
+
+    [Fact]
     public void One_screen_setup_ignores_bus_two()
     {
         var hints = Report("I2C scan now: bus 1 (SDA=8 SCL=9): 0x3C (OLED) | bus 2 (SDA=17 SCL=18): nothing")

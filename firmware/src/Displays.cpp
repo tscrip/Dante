@@ -3,6 +3,7 @@
 #include "config.h"
 #include <Wire.h>
 #include <Preferences.h>
+#include <esp_system.h>
 
 // ---- second panel driver ------------------------------------------------------------
 // U8g2's own "2ND_HW_I2C" driver is compiled out on ESP32 (it keys off WIRE_INTERFACES_COUNT,
@@ -61,6 +62,8 @@ namespace {
 Displays::Settings cfg;
 bool detected2 = false;
 bool detected1 = false;
+// SSD1306 modules answer at 0x3C, or 0x3D when their address jumper/resistor is moved.
+uint8_t oledAddr1 = DISP1_I2C_ADDR, oledAddr2 = DISP2_I2C_ADDR;
 uint8_t lcdFound = 0;
 uint8_t lcdFound2 = 0;          // an LCD backpack on the second bus (two LCDs: one eye each)
 Displays::Kind active = Displays::KIND_OLED;   // cfg.kind with KIND_AUTO resolved
@@ -155,7 +158,7 @@ uint8_t findLcd(uint8_t preferred) {
   for (uint8_t a = 0x20; a <= 0x26; a++) candidates[n++] = a;
   for (uint8_t a = 0x38; a <= 0x3E; a++) candidates[n++] = a;
   for (int i = 0; i < n; i++)
-    if (candidates[i] != DISP1_I2C_ADDR && Lcd::probe(candidates[i])) return candidates[i];
+    if (candidates[i] != 0x3C && candidates[i] != 0x3D && Lcd::probe(candidates[i])) return candidates[i];
   return 0;
 }
 } // namespace
@@ -166,10 +169,12 @@ void begin() {
   load();
   Wire.begin(PIN_SDA, PIN_SCL, 400000);
   Lcd::select(0);
+  // First OLED: 0x3C, else 0x3D.
   detected1 = Lcd::probe(DISP1_I2C_ADDR);
+  if (!detected1 && Lcd::probe(DISP1_I2C_ADDR ^ 0x01)) { detected1 = true; oledAddr1 = DISP1_I2C_ADDR ^ 0x01; }
   lcdFound = findLcd(cfg.lcdAddr);
 
-  panel1.setI2CAddress(DISP1_I2C_ADDR << 1);
+  panel1.setI2CAddress(oledAddr1 << 1);
   panel1.setBusClock(400000);
   panel1.begin();
 
@@ -177,6 +182,17 @@ void begin() {
   panel2.begin();               // inits the bus; harmless if nothing is attached
   BUS2.beginTransmission(DISP2_I2C_ADDR);
   detected2 = BUS2.endTransmission() == 0;
+#if !DISP2_SAME_BUS
+  if (!detected2) {             // second OLED at the other address? (on its own bus, either is fine)
+    BUS2.beginTransmission(DISP2_I2C_ADDR ^ 0x01);
+    if (BUS2.endTransmission() == 0) {
+      detected2 = true;
+      oledAddr2 = DISP2_I2C_ADDR ^ 0x01;
+      panel2.setI2CAddress(oledAddr2 << 1);
+      panel2.begin();           // re-run the init sequence at the right address
+    }
+  }
+#endif
   Lcd::select(1);                // the second bus is up now: is there an LCD on it too?
   lcdFound2 = findLcd(lcdFound ? lcdFound : cfg.lcdAddr);
   Lcd::select(0);
@@ -231,16 +247,34 @@ bool applyConfig(JsonDocument& m) {
   return changed;
 }
 
+// Why the chip last started. A brownout means the supply voltage dipped (power problem).
+const char* resetReason() {
+  switch (esp_reset_reason()) {
+    case ESP_RST_POWERON:  return "power on";
+    case ESP_RST_EXT:      return "reset pin";
+    case ESP_RST_SW:       return "software";
+    case ESP_RST_PANIC:    return "crash";
+    case ESP_RST_INT_WDT:
+    case ESP_RST_TASK_WDT:
+    case ESP_RST_WDT:      return "watchdog";
+    case ESP_RST_BROWNOUT: return "BROWNOUT (power dipped)";
+    case ESP_RST_DEEPSLEEP: return "deep sleep";
+    default:               return "other";
+  }
+}
+
 void describe(char* out, size_t n) {
-  char lcd[8] = "none", lcd2[8] = "none";
+  char lcd[8] = "none", lcd2[8] = "none", o1[8] = "none", o2[8] = "none";
   if (lcdFound) snprintf(lcd, sizeof(lcd), "0x%02X", lcdFound);
   if (lcdFound2) snprintf(lcd2, sizeof(lcd2), "0x%02X", lcdFound2);
+  if (detected1) snprintf(o1, sizeof(o1), "0x%02X", oledAddr1);
+  if (detected2) snprintf(o2, sizeof(o2), "0x%02X", oledAddr2);
   snprintf(out, n, "DANTE " FW_VERSION ": bus 1 (SDA=%d SCL=%d): OLED %s, LCD %s | bus 2 (SDA=%d SCL=%d): OLED %s, LCD %s"
-                   " | screen: %s%s x%d%s",
-           PIN_SDA, PIN_SCL, detected1 ? "found" : "none", lcd,
-           BUS2_SDA, BUS2_SCL, detected2 ? "found" : "none", lcd2,
+                   " | screen: %s%s x%d%s | last reset: %s",
+           PIN_SDA, PIN_SCL, o1, lcd,
+           BUS2_SDA, BUS2_SCL, o2, lcd2,
            kindName(), cfg.kind == KIND_AUTO ? " (auto)" : " (set by PC app)",
-           count(), cfg.screens == 0 ? " (auto)" : " (set by PC app)");
+           count(), cfg.screens == 0 ? " (auto)" : " (set by PC app)", resetReason());
 }
 
 void scanNow(char* out, size_t n) {
