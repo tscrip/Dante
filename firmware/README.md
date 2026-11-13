@@ -56,17 +56,20 @@ pull SDA/SCL up to 5 V. The ESP32-S3's pins are **not** 5 V tolerant, so use a l
 
 By default (*Automatic*) DANTE uses the second screen whenever it answers at boot; you can also force
 **1 or 2 screens** in the PC app (*Device → Screens*). DANTE stores the choice in flash.
-With two screens each display shows one big eye. On app screens the PC app picks the layout:
+With two screens each one shows one big eye. On app screens the PC app picks the layout:
 the app on one screen while the other eye *watches it*, or the app on both screens.
+
+This works with **two OLEDs** or **two LCDs** of the same size (1602 or 2004). On two LCDs each eye
+is 4×2 characters instead of 2×2, because every LCD has its own 8 custom characters.
 
 | Part                          | ESP32 pin | Notes                                              |
 |-------------------------------|-----------|----------------------------------------------------|
-| 2nd OLED `SDA`                | GPIO 17   | second I2C bus (`Wire1`)                           |
-| 2nd OLED `SCL`                | GPIO 18   |                                                    |
-| 2nd OLED `VCC` / `GND`        | 3V3 / GND |                                                    |
+| 2nd screen `SDA`              | GPIO 17   | second I2C bus (`Wire1`)                           |
+| 2nd screen `SCL`              | GPIO 18   |                                                    |
+| 2nd screen `VCC` / `GND`      | 3V3 / GND (OLED), 5V / GND (LCD) | same level-shifting advice as the first LCD |
 
-Most 0.91" modules are fixed at address `0x3C`, so two of them can't share a bus — hence the second
-bus. If your second module has an address jumper set to `0x3D`, you can put it on GPIO 8/9 instead:
+Most 0.91" modules are fixed at address `0x3C`, and two LCD backpacks usually both sit at `0x27`, so
+two screens can't share a bus — hence the second bus. Each LCD's address is found automatically. If your second module has an address jumper set to `0x3D`, you can put it on GPIO 8/9 instead:
 set `DISP2_SAME_BUS 1` and `DISP2_I2C_ADDR 0x3D` in `src/config.h`. Screens mounted the wrong way round
 or upside down are fixed in the PC app (swap / flip), no rewiring needed. DANTE reports whether it
 found the second screen at boot, and the PC app warns you if it didn't.
@@ -92,12 +95,14 @@ Open the serial monitor (`pio device monitor`, then press **RST**). The first li
 DANTE found on both I2C buses and which screens it is driving, e.g.
 
 ```
-DANTE 2.4.1: I2C SDA=8 SCL=9 | OLED@0x3C found | LCD none | 2nd OLED (SDA=17 SCL=18) found | screen: oled (auto) x2 (auto)
+DANTE 2.5.0: bus 1 (SDA=8 SCL=9): OLED none, LCD 0x27 | bus 2 (SDA=17 SCL=18): OLED none, LCD 0x27 | screen: lcd1602 (auto) x2 (auto)
 ```
 
-* **Second screen dark:** the line says `2nd OLED (SDA=17 SCL=18) found` or `not found`. If found but
-  the line ends in `x1 (set by PC app)`, set *Device → Screens* to *Automatic* or *2 screens*. If not
-  found, check SDA → GPIO 17, SCL → GPIO 18 (not swapped), 3V3 and GND, and press **RST** after wiring.
+* **Second screen dark:** the `bus 2 (SDA=17 SCL=18)` part says whether an OLED or LCD answered there.
+  It must be the same kind as the first screen (two OLEDs, or two LCDs of the same size). If it was found
+  but the line ends in `x1 (set by PC app)`, set *Device → Screens* to *Automatic* or *2 screens*. If
+  nothing was found, check SDA → GPIO 17, SCL → GPIO 18 (not swapped), power and GND, and press **RST**
+  after wiring.
 * **Nothing found:** check SDA → GPIO 8, SCL → GPIO 9, power and GND (the old ESP32 build used
   21/22).
 * **Found, but the other screen is used:** in the PC app set *Device → Screen type* to

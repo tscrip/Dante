@@ -8,6 +8,9 @@
 
 @code {
     [Parameter] public bool Face { get; set; }
+    /// <summary>Two-LCD mode: one big eye (4x2 characters) on this LCD, shifted by EyeOffset columns.</summary>
+    [Parameter] public bool BigEye { get; set; }
+    [Parameter] public int EyeOffset { get; set; }
     [Parameter] public LcdSize Size { get; set; } = LcdSize.Size16x2;
     /// <summary>Position on DANTE's carousel ("2/5" on a 20x4).</summary>
     [Parameter] public int Page { get; set; } = 1;
@@ -33,6 +36,15 @@
 
     private IEnumerable<string> Rows()
     {
+        if (BigEye)
+        {
+            var eye = new string(' ', Math.Clamp(Cols / 2 - 2 + EyeOffset, 0, Cols - 4)) + "████";
+            if (RowCount == 4) yield return Fit("");
+            yield return Fit(eye);
+            yield return Fit(eye);
+            if (RowCount == 4) yield return Fit("");
+            yield break;
+        }
         if (Face)
         {
             var eyes = Center("██    ██");

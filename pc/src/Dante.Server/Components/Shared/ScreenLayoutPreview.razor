@@ -4,11 +4,33 @@
 @if (Settings.IsLcd || (Settings.Display == DisplayType.Auto && DetectedLcd is not null))
 {
     var size = Settings.IsLcd ? Settings.EffectiveLcdSize : DetectedLcd!.Value;
+    var twoLcds = Settings.ScreenCount == 2 || (Settings.ScreenCount == 0 && DetectedScreens == 2);
+    var appOnLeft = Settings.DualLayout == DualLayout.Watch && Settings.ContentScreen == ScreenSide.Left;
+    var mirror = Settings.DualLayout == DualLayout.Mirror;
     <div class="layout-preview">
         <div class="small muted">Face</div>
-        <LcdPreview Face="true" Size="size" />
+        @if (twoLcds)
+        {
+            <div class="row" style="gap:.5rem;flex-wrap:nowrap"><LcdPreview BigEye="true" Size="size" /><LcdPreview BigEye="true" Size="size" /></div>
+        }
+        else
+        {
+            <LcdPreview Face="true" Size="size" />
+        }
         <div class="small muted" style="margin-top:.5rem">App screens</div>
-        <LcdPreview Visual="VisualKind.Gauge" Name="Claude 5h" Value="63" Unit="%" Size="size" />
+        @if (twoLcds)
+        {
+            <div class="row" style="gap:.5rem;flex-wrap:nowrap">
+                @if (mirror || appOnLeft) { <LcdPreview Visual="VisualKind.Gauge" Name="Claude 5h" Value="63" Unit="%" Size="size" /> }
+                else { <LcdPreview BigEye="true" EyeOffset="3" Size="size" /> }
+                @if (mirror || !appOnLeft) { <LcdPreview Visual="VisualKind.Gauge" Name="Claude 5h" Value="63" Unit="%" Size="size" /> }
+                else { <LcdPreview BigEye="true" EyeOffset="-3" Size="size" /> }
+            </div>
+        }
+        else
+        {
+            <LcdPreview Visual="VisualKind.Gauge" Name="Claude 5h" Value="63" Unit="%" Size="size" />
+        }
     </div>
     return;
 }

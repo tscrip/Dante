@@ -94,7 +94,7 @@
                 @if (Link.Online && Link.OledDetected is not null)
                 {
                     <span class="help">DANTE found at boot: OLED @(Link.OledDetected == true ? "✓" : "✗") ·
-                        LCD @LcdFoundText · using: <strong>@(Link.DeviceLcd switch { LcdSize.Size20x4 => "LCD 2004", LcdSize.Size16x2 => "LCD 1602", _ => "OLED" })</strong></span>
+                        LCD @LcdFoundText · second bus: @SecondBusText · using: <strong>@(Link.DeviceLcd switch { LcdSize.Size20x4 => "LCD 2004", LcdSize.Size16x2 => "LCD 1602", _ => "OLED" })@(Link.DeviceScreens == 2 ? " ×2" : "")</strong></span>
                     @if (Link.OledDetected == false && Link.LcdDetectedAddress is not > 0)
                     {
                         <div class="notice error small">DANTE found no screen on its I2C bus. Check the wiring: SDA → GPIO 8, SCL → GPIO 9, plus power and GND.</div>
@@ -126,7 +126,7 @@
                     <select value="@_cfg.Device.LcdAddress" @onchange="SetLcdAddress">
                         @foreach (var addr in LcdAddresses) { <option value="@addr">@AddressLabel(addr)</option> }
                     </select>
-                    <span class="help">Same I2C pins as the OLED (SDA 8 / SCL 9). Use a level shifter: 5 V backpacks pull the bus to 5 V and the S3 is not 5 V tolerant. One character screen, so the face, apps and nudges are drawn as text plus custom characters.</span>
+                    <span class="help">Same I2C pins as the OLED (SDA 8 / SCL 9). Use a level shifter: 5 V backpacks pull the bus to 5 V and the S3 is not 5 V tolerant. The face, apps and nudges are drawn as text plus custom characters. Add a second LCD (same size) on SDA 17 / SCL 18 for one big eye per LCD.</span>
                 </label>
                 @if (Link.Online && Link.LcdDetectedAddress is > 0 and var found && found != _cfg.Device.LcdAddress)
                 {
@@ -135,46 +135,47 @@
                 }
                 <label class="check"><input type="checkbox" checked="@(_cfg.Device.Brightness > 0)" @onchange="SetBacklight" /> Backlight on</label>
             }
-            else
+            <h3 class="small muted">How many screens</h3>
+            <label class="check"><input type="radio" name="screens" checked="@(_cfg.Device.ScreenCount == 0)" @onchange="() => _cfg.Device.ScreenCount = 0" />
+                <span><strong>Automatic</strong> <span class="muted small">— one eye per screen if a second screen is connected</span></span></label>
+            @if (_cfg.Device.ScreenCount == 0 && Link.Online && Link.SecondScreenDetected is not null)
             {
-                <label class="check"><input type="radio" name="screens" checked="@(_cfg.Device.ScreenCount == 0)" @onchange="() => _cfg.Device.ScreenCount = 0" />
-                    <span><strong>Automatic</strong> <span class="muted small">— one eye per display if a second screen is connected</span></span></label>
-                @if (_cfg.Device.ScreenCount == 0 && Link.Online && Link.SecondScreenDetected is not null)
-                {
-                    <p class="help" style="margin:-.3rem 0 .6rem 1.6rem">@(Link.SecondScreenDetected == true
-                        ? "DANTE found a second screen: using two."
-                        : "No second screen found when DANTE started (SDA 17 / SCL 18): using one.")</p>
-                }
-                <label class="check"><input type="radio" name="screens" checked="@(_cfg.Device.ScreenCount == 1)" @onchange="() => _cfg.Device.ScreenCount = 1" />
-                    <span><strong>1 screen</strong> <span class="muted small">— both eyes on one display</span></span></label>
-                <label class="check"><input type="radio" name="screens" checked="@(_cfg.Device.ScreenCount == 2)" @onchange="() => _cfg.Device.ScreenCount = 2" />
-                    <span><strong>2 screens</strong> <span class="muted small">— one big eye per display</span></span></label>
+                <p class="help" style="margin:-.3rem 0 .6rem 1.6rem">@(Link.SecondScreenDetected == true
+                    ? "DANTE found a second screen: using two."
+                    : "No second screen found when DANTE started (SDA 17 / SCL 18): using one.")</p>
+            }
+            <label class="check"><input type="radio" name="screens" checked="@(_cfg.Device.ScreenCount == 1)" @onchange="() => _cfg.Device.ScreenCount = 1" />
+                <span><strong>1 screen</strong> <span class="muted small">— both eyes on one screen</span></span></label>
+            <label class="check"><input type="radio" name="screens" checked="@(_cfg.Device.ScreenCount == 2)" @onchange="() => _cfg.Device.ScreenCount = 2" />
+                <span><strong>2 screens</strong> <span class="muted small">— one big eye per screen</span></span></label>
 
-                @if (_cfg.Device.ScreenCount != 1)
+            @if (_cfg.Device.ScreenCount != 1)
+            {
+                @if (_cfg.Device.ScreenCount == 2 && Link.Online && Link.SecondScreenDetected == false)
                 {
-                    @if (_cfg.Device.ScreenCount == 2 && Link.Online && Link.SecondScreenDetected == false)
-                    {
-                        <div class="notice error small">DANTE didn't find a second screen when it started. Check the wiring
-                            (second screen on SDA 17 / SCL 18 by default) and restart it.</div>
-                    }
-                    <h3 class="small muted">On app screens@(_cfg.Device.ScreenCount == 0 ? " (when there are two)" : "")</h3>
-                    <label class="check"><input type="radio" name="layout" checked="@(_cfg.Device.DualLayout == DualLayout.Watch)" @onchange="() => _cfg.Device.DualLayout = DualLayout.Watch" />
-                        <span>App on one screen, the other eye watches it</span></label>
-                    <label class="check"><input type="radio" name="layout" checked="@(_cfg.Device.DualLayout == DualLayout.Mirror)" @onchange="() => _cfg.Device.DualLayout = DualLayout.Mirror" />
-                        <span>App on both screens</span></label>
-                    @if (_cfg.Device.DualLayout == DualLayout.Watch)
-                    {
-                        <label class="field"><span>App goes on the</span>
-                            <select @bind="_cfg.Device.ContentScreen">
-                                <option value="@ScreenSide.Right">right screen</option>
-                                <option value="@ScreenSide.Left">left screen</option>
-                            </select>
-                            <span class="help">Speech bubbles and nudge messages appear there too.</span>
-                        </label>
-                    }
-                    <h3 class="small muted">Mounting</h3>
-                    <label class="check"><input type="checkbox" @bind="_cfg.Device.SwapScreens" /> Swap left and right screens</label>
+                    <div class="notice error small">DANTE didn't find a second screen when it started. Check the wiring
+                        (second screen on SDA 17 / SCL 18, the same kind as the first) and restart it.</div>
                 }
+                <h3 class="small muted">On app screens@(_cfg.Device.ScreenCount == 0 ? " (when there are two)" : "")</h3>
+                <label class="check"><input type="radio" name="layout" checked="@(_cfg.Device.DualLayout == DualLayout.Watch)" @onchange="() => _cfg.Device.DualLayout = DualLayout.Watch" />
+                    <span>App on one screen, the other eye watches it</span></label>
+                <label class="check"><input type="radio" name="layout" checked="@(_cfg.Device.DualLayout == DualLayout.Mirror)" @onchange="() => _cfg.Device.DualLayout = DualLayout.Mirror" />
+                    <span>App on both screens</span></label>
+                @if (_cfg.Device.DualLayout == DualLayout.Watch)
+                {
+                    <label class="field"><span>App goes on the</span>
+                        <select @bind="_cfg.Device.ContentScreen">
+                            <option value="@ScreenSide.Right">right screen</option>
+                            <option value="@ScreenSide.Left">left screen</option>
+                        </select>
+                        <span class="help">Speech bubbles and nudge messages appear there too.</span>
+                    </label>
+                }
+                <h3 class="small muted">Mounting</h3>
+                <label class="check"><input type="checkbox" @bind="_cfg.Device.SwapScreens" /> Swap left and right screens</label>
+            }
+            @if (!_cfg.Device.IsLcd)   // character LCDs can't be rotated
+            {
                 <label class="check"><input type="checkbox" @bind="_cfg.Device.FlipScreen1" /> Upside down: @(_cfg.Device.ScreenCount == 1 ? "screen" : "screen 1")</label>
                 @if (_cfg.Device.ScreenCount != 1)
                 {
@@ -246,6 +247,8 @@
     // 0x20-0x27 = PCF8574, 0x38-0x3F = PCF8574A (set by the A0-A2 jumpers on the backpack).
     private static string Hex(int a) => $"0x{a:X2}";
     private static string AddressLabel(int a) => Hex(a) + (a == 0x27 ? " (PCF8574, most common)" : a == 0x3F ? " (PCF8574A)" : "");
+    private string SecondBusText =>
+        Link.Lcd2DetectedAddress is > 0 and var a2 ? $"LCD at {Hex(a2)}" : Link.SecondScreenDetected == true ? "OLED" : "nothing";
     private string LcdFoundText => Link.LcdDetectedAddress is > 0 and var a ? $"✓ at {Hex(a)}" : "✗";
     private void SetLcdAddress(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var a)) _cfg.Device.LcdAddress = a; }
     private void SetBacklight(ChangeEventArgs e) => _cfg.Device.Brightness = e.Value is true ? 200 : 0;

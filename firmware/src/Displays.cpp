@@ -62,6 +62,7 @@ Displays::Settings cfg;
 bool detected2 = false;
 bool detected1 = false;
 uint8_t lcdFound = 0;
+uint8_t lcdFound2 = 0;          // an LCD backpack on the second bus (two LCDs: one eye each)
 Displays::Kind active = Displays::KIND_OLED;   // cfg.kind with KIND_AUTO resolved
 bool panel2Awake = false;
 Preferences prefs;
@@ -127,16 +128,35 @@ void apply() {
     panel2.setPowerSave(want2 ? 0 : 1);
     panel2Awake = want2;
   }
-  if (lcd) {
-    static uint8_t startedAt = 0;
-    if (!Lcd::active() || startedAt != lcdAddr || Lcd::cols() != cols || Lcd::rows() != rows) {
-      Lcd::begin(lcdAddr, cols, rows);
-      startedAt = lcdAddr;
+  // LCD 0 on the main bus; LCD 1 on the second bus when there are two (one eye each).
+  bool two = lcd && Displays::count() == 2;
+  uint8_t addrs[2] = { lcdAddr, lcdFound2 ? lcdFound2 : lcdAddr };
+  static uint8_t startedAt[2] = { 0, 0 };
+  for (int i = 0; i < 2; i++) {
+    Lcd::select(i);
+    if (i == 0 ? lcd : two) {
+      if (!Lcd::active() || startedAt[i] != addrs[i] || Lcd::cols() != cols || Lcd::rows() != rows) {
+        Lcd::begin(addrs[i], cols, rows);
+        startedAt[i] = addrs[i];
+      }
+      Lcd::backlight(cfg.bright > 0);
+    } else {
+      Lcd::end();
     }
-    Lcd::backlight(cfg.bright > 0);
-  } else {
-    Lcd::end();
   }
+  Lcd::select(0);
+}
+
+// PCF8574 backpacks live at 0x20-0x27, PCF8574A at 0x38-0x3F (A0-A2 jumpers). Try the
+// preferred one first, then the usual 0x27 / 0x3F, then the rest. Probes the selected LCD's bus.
+uint8_t findLcd(uint8_t preferred) {
+  uint8_t candidates[18] = { preferred, 0x27, 0x3F };
+  int n = 3;
+  for (uint8_t a = 0x20; a <= 0x26; a++) candidates[n++] = a;
+  for (uint8_t a = 0x38; a <= 0x3E; a++) candidates[n++] = a;
+  for (int i = 0; i < n; i++)
+    if (candidates[i] != DISP1_I2C_ADDR && Lcd::probe(candidates[i])) return candidates[i];
+  return 0;
 }
 } // namespace
 
@@ -145,15 +165,9 @@ namespace Displays {
 void begin() {
   load();
   Wire.begin(PIN_SDA, PIN_SCL, 400000);
+  Lcd::select(0);
   detected1 = Lcd::probe(DISP1_I2C_ADDR);
-  // PCF8574 backpacks live at 0x20-0x27, PCF8574A at 0x38-0x3F (A0-A2 jumpers). Try the
-  // configured one first, then the usual 0x27 / 0x3F, then the rest.
-  uint8_t candidates[18] = { cfg.lcdAddr, 0x27, 0x3F };
-  int n = 3;
-  for (uint8_t a = 0x20; a <= 0x26; a++) candidates[n++] = a;
-  for (uint8_t a = 0x38; a <= 0x3E; a++) candidates[n++] = a;
-  for (int i = 0; i < n && !lcdFound; i++)
-    if (candidates[i] != DISP1_I2C_ADDR && Lcd::probe(candidates[i])) lcdFound = candidates[i];
+  lcdFound = findLcd(cfg.lcdAddr);
 
   panel1.setI2CAddress(DISP1_I2C_ADDR << 1);
   panel1.setBusClock(400000);
@@ -163,27 +177,29 @@ void begin() {
   panel2.begin();               // inits the bus; harmless if nothing is attached
   BUS2.beginTransmission(DISP2_I2C_ADDR);
   detected2 = BUS2.endTransmission() == 0;
+  Lcd::select(1);                // the second bus is up now: is there an LCD on it too?
+  lcdFound2 = findLcd(lcdFound ? lcdFound : cfg.lcdAddr);
+  Lcd::select(0);
   panel2Awake = true;           // begin() wakes it; apply() puts it back to sleep if unused
   apply();
 }
 
 const Settings& settings() { return cfg; }
-bool secondDetected() { return detected2; }
+bool secondDetected() { return isLcd() ? lcdFound2 != 0 : detected2; }
+uint8_t lcd2Detected() { return lcdFound2; }
 bool oledDetected() { return detected1; }
 uint8_t lcdDetected() { return lcdFound; }
 bool isLcd() { return active == KIND_LCD; }
 const char* kindName() { return !isLcd() ? "oled" : cfg.lcdSize == LCD_2004 ? "lcd2004" : "lcd1602"; }
 int count() {
-  if (isLcd()) return 1;
+  if (isLcd()) return cfg.screens == 2 || (cfg.screens == 0 && lcdFound2) ? 2 : 1;
   if (cfg.screens == 0) return detected2 ? 2 : 1;   // automatic
   return cfg.screens == 2 ? 2 : 1;
 }
 
-U8G2& side(int s) {
-  if (count() != 2) return panel1;
-  int phys = (s ? 1 : 0) ^ (cfg.swap ? 1 : 0);
-  return *physical(phys);
-}
+int physicalIndex(int s) { return count() == 2 ? ((s ? 1 : 0) ^ (cfg.swap ? 1 : 0)) : 0; }
+
+U8G2& side(int s) { return *physical(physicalIndex(s)); }
 
 bool applyConfig(JsonDocument& m) {
   Settings before = cfg;
@@ -216,12 +232,13 @@ bool applyConfig(JsonDocument& m) {
 }
 
 void describe(char* out, size_t n) {
-  char lcd[8] = "none";
+  char lcd[8] = "none", lcd2[8] = "none";
   if (lcdFound) snprintf(lcd, sizeof(lcd), "0x%02X", lcdFound);
-  snprintf(out, n, "DANTE " FW_VERSION ": I2C SDA=%d SCL=%d | OLED@0x%02X %s | LCD %s | 2nd OLED (SDA=%d SCL=%d) %s"
+  if (lcdFound2) snprintf(lcd2, sizeof(lcd2), "0x%02X", lcdFound2);
+  snprintf(out, n, "DANTE " FW_VERSION ": bus 1 (SDA=%d SCL=%d): OLED %s, LCD %s | bus 2 (SDA=%d SCL=%d): OLED %s, LCD %s"
                    " | screen: %s%s x%d%s",
-           PIN_SDA, PIN_SCL, DISP1_I2C_ADDR, detected1 ? "found" : "not found", lcd,
-           BUS2_SDA, BUS2_SCL, detected2 ? "found" : "not found",
+           PIN_SDA, PIN_SCL, detected1 ? "found" : "none", lcd,
+           BUS2_SDA, BUS2_SCL, detected2 ? "found" : "none", lcd2,
            kindName(), cfg.kind == KIND_AUTO ? " (auto)" : " (set by PC app)",
            count(), cfg.screens == 0 ? " (auto)" : " (set by PC app)");
 }

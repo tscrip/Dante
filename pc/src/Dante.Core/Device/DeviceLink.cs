@@ -96,6 +96,8 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
     public bool? OledDetected { get; private set; }
     /// <summary>I2C address an LCD backpack answered at during boot (0 = none found).</summary>
     public int? LcdDetectedAddress { get; private set; }
+    /// <summary>I2C address an LCD answered at on the second bus (GPIO 17/18) during boot (0 = none).</summary>
+    public int? Lcd2DetectedAddress { get; private set; }
     public string? LastError { get; private set; }
     public DateTimeOffset? LastHeard { get; private set; }
     /// <summary>Link open AND DANTE answered recently.</summary>
@@ -172,6 +174,7 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
         DeviceDisplay = null;
         OledDetected = null;
         LcdDetectedAddress = null;
+        Lcd2DetectedAddress = null;
         SetStatus(LinkStatus.Connected, Target(settings));
 
         Write(transport, DeviceProtocol.Hello().ToJsonString());
@@ -228,6 +231,7 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
                     DeviceDisplay = evt.Raw["display"]?.GetValue<string>();
                     OledDetected = evt.Raw["oled"]?.GetValue<bool>();
                     LcdDetectedAddress = evt.Raw["lcd"]?.GetValue<int>();
+                    Lcd2DetectedAddress = evt.Raw["lcd2"]?.GetValue<int>();
                 }
                 StatusChanged?.Invoke();
                 EventReceived?.Invoke(evt);

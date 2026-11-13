@@ -8,6 +8,7 @@
 //  * 2 screens: one big eye per panel. App screens then use a layout:
 //      WATCH  - one panel shows the app, the other keeps an eye on it (literally);
 //      MIRROR - both panels show the app.
+// Two character LCDs (one per bus, same size) work the same way: one big eye per LCD.
 // Settings come from the PC (`cfg` message) and are stored in flash.
 // The display type can also be a character LCD, 16x2 ("1602") or 20x4 ("2004") (see Lcd.h /
 // LcdUi.h); that is always a single screen.
@@ -23,7 +24,7 @@ namespace Displays {
     Kind kind = KIND_AUTO;      // what's configured; see isLcd()/kindName() for what's in use
     uint8_t lcdAddr = 0x27;     // PCF8574 backpack address
     LcdSize lcdSize = LCD_1602;
-    uint8_t screens = 0;        // OLED only: 1, 2, or 0 = automatic (2 if a second panel answers at boot)
+    uint8_t screens = 0;        // 1, 2, or 0 = automatic (2 if a second screen of the same type answers at boot)
     Layout layout = LAYOUT_WATCH;
     uint8_t contentSide = 1;    // WATCH layout: 0 = app on the left panel, 1 = right panel
     bool swap = false;          // wired the wrong way round? swap which panel is left
@@ -33,7 +34,8 @@ namespace Displays {
 
   void begin();
   const Settings& settings();
-  bool secondDetected();        // did a panel answer at the second display's address?
+  bool secondDetected();        // did a second screen of the type in use answer on the second bus?
+  uint8_t lcd2Detected();       // address an LCD answered at on the second bus, or 0
   bool oledDetected();          // did the first OLED answer at boot?
   uint8_t lcdDetected();        // address an LCD backpack answered at during boot, or 0
   bool isLcd();                 // the screen in use (after resolving KIND_AUTO)
@@ -44,7 +46,9 @@ namespace Displays {
   // Applies the display-related fields of a `cfg` message. Returns true if anything changed.
   bool applyConfig(JsonDocument& msg);
 
-  int count();                  // OLED panels in use (1 or 2, automatic resolved); 1 for the LCD
+  int count();                  // screens in use (1 or 2, automatic resolved), OLED or LCD
   // Panel for a logical side: 0 = left, 1 = right. With one screen, side 0 is the only panel.
   U8G2& side(int s);
+  // Which physical screen (0 = main bus, 1 = second bus) shows logical side s (0 left, 1 right).
+  int physicalIndex(int s);
 }

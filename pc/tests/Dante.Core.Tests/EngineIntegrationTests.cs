@@ -23,7 +23,7 @@ public sealed class FakeDante : IDeviceTransport
     {
         var msg = (JsonObject)JsonNode.Parse(line)!;
         Received.Enqueue(msg);
-        if (msg["t"]!.GetValue<string>() == "hello") _toPc.Add("""{"t":"hello","fw":"test","name":"DANTE","display":"oled","screens":1,"disp2":true,"oled":false,"lcd":39}""");
+        if (msg["t"]!.GetValue<string>() == "hello") _toPc.Add("""{"t":"hello","fw":"test","name":"DANTE","display":"oled","screens":1,"disp2":true,"oled":false,"lcd":39,"lcd2":63}""");
     }
 
     public void Press(string json) => _toPc.Add(json);
@@ -104,6 +104,7 @@ public class EngineIntegrationTests : IAsyncLifetime
         Assert.Equal("oled", _link.DeviceDisplay);
         Assert.False(_link.OledDetected);
         Assert.Equal(0x27, _link.LcdDetectedAddress);
+        Assert.Equal(0x3F, _link.Lcd2DetectedAddress);   // LCD on the second bus
 
         var cfg = _store.Snapshot();
         cfg.Device.ScreenCount = 2;

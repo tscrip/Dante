@@ -163,9 +163,65 @@ const char* mouth(const FaceInfo& f, uint32_t now) {
   return "-";
 }
 
+// Two-LCD mode: each eye is 4x2 cells (20x16 px), using all 8 glyphs of its own LCD.
+void bigEyeGlyphs(int eye, int cy) {
+  canvas.setClipWindow(0, 0, 20, 16);
+  Face::drawEyeScaled(canvas, eye, 10, cy, 0.8f, 0.68f, 3);
+  canvas.setMaxClipWindow();
+  for (int cr = 0; cr < 2; cr++)
+    for (int cc = 0; cc < 4; cc++) {
+      uint8_t rows[8];
+      for (int y = 0; y < 8; y++) {
+        uint8_t b = 0;
+        for (int x = 0; x < 5; x++)
+          if (canvas.px(cc * 5 + x, cr * 8 + y)) b |= (uint8_t)(0x10 >> x);
+        rows[y] = b;
+      }
+      Lcd::glyph(cr * 4 + cc, rows);
+    }
+}
+
 } // namespace
 
 namespace LcdUi {
+
+void faceSingle(int eye, float lookBias, uint32_t now) {
+  FaceInfo f = Face::info();
+  eye = eye ? 1 : 0;
+  canvas.clearBuffer();
+  bigEyeGlyphs(eye, 8 + (int)lroundf(f.lookY * 0.3f));
+
+  const int top = tall() ? 1 : 0;
+  // Decorations: this LCD only keeps its own side's half (left eye: left margin, right eye: right).
+  decorations(f, top, now);
+  for (int r = top; r < top + 2; r++)
+    for (int c = (eye == 0 ? W() / 2 : 0); c < (eye == 0 ? W() : W() / 2); c++) Lcd::put(c, r, ' ');
+  if (eye == 1 && f.pending > 0 && !f.alone) {
+    char b[6];
+    snprintf(b, sizeof(b), "[%d]", f.pending > 99 ? 99 : f.pending);
+    printRight(0, b);
+  }
+  if (eye == 0 && f.alone && (now / 700) % 2 == 0) Lcd::print(0, 0, "noPC");
+
+  int reach = W() >= 20 ? 5 : 4;
+  int look = (int)lroundf((f.lookX + lookBias) / 24.0f * reach);
+  look = look < -reach ? -reach : (look > reach ? reach : look);
+  int col = W() / 2 - 2 + look;
+  for (int r = 0; r < 2; r++)
+    for (int c = 0; c < 4; c++) Lcd::put(col + c, top + r, (uint8_t)(r * 4 + c));
+}
+
+void takeoverEye(int eye, float lookBias, uint8_t lvl, uint32_t since, uint32_t now, bool light) {
+  uint32_t t = now - since;
+  // Every few seconds it turns to look at the human: "...well?"
+  faceSingle(eye, (t / 2500) % 3 == 2 ? 0 : lookBias, now);
+  if ((t / 400) % 2 == 0) {
+    const char* bang = lvl >= 2 ? "!!" : "!";
+    if (eye == 0) Lcd::print(0, tall() ? 1 : 0, bang);
+    else printRight(tall() ? 1 : 0, bang);
+  }
+  Lcd::backlight(light && !(lvl >= 2 && (t % 1000) < 160));
+}
 
 void face(uint32_t now) {
   FaceInfo f = Face::info();

@@ -76,6 +76,7 @@ static void fillHello(JsonDocument& d) {
   d["disp2"] = Displays::secondDetected();
   d["oled"] = Displays::oledDetected();
   d["lcd"] = Displays::lcdDetected();       // backpack address found at boot, 0 = none
+  d["lcd2"] = Displays::lcd2Detected();     // ... on the second bus (two LCDs = one eye each)
 }
 
 static void sendHello() {
@@ -319,20 +320,39 @@ static void drawTakeoverEye(U8G2& g, int side, Alert& a, uint32_t now) {
   urgentFlash(g, a, t);
 }
 
-// Character LCD (16x2 / 20x4): one screen, text-mode rendering, no slide transitions.
+// Character LCD (16x2 / 20x4): one, or two with one eye each. Text-mode rendering, no slides.
 static void renderLcd(Alert* alert, uint32_t now) {
   static uint32_t lastLcd = 0;
   if (now - lastLcd < LCD_FRAME_MS) return;
   lastLcd = now;
 
   bool light = Displays::settings().bright > 0;
-  Lcd::backlight(light);
-  Lcd::clear();
-  if (alert) LcdUi::takeover(alert->title, alert->txt, alert->lvl, alert->since, now, light);
-  else if (toast.active) LcdUi::toast(toast.title, toast.text, toast.start, now);
-  else if (screen == 0) LcdUi::face(now);
-  else if (App* a = Apps::get(screen - 1)) LcdUi::app(*a, screen, Apps::count(), now);   // "app 2 of 5"
-  Lcd::flush();
+  for (int side = 0; side < Displays::count(); side++) {
+    Lcd::select(Displays::physicalIndex(side));
+    Lcd::backlight(light);
+    Lcd::clear();
+    if (!dual()) {
+      // One LCD: both eyes on it, everything else full-screen.
+      if (alert) LcdUi::takeover(alert->title, alert->txt, alert->lvl, alert->since, now, light);
+      else if (toast.active) LcdUi::toast(toast.title, toast.text, toast.start, now);
+      else if (screen == 0) LcdUi::face(now);
+      else if (App* a = Apps::get(screen - 1)) LcdUi::app(*a, screen, Apps::count(), now);   // "app 2 of 5"
+    } else if (alert) {
+      // Two LCDs: same layout rules as two OLEDs (see showsContent()).
+      if (showsContent(side)) LcdUi::takeover(alert->title, alert->txt, alert->lvl, alert->since, now, light);
+      else LcdUi::takeoverEye(side, lookTowardContent(side), alert->lvl, alert->since, now, light);
+    } else if (toast.active && showsContent(side)) {
+      LcdUi::toast(toast.title, toast.text, toast.start, now);
+    } else if (screen == 0) {
+      LcdUi::faceSingle(side, 0, now);
+    } else if (showsContent(side)) {
+      if (App* a = Apps::get(screen - 1)) LcdUi::app(*a, screen, Apps::count(), now);
+    } else {
+      LcdUi::faceSingle(side, lookTowardContent(side), now);
+    }
+    Lcd::flush();
+  }
+  Lcd::select(0);
 }
 
 // ---- Arduino entry points -------------------------------------------------------------
