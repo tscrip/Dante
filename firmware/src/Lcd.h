@@ -4,12 +4,8 @@
 
 // HD44780 character LCD behind a PCF8574 I2C backpack: 16x2 ("1602") or 20x4 ("2004").
 // Draw into a shadow buffer with put/print/glyph, then flush() sends only what changed.
-//
-// Up to two LCDs (one eye each): `select(0)` = the one on the main I2C bus, `select(1)` = the one
-// on the second bus (GPIO 17/18). Every other call works on the selected LCD.
 namespace Lcd {
-  void select(int panel);
-  bool probe(uint8_t addr);          // is something answering at this address (selected LCD's bus)?
+  bool probe(uint8_t addr);          // is something answering at this I2C address?
   void begin(uint8_t addr, uint8_t cols, uint8_t rows);   // (re)initialise (~60 ms)
   void end();                        // blank + backlight off
   bool active();

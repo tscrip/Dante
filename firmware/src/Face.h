@@ -1,6 +1,6 @@
 #pragma once
 #include <Arduino.h>
-#include <U8g2lib.h>
+#include "Gfx.h"
 
 enum Mood : uint8_t {
   MOOD_HAPPY = 0,
@@ -63,18 +63,15 @@ namespace Face {
   void react();                    // quick surprised double-take
 
   void update(uint32_t now);
-  void draw(U8G2& g, int ox);      // full-screen face, shifted by ox pixels
-
-  // Dual-screen mode: one big eye filling its own 128x32 screen.
-  // eye 0 = left eye, 1 = right eye. lookBias pushes the gaze sideways (e.g. towards the
-  // other screen when it shows an app), dy nudges it vertically (bounces).
-  void drawSingle(U8G2& g, int eye, int ox, float lookBias, int dy);
+  // Full-screen face, shifted by ox pixels. chrome = also the pending badge and the "no PC" sign
+  // (the TFT shows those in its status bar instead).
+  void draw(Gfx& g, int ox, bool chrome = true);
 
   FaceInfo info();
   // Draws eye `eye` (0 left, 1 right) in its current state, scaled by (sx, sy), centred at (cx, cy),
   // with corner radius at most `radius`. Used to rasterise tiny eyes into LCD glyphs.
-  void drawEyeScaled(U8G2& g, int eye, int cx, int cy, float sx, float sy, int radius);
+  void drawEyeScaled(Gfx& g, int eye, int cx, int cy, float sx, float sy, int radius);
 
   // Small pair of eyes centred at (cx, cy); `scale` 1.0 == full-size eyes.
-  void drawMini(U8G2& g, int cx, int cy, float scale, MiniExpr expr, uint32_t now);
+  void drawMini(Gfx& g, int cx, int cy, float scale, MiniExpr expr, uint32_t now);
 }

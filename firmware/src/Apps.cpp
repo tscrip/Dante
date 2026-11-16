@@ -18,6 +18,7 @@ namespace {
     if (!strcmp(s, "counter")) return VIS_COUNTER;
     if (!strcmp(s, "spark"))   return VIS_SPARK;
     if (!strcmp(s, "status"))  return VIS_STATUS;
+    if (!strcmp(s, "timer"))   return VIS_TIMER;
     return VIS_TEXT;
   }
 
@@ -43,7 +44,7 @@ namespace {
   // Critical values blink to get attention.
   bool blinkHidden(const App& a, uint32_t now) { return a.lvl >= 2 && (now % 1000) < 280; }
 
-  void drawHeader(U8G2& g, const App& a, int ox, int page, int pages) {
+  void drawHeader(Gfx& g, const App& a, int ox, int page, int pages) {
     g.setFont(u8g2_font_4x6_tr);
     int dotsW = pages * 4;
     int maxChars = (128 - dotsW - 4) / 4;
@@ -60,14 +61,14 @@ namespace {
     if (a.lvl >= 2) g.drawStr(ox + 128 - dotsW - 10, 5, "!!");
   }
 
-  void drawSmallText(U8G2& g, const App& a, int ox, int x, int y, uint32_t now) {
+  void drawSmallText(Gfx& g, const App& a, int ox, int x, int y, uint32_t now) {
     if (!a.txt[0]) return;
     g.setFont(u8g2_font_4x6_tr);
     drawMarquee(g, a.txt, ox + x, y, 128 - x, now, a.changedAt, y - 6, y + 1);
   }
 
   // ---- visuals -------------------------------------------------------------------
-  void drawGauge(U8G2& g, const App& a, int ox, uint32_t now) {
+  void drawGauge(Gfx& g, const App& a, int ox, uint32_t now) {
     const int cx = ox + 22, cy = 30, ro = 20, ri = 13;
     float f = frac(a, a.shown);
     // Filled arc from the left (180deg) clockwise to the value.
@@ -100,7 +101,7 @@ namespace {
     drawSmallText(g, a, ox, 48, 31, now);
   }
 
-  void drawBar(U8G2& g, const App& a, int ox, uint32_t now) {
+  void drawBar(Gfx& g, const App& a, int ox, uint32_t now) {
     if (!blinkHidden(a, now)) {
       char v[12];
       if (a.hasValue) fmtValue(a.shown, v, sizeof(v)); else copyStr(v, sizeof(v), "--");
@@ -127,7 +128,7 @@ namespace {
     }
   }
 
-  void drawCounter(U8G2& g, const App& a, int ox, uint32_t now) {
+  void drawCounter(Gfx& g, const App& a, int ox, uint32_t now) {
     char v[12];
     if (a.hasValue) snprintf(v, sizeof(v), "%ld", lroundf(a.value)); else copyStr(v, sizeof(v), "-");
     // Drop-in bounce when the number changes.
@@ -160,7 +161,7 @@ namespace {
     }
   }
 
-  void drawText(U8G2& g, const App& a, int ox, uint32_t now) {
+  void drawText(Gfx& g, const App& a, int ox, uint32_t now) {
     g.setFont(u8g2_font_7x13_tr);
     const char* s = a.txt[0] ? a.txt : (a.hasValue ? "" : "waiting...");
     char buf[TXT_LEN + 16];
@@ -173,7 +174,7 @@ namespace {
     drawMarquee(g, s, ox, 24, 128, now, a.changedAt, 8, 31);
   }
 
-  void drawSpark(U8G2& g, const App& a, int ox, uint32_t now) {
+  void drawSpark(Gfx& g, const App& a, int ox, uint32_t now) {
     if (a.hasValue && !blinkHidden(a, now)) {
       char v[16], buf[24];
       fmtValue(a.value, v, sizeof(v));
@@ -205,7 +206,40 @@ namespace {
     if ((now / 300) % 2) g.drawDisc(px, py, 2); else g.drawCircle(px, py, 2);
   }
 
-  void drawStatus(U8G2& g, const App& a, int ox, uint32_t now) {
+  // Countdown: big m:ss, the text beside it, a progress bar along the bottom.
+  void drawTimer(Gfx& g, const App& a, int ox, uint32_t now) {
+    float left = Apps::secondsLeft(a, now);
+    bool done = a.hasTimer && a.timerRun && left <= 0;
+    char clock[12];
+    if (a.hasValue) Apps::formatClock(left, clock, sizeof(clock)); else copyStr(clock, sizeof(clock), "--:--");
+    // Paused: the clock blinks slowly. Ran out: it flashes.
+    bool hide = (done && (now % 600) < 300) || (a.hasTimer && !a.timerRun && left > 0 && a.timerTotal > left && (now % 1600) < 400);
+    g.setFont(u8g2_font_logisoso16_tr);
+    int w = g.getStrWidth(clock);
+    if (!hide) g.drawStr(ox + 0, 25, clock);
+    if (a.txt[0]) {
+      g.setFont(u8g2_font_5x7_tr);
+      drawMarquee(g, a.txt, ox + w + 6, 21, 128 - w - 6, now, a.changedAt, 13, 23);
+    }
+    // Progress: fills up as time passes.
+    float frac = a.hasTimer && a.timerTotal > 0 ? 1.0f - left / a.timerTotal : 0;
+    frac = frac < 0 ? 0 : (frac > 1 ? 1 : frac);
+    g.drawHLine(ox + 0, 28, 128);
+    g.drawHLine(ox + 0, 31, 128);
+    g.drawVLine(ox + 0, 28, 4);
+    g.drawVLine(ox + 127, 28, 4);
+    int fill = (int)(frac * 126);
+    if (fill > 0) g.drawBox(ox + 1, 29, fill, 2);
+    if (a.hasTimer && !a.timerRun) {            // pause sign at the end of the bar
+      g.setDrawColor(0);
+      g.drawBox(ox + 120, 27, 8, 5);
+      g.setDrawColor(1);
+      g.drawBox(ox + 122, 27, 2, 5);
+      g.drawBox(ox + 125, 27, 2, 5);
+    }
+  }
+
+  void drawStatus(Gfx& g, const App& a, int ox, uint32_t now) {
     const int cx = ox + 12, cy = 19;
     bool hide = a.lvl >= 2 && (now % 800) < 250;
     if (!hide) {
@@ -242,7 +276,7 @@ namespace {
   }
 }
 
-void drawMarquee(U8G2& g, const char* text, int x, int y, int w, uint32_t now, uint32_t startMs, int clipTop, int clipBottom) {
+void drawMarquee(Gfx& g, const char* text, int x, int y, int w, uint32_t now, uint32_t startMs, int clipTop, int clipBottom) {
   int tw = g.getStrWidth(text);
   if (tw <= w) { g.drawStr(x, y, text); return; }
   // Pause at the start, then scroll at ~30 px/s and wrap with a gap.
@@ -284,11 +318,26 @@ void setList(JsonArrayConst arr) {
         memcpy(a.txt, old[i].txt, sizeof(a.txt));
         memcpy(a.hist, old[i].hist, sizeof(a.hist));
         a.histN = old[i].histN; a.histHead = old[i].histHead;
+        a.hasTimer = old[i].hasTimer; a.timerRun = old[i].timerRun;
+        a.timerTotal = old[i].timerTotal; a.timerAt = old[i].timerAt;
         break;
       }
     }
     appCount++;
   }
+}
+
+float secondsLeft(const App& a, uint32_t now) {
+  if (!a.hasValue) return 0;
+  if (!a.hasTimer || !a.timerRun) return a.value;
+  float left = a.value - (now - a.timerAt) / 1000.0f;
+  return left > 0 ? left : 0;
+}
+
+void formatClock(float seconds, char* out, size_t n) {
+  long s = (long)ceilf(seconds < 0 ? 0 : seconds);   // a countdown rounds up: 20:00 right after it starts
+  if (s >= 3600) snprintf(out, n, "%ldh%02ld", s / 3600, (s % 3600) / 60);
+  else snprintf(out, n, "%ld:%02ld", s / 60, s % 60);
 }
 
 int count() { return appCount; }
@@ -321,6 +370,16 @@ App* applyValue(JsonDocument& msg) {
     if (strncmp(t, a->txt, TXT_LEN - 1)) changed = true;
     copyStr(a->txt, sizeof(a->txt), t);
   }
+  if (a->vis == VIS_TIMER && !msg["v"].is<float>()) {   // no countdown right now (e.g. no next meeting)
+    a->hasValue = false;
+    a->hasTimer = false;
+  }
+  if (msg["tot"].is<float>()) {          // a countdown: restart the local clock from the PC's value
+    a->hasTimer = true;
+    a->timerTotal = msg["tot"].as<float>();
+    a->timerRun = msg["run"] | false;
+    a->timerAt = now;
+  }
   a->lvl = msg["lvl"] | a->lvl;
   if (changed) a->changedAt = now;
   return a;
@@ -336,7 +395,7 @@ void update(uint32_t now) {
   }
 }
 
-void draw(U8G2& g, int index, int ox, int page, int pages, uint32_t now) {
+void draw(Gfx& g, int index, int ox, int page, int pages, uint32_t now) {
   App* a = get(index);
   if (!a) return;
   g.setDrawColor(1);
@@ -347,6 +406,7 @@ void draw(U8G2& g, int index, int ox, int page, int pages, uint32_t now) {
     case VIS_COUNTER: drawCounter(g, *a, ox, now); break;
     case VIS_SPARK:   drawSpark(g, *a, ox, now); break;
     case VIS_STATUS:  drawStatus(g, *a, ox, now); break;
+    case VIS_TIMER:   drawTimer(g, *a, ox, now); break;
     default:          drawText(g, *a, ox, now); break;
   }
 }

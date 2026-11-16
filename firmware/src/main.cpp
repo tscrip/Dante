@@ -1,5 +1,5 @@
 // DANTE firmware: a tiny desk companion with opinions.
-// ESP32-S3 + one or two SSD1306 128x32 OLEDs or a 1602/2004 LCD + 4 buttons, talking JSON lines over Bluetooth LE / USB.
+// ESP32-S3 + one screen (SSD1306 128x32 OLED, 1602/2004 LCD or 3.5" ST7796 TFT) + 4 buttons, talking JSON lines over Bluetooth LE / USB.
 // Protocol: docs/protocol.md
 #include <Arduino.h>
 #include <Wire.h>
@@ -14,6 +14,8 @@
 #include "Displays.h"
 #include "Lcd.h"
 #include "LcdUi.h"
+#include "Tft.h"
+#include "Gfx.h"
 
 // ---- screens ---------------------------------------------------------------------
 // Screen 0 is the face, screens 1..n are the PC-defined apps.
@@ -71,12 +73,9 @@ static void fillHello(JsonDocument& d) {
   d["t"] = "hello";
   d["fw"] = FW_VERSION;
   d["name"] = DEVICE_NAME;
-  d["display"] = Displays::kindName();
-  d["screens"] = Displays::count();
-  d["disp2"] = Displays::secondDetected();
+  d["display"] = Displays::kindName();      // oled / lcd1602 / lcd2004 / tft
   d["oled"] = Displays::oledDetected();
   d["lcd"] = Displays::lcdDetected();       // backpack address found at boot, 0 = none
-  d["lcd2"] = Displays::lcd2Detected();     // ... on the second bus (two LCDs = one eye each)
 }
 
 static void sendHello() {
@@ -188,7 +187,9 @@ static void handleButton(const ButtonEvent& ev) {
   //    and answers with a `say` ("Mic muted").
   if (ev.id == BTN_MAGIC) {
     if (!Link::pcAlive()) { showToast("", "No PC, no magic :("); return; }
-    Face::playGag(GAG_MAGIC, 900);
+    // On a countdown screen MAGIC is start / pause (the PC answers with a bubble); elsewhere, sparkles.
+    App* on = screen > 0 ? Apps::get(screen - 1) : nullptr;
+    if (!on || on->vis != VIS_TIMER) Face::playGag(GAG_MAGIC, 900);
     sendButton(ev.id, ev.longPress, screen);
     return;
   }
@@ -220,42 +221,24 @@ static void handleButton(const ButtonEvent& ev) {
 }
 
 // ---- rendering ------------------------------------------------------------------------
-// Everything below draws into a given panel. Which panel shows what:
-//
-//   1 screen            : face (both eyes) or the app, as always.
-//   2 screens, face     : left panel = left eye, right panel = right eye.
-//   2 screens, app      : WATCH  - the app on the content side, the other eye watches it;
-//                         MIRROR - the app on both panels.
-static bool dual() { return Displays::count() == 2; }
-static int contentSide() { return Displays::settings().contentSide; }
-static bool mirror() { return Displays::settings().layout == Displays::LAYOUT_MIRROR; }
+// Everything draws on a logical 128x32 canvas (Gfx.h). The OLED shows it 1:1, the TFT scaled up
+// and in colour, the character LCD has its own text layouts (LcdUi).
 
-// Does this side show "content" (apps, bubbles, takeover text) rather than a lone eye?
-static bool showsContent(int side) { return !dual() || mirror() || side == contentSide(); }
-
-// The watching eye glances towards the other panel.
-static float lookTowardContent(int side) { return side < contentSide() ? 26.0f : -26.0f; }
-
-static void renderOn(U8G2& g, int side, int s, uint32_t now) {
-  if (!dual()) {
-    if (s == 0) Face::draw(g, 0);
-    else Apps::draw(g, s - 1, 0, s, screenCount(), now);
-    return;
-  }
-  if (s == 0) { Face::drawSingle(g, side, 0, 0, 0); return; }
-  if (showsContent(side)) Apps::draw(g, s - 1, 0, s, screenCount(), now);
-  else Face::drawSingle(g, side, 0, lookTowardContent(side), 0);
+static void renderOn(Gfx& g, int s, uint32_t now, bool chrome = true) {
+  if (s == 0) Face::draw(g, 0, chrome);
+  else Apps::draw(g, s - 1, 0, s, screenCount(), now);
 }
 
 static float easeInOut(float p) { return p < 0.5f ? 2 * p * p : 1 - powf(-2 * p + 2, 2) / 2; }
 
-// Slide transition: render both screens into separate buffers and splice columns.
+// OLED slide transition: render both screens into separate buffers and splice columns.
 // (SSD1306 buffer = 4 pages x 128 columns, one byte per column per page.)
-static void renderSlide(U8G2& g, int side, uint32_t now) {
+static void renderSlide(U8G2& u, uint32_t now) {
   static uint8_t a[512], b[512];
-  uint8_t* buf = g.getBufferPtr();
-  g.clearBuffer(); renderOn(g, side, slideFrom, now); memcpy(a, buf, sizeof(a));
-  g.clearBuffer(); renderOn(g, side, slideTo, now);   memcpy(b, buf, sizeof(b));
+  U8g2Gfx g(u);
+  uint8_t* buf = u.getBufferPtr();
+  u.clearBuffer(); renderOn(g, slideFrom, now); memcpy(a, buf, sizeof(a));
+  u.clearBuffer(); renderOn(g, slideTo, now);   memcpy(b, buf, sizeof(b));
 
   float p = easeInOut((float)(now - slideStart) / SLIDE_MS);
   int s = (int)(p * 128);
@@ -270,7 +253,7 @@ static void renderSlide(U8G2& g, int side, uint32_t now) {
   }
 }
 
-static void drawToast(U8G2& g, uint32_t now) {
+static void drawToast(Gfx& g, uint32_t now) {
   uint32_t t = now - toast.start;
   // Bubble pops in from the right.
   int slide = t < 160 ? (int)((160 - t) * 96 / 160) : 0;
@@ -300,7 +283,7 @@ static int knockOffset(uint32_t t) {
   return ph < 450 ? (int)(sinf(ph * 0.09f) * 3) : 0;
 }
 
-static void urgentFlash(U8G2& g, Alert& a, uint32_t t) {
+static void urgentFlash(Gfx& g, Alert& a, uint32_t t) {
   if (a.lvl >= 2 && (t % 1000) < 140) {
     g.setDrawColor(2);
     g.drawBox(0, 0, 128, 32);
@@ -308,7 +291,7 @@ static void urgentFlash(U8G2& g, Alert& a, uint32_t t) {
   }
 }
 
-static void drawTakeover(U8G2& g, Alert& a, uint32_t now) {
+static void drawTakeover(Gfx& g, Alert& a, uint32_t now) {
   uint32_t t = now - a.since;
   int ox = knockOffset(t);
 
@@ -327,51 +310,138 @@ static void drawTakeover(U8G2& g, Alert& a, uint32_t now) {
   urgentFlash(g, a, t);
 }
 
-// Dual-screen WATCH layout: the eye panel bounces and stares at the message, knocking in sync.
-static void drawTakeoverEye(U8G2& g, int side, Alert& a, uint32_t now) {
-  uint32_t t = now - a.since;
-  int bounce = (int)(-fabsf(sinf(t * 0.008f)) * 3);
-  // Every few seconds it turns to look at the human: "...well?"
-  float look = ((t / 2500) % 3 == 2) ? 0 : lookTowardContent(side);
-  Face::drawSingle(g, side, knockOffset(t), look, bounce);
-  g.setFont(u8g2_font_7x13B_tr);
-  if ((t / 400) % 2 == 0) g.drawStr(side == 0 ? 4 : 112, 20, a.lvl >= 2 ? "!!" : "!");
-  urgentFlash(g, a, t);
+static void renderOled(Alert* alert, uint32_t now) {
+  U8G2& u = Displays::oled();
+  U8g2Gfx g(u);
+  u.clearBuffer();
+  u.setDrawColor(1);
+  if (alert) {
+    drawTakeover(g, *alert, now);
+  } else {
+    if (sliding) renderSlide(u, now);
+    else renderOn(g, screen, now);
+    if (toast.active) drawToast(g, now);
+  }
+  u.sendBuffer();
 }
 
-// Character LCD (16x2 / 20x4): one, or two with one eye each. Text-mode rendering, no slides.
+// Character LCD (16x2 / 20x4). Text-mode rendering, no slides.
 static void renderLcd(Alert* alert, uint32_t now) {
   static uint32_t lastLcd = 0;
   if (now - lastLcd < LCD_FRAME_MS) return;
   lastLcd = now;
 
   bool light = Displays::settings().bright > 0;
-  for (int side = 0; side < Displays::count(); side++) {
-    Lcd::select(Displays::physicalIndex(side));
-    Lcd::backlight(light);
-    Lcd::clear();
-    if (!dual()) {
-      // One LCD: both eyes on it, everything else full-screen.
-      if (alert) LcdUi::takeover(alert->title, alert->txt, alert->lvl, alert->since, now, light);
-      else if (toast.active) LcdUi::toast(toast.title, toast.text, toast.start, now);
-      else if (screen == 0) LcdUi::face(now);
-      else if (App* a = Apps::get(screen - 1)) LcdUi::app(*a, screen, Apps::count(), now);   // "app 2 of 5"
-    } else if (alert) {
-      // Two LCDs: same layout rules as two OLEDs (see showsContent()).
-      if (showsContent(side)) LcdUi::takeover(alert->title, alert->txt, alert->lvl, alert->since, now, light);
-      else LcdUi::takeoverEye(side, lookTowardContent(side), alert->lvl, alert->since, now, light);
-    } else if (toast.active && showsContent(side)) {
-      LcdUi::toast(toast.title, toast.text, toast.start, now);
-    } else if (screen == 0) {
-      LcdUi::faceSingle(side, 0, now);
-    } else if (showsContent(side)) {
-      if (App* a = Apps::get(screen - 1)) LcdUi::app(*a, screen, Apps::count(), now);
-    } else {
-      LcdUi::faceSingle(side, lookTowardContent(side), now);
-    }
-    Lcd::flush();
+  Lcd::backlight(light);
+  Lcd::clear();
+  if (alert) LcdUi::takeover(alert->title, alert->txt, alert->lvl, alert->since, now, light);
+  else if (toast.active) LcdUi::toast(toast.title, toast.text, toast.start, now);
+  else if (screen == 0) LcdUi::face(now);
+  else if (App* a = Apps::get(screen - 1)) LcdUi::app(*a, screen, Apps::count(), now);   // "app 2 of 5"
+  Lcd::flush();
+}
+
+// ---- 3.5" TFT ---------------------------------------------------------------------------
+// A status bar on top; below it the face fills the screen (the eyes stretch tall), while app
+// screens, bubbles and nudges are the OLED layouts scaled up 3.75x in a band across the middle.
+static const int TFT_BAR = 40;                         // status bar height
+static const float TFT_SX = TFT_W / 128.0f;            // 3.75
+static const float TFT_BAND_Y = TFT_BAR + (TFT_H - TFT_BAR - 32 * TFT_SX) / 2;
+
+static uint32_t moodColor(const FaceInfo& f) {
+  if (f.gag == GAG_LOVE) return Rgb::Pink;
+  switch (f.mood) {
+    case MOOD_CURIOUS:  return Rgb::Sky;
+    case MOOD_ANTSY:    return Rgb::Yellow;
+    case MOOD_GRUMPY:   return Rgb::Orange;
+    case MOOD_MELTDOWN: return Rgb::Red;
+    case MOOD_SLEEPY:   return Rgb::Slate;
+    default:            return Rgb::Teal;
   }
-  Lcd::select(0);
+}
+
+static uint32_t levelColor(uint8_t lvl) { return lvl >= 2 ? Rgb::Red : lvl == 1 ? Rgb::Amber : Rgb::Light; }
+
+static const char* moodName(Mood m) {
+  switch (m) {
+    case MOOD_CURIOUS:  return "curious";
+    case MOOD_ANTSY:    return "antsy";
+    case MOOD_GRUMPY:   return "grumpy";
+    case MOOD_MELTDOWN: return "meltdown!";
+    case MOOD_SLEEPY:   return "sleepy";
+    default:            return "happy";
+  }
+}
+
+// Name, mood, waiting count and link on top; page dots for the screens.
+static void tftStatusBar(TftGfx& g, uint32_t now) {
+  LGFX_Sprite& s = g.sprite();
+  const int y = -g.top();
+  if (y + TFT_BAR < 0) return;   // this strip is below the bar
+  FaceInfo f = Face::info();
+  s.setTextSize(1);
+  s.setTextDatum(lgfx::textdatum_t::middle_left);
+  s.setFont(&fonts::FreeSansBold12pt7b);
+  s.setTextColor(Rgb::Teal);
+  s.drawString("DANTE", 12, y + TFT_BAR / 2);
+  s.setFont(&fonts::FreeSans9pt7b);
+  s.setTextColor(moodColor(f));
+  s.drawString(moodName(f.mood), 112, y + TFT_BAR / 2 + 1);
+
+  // Right: link state, then the "waiting on you" badge.
+  s.setTextDatum(lgfx::textdatum_t::middle_right);
+  int right = TFT_W - 12;
+  if (f.alone) {
+    if ((now / 700) % 2 == 0) { s.setTextColor(Rgb::Red); s.drawString("no PC", right, y + TFT_BAR / 2 + 1); }
+  } else {
+    s.setTextColor(Rgb::Slate);
+    s.drawString(Link::btConnected() ? "Bluetooth" : "USB", right, y + TFT_BAR / 2 + 1);
+    if (f.pending > 0) {
+      char b[16];
+      snprintf(b, sizeof(b), "%d waiting", f.pending > 99 ? 99 : f.pending);
+      int w = s.textWidth(b) + 16;
+      int x = right - s.textWidth(Link::btConnected() ? "Bluetooth" : "USB") - 14 - w;
+      s.fillRoundRect(x, y + 8, w, TFT_BAR - 16, 10, Rgb::Amber);
+      s.setTextColor(Rgb::Black);
+      s.setTextDatum(lgfx::textdatum_t::middle_center);
+      s.drawString(b, x + w / 2, y + TFT_BAR / 2 + 1);
+    }
+  }
+  // Page dots, centred: the face plus one per app.
+  int n = screenCount();
+  int x0 = TFT_W / 2 - (n - 1) * 8;
+  for (int i = 0; i < n; i++) {
+    if (i == screen) s.fillCircle(x0 + i * 16, y + TFT_BAR / 2, 5, Rgb::Teal);
+    else s.drawCircle(x0 + i * 16, y + TFT_BAR / 2, 4, Rgb::Slate);
+  }
+  s.drawFastHLine(0, y + TFT_BAR - 1, TFT_W, Rgb::Dim);
+}
+
+static void renderTft(Alert* alert, uint32_t now) {
+  static uint32_t last = 0;
+  if (now - last < TFT_FRAME_MS) return;
+  last = now;
+  Tft::frame([&](TftGfx& g) {
+    tftStatusBar(g, now);
+    if (alert) {
+      g.setTransform(TFT_SX, TFT_SX, 0, TFT_BAND_Y);
+      g.setColors(alert->lvl >= 2 ? Rgb::Red : Rgb::Amber);
+      drawTakeover(g, *alert, now);
+    } else if (toast.active) {
+      g.setTransform(TFT_SX, TFT_SX, 0, TFT_BAND_Y);
+      g.setColors(Rgb::White);
+      drawToast(g, now);
+    } else if (screen == 0) {
+      // The face fills everything under the status bar: tall robot eyes.
+      g.setTransform(TFT_SX, (TFT_H - TFT_BAR - 8) / 32.0f, 0, TFT_BAR + 4);
+      g.setColors(moodColor(Face::info()));
+      Face::draw(g, 0, false);
+    } else if (App* a = Apps::get(screen - 1)) {
+      g.setTransform(TFT_SX, TFT_SX, 0, TFT_BAND_Y);
+      g.setColors(levelColor(a->lvl));
+      Apps::draw(g, screen - 1, 0, screen, screenCount(), now);
+    }
+  });
 }
 
 // ---- Arduino entry points -------------------------------------------------------------
@@ -413,21 +483,9 @@ void loop() {
   if (sliding && now - slideStart >= SLIDE_MS) sliding = false;
   Alert* alert = currentAlert();
 
-  if (Displays::isLcd()) { renderLcd(alert, now); return; }
-
-  for (int side = 0; side < Displays::count(); side++) {
-    U8G2& g = Displays::side(side);
-    g.clearBuffer();
-    g.setDrawColor(1);
-    if (alert) {
-      if (showsContent(side)) drawTakeover(g, *alert, now);
-      else drawTakeoverEye(g, side, *alert, now);
-    } else {
-      // A lone watching eye doesn't slide: it just turns to look at the new screen.
-      if (sliding && showsContent(side)) renderSlide(g, side, now);
-      else renderOn(g, side, screen, now);
-      if (toast.active && showsContent(side)) drawToast(g, now);
-    }
-    g.sendBuffer();
+  switch (Displays::active()) {
+    case Displays::KIND_LCD: renderLcd(alert, now); break;
+    case Displays::KIND_TFT: renderTft(alert, now); break;
+    default:                 renderOled(alert, now); break;
   }
 }

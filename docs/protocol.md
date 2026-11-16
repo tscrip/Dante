@@ -1,4 +1,4 @@
-# DANTE wire protocol (v1)
+# DANTE wire protocol (v1, firmware 3.0)
 
 Transport: **Bluetooth LE**, Nordic UART Service: service `6E400001-B5A3-F393-E0A9-E50E24DCCA9E`,
 the PC writes to RX `6E400002-…`, DANTE notifies on TX `6E400003-…` (lines may be split across
@@ -18,36 +18,39 @@ Limits on the device: max 12 apps, `id` ≤ 15 chars, `name` ≤ 19 chars, `unit
 |---------|--------|---------|
 | `hello` | –      | PC (re)connected. Device answers with its own `hello`. |
 | `ping`  | –      | Heartbeat (PC sends every ~10 s). Device answers `pong`. If no message arrives for 30 s DANTE considers itself alone (sleepy + "no PC" icon). |
-| `diag`  | –      | "Check wiring": DANTE answers with a `diag` (what it found at boot plus a live scan of both I2C buses). |
-| `apps`  | `apps`: array of `{id, name, vis, min, max, unit}` | Replaces the list of app screens. `vis` ∈ `gauge`, `bar`, `counter`, `text`, `spark`, `status`. Screen order = array order; the face is always screen 0. |
-| `val`   | `id`, `v` (number, optional), `txt` (optional), `lvl` (0 ok, 1 warn, 2 crit), `quip` (optional) | New value for an app. If `quip` is present DANTE "delivers" it: a speech-bubble toast with a reaction face. |
+| `diag`  | –      | "Check wiring": DANTE answers with a `diag` (what it found at boot plus a live scan of the I2C bus). |
+| `apps`  | `apps`: array of `{id, name, vis, min, max, unit}` | Replaces the list of app screens. `vis` ∈ `gauge`, `bar`, `counter`, `text`, `spark`, `status`, `timer`. Screen order = array order; the face is always screen 0. |
+| `val`   | `id`, `v` (number, optional), `txt` (optional), `lvl` (0 ok, 1 warn, 2 crit), `quip` (optional), `tot` + `run` (countdowns) | New value for an app. If `quip` is present DANTE "delivers" it: a speech-bubble toast with a reaction face. **Countdowns** (`timer` apps) carry `v` = seconds left, `tot` = seconds in the whole countdown (for the progress bar) and `run` = whether it is ticking; DANTE counts down by itself from the moment the message arrives, so the PC only sends a `val` when something changes (start, pause, a new session). A `timer` app's `val` without `v` means "no countdown right now". |
 | `mood`  | `m` ∈ `happy`,`curious`,`antsy`,`grumpy`,`meltdown`; `n` pending count; `age` oldest wait in minutes | Personality baseline for the face. |
-| `alert` | `id`, `title`, `txt`, `lvl` (1 nudge, 2 urgent) | Take over the screen and nudge the human until acknowledged or cleared. |
+| `alert` | `id`, `title`, `txt`, `lvl` (1 nudge, 2 urgent) | Take over the screen and nudge the human until acknowledged or cleared. Apps raise these through their take-over rules; features such as calendar reminders (`id` `calendar`) and the Pomodoro timer (`id` `pomodoro`) raise their own. |
 | `clear` | `id`   | Remove the takeover for that id. |
 | `say`   | `txt`  | Show a toast speech bubble (no value attached). |
-| `cfg`   | `bright` (0-255), `display` (`auto`\|`oled`\|`lcd1602`\|`lcd2004`), `lcdSize` (`1602`\|`2004`), `lcdAddr` (I2C address, e.g. 39 = 0x27), `screens` (0\|1\|2), `layout` (`watch`\|`mirror`), `content` (`left`\|`right`), `swap` (bool), `flip1` (bool), `flip2` (bool) | Device settings; every field optional. `display` picks the screen type (`auto` = whichever screen answers on the I2C bus, OLED preferred; `lcd1602` / `lcd2004` = 16x2 / 20x4 character LCD on a PCF8574 backpack; always one screen, `bright` 0 turns its backlight off). Both LCD sizes look identical on the bus, so `lcdSize` tells DANTE which one to expect when `display` is `auto`; it is stored too. Display settings are stored in flash. `screens`: 1 = both eyes on one display, 2 = one eye per display, 0 = automatic (2 if a second display of the same type answered at boot). Applies to OLEDs and LCDs alike: two LCDs (one per I2C bus, same size) show one big eye each. With 2 screens, app screens use `layout`: `watch` = the app on the `content` side while the other eye watches it, `mirror` = the app on both. `swap` exchanges left/right; `flip1`/`flip2` rotate a physical display 180°. |
+| `cfg`   | `bright` (0-255), `display` (`auto`\|`oled`\|`lcd1602`\|`lcd2004`\|`tft`), `lcdSize` (`1602`\|`2004`), `lcdAddr` (I2C address, e.g. 39 = 0x27), `flip` (bool) | Device settings; every field optional; stored in flash. DANTE always drives **one** screen. `display` picks it: `oled` = 0.91" SSD1306 128x32, `lcd1602` / `lcd2004` = 16x2 / 20x4 character LCD on a PCF8574 backpack, `tft` = 3.5" 480x320 ST7796 colour TFT on SPI, `auto` = whichever I2C screen answers (OLED preferred) and, if none does, the TFT (which can't be detected). Both LCD sizes look identical on the bus, so `lcdSize` tells DANTE which one to expect when `display` is `auto`. `bright` is the OLED contrast or the LCD/TFT backlight (0 = off). `flip` rotates the OLED or TFT 180°. (Firmware 2.x also took `screens`, `layout`, `content`, `swap`, `flip1` and `flip2` for two-screen mode; 3.0 ignores them, except that `flip1` is read as `flip` when `flip` is missing.) |
 
 ## Device → PC
 
 | `t`      | Fields | Meaning |
 |----------|--------|---------|
-| `hello`  | `fw`, `name`, `display`, `screens`, `disp2`, `oled`, `lcd`, `lcd2` | Firmware version, device name, screen type in use (`oled`/`lcd1602`/`lcd2004`), screens in use, and what answered at boot: a second screen of the type in use (`disp2`), the first OLED (`oled`), the address of an LCD backpack (`lcd`, 0 = none), and of one on the second bus (`lcd2`, 0 = none). PC replies by sending `apps`, every `val`, `mood`, active `alert`s. |
+| `hello`  | `fw`, `name`, `display`, `oled`, `lcd` | Firmware version, device name, screen type in use (`oled`/`lcd1602`/`lcd2004`/`tft`), and what answered on the I2C bus at boot: an OLED (`oled`) and the address of an LCD backpack (`lcd`, 0 = none). PC replies by sending `cfg`, `apps`, every `val`, `mood`, active `alert`s. |
 | `pong`   | –      | Heartbeat reply. |
-| `diag`   | `boot`, `scan` | `boot` = the startup report line; `scan` = live I2C scan, e.g. `I2C scan now: bus 1 (SDA=8 SCL=9): 0x27 (LCD) \| bus 2 (SDA=17 SCL=18): nothing`. Typing `?` in a serial monitor prints the same two lines as plain text. |
-| `btn`    | `b` ∈ `sel`,`left`,`right`,`magic`; `long` (bool); `scr` (app id or `face`) | Button press. Short `sel` on an app = "open it" (PC opens configured URL); long `sel` = "refresh now". `magic` = run the action configured in the PC app for a press / long press (mute, play/pause, ...); the PC answers with a `say` describing the result. MAGIC presses are sent even during a takeover and never acknowledge it. |
-| `ack`    | `id`   | User pressed SELECT on a takeover ("I'm on it"). |
+| `diag`   | `boot`, `scan` | `boot` = the startup report line; `scan` = live I2C scan, e.g. `I2C scan now: bus 1 (SDA=8 SCL=9): 0x27 (LCD)`. The TFT is on SPI and never shows up in the scan. Typing `?` in a serial monitor prints the same two lines as plain text. |
+| `btn`    | `b` ∈ `sel`,`left`,`right`,`magic`; `long` (bool); `scr` (app id or `face`) | Button press. Short `sel` on an app = "open it" (PC opens configured URL); long `sel` = "refresh now". `magic` = whatever the PC decides for the screen in `scr`: on a countdown screen (the Pomodoro timer) press = start / pause and long press = reset; anywhere else the action configured in the PC app (mute, play/pause, ...). The PC answers with a `say` describing the result. MAGIC presses are sent even during a takeover and never acknowledge it. |
+| `ack`    | `id`   | User pressed SELECT on a takeover ("I'm on it"). For a meeting reminder the PC opens the meeting's join link; for a finished Pomodoro session it starts the next one. |
 | `snooze` | `id`   | User pressed LEFT/RIGHT on a takeover ("later"). |
 
 ## Example session
 
 ```
 PC  {"t":"hello"}
-DEV {"t":"hello","fw":"1.2.0","name":"DANTE","display":"oled","screens":1,"disp2":true,"oled":true,"lcd":0}
-PC  {"t":"cfg","bright":200,"display":"oled","lcdAddr":39,"screens":2,"layout":"watch","content":"right","swap":false,"flip1":false,"flip2":false}
-PC  {"t":"apps","apps":[{"id":"cc_usage","name":"Claude 5h","vis":"gauge","min":0,"max":100,"unit":"%"},{"id":"prs","name":"PRs","vis":"counter","min":0,"max":20,"unit":""}]}
+DEV {"t":"hello","fw":"3.0.0","name":"DANTE","display":"tft","oled":false,"lcd":0}
+PC  {"t":"cfg","bright":200,"display":"tft","lcdSize":"1602","lcdAddr":39,"flip":false}
+PC  {"t":"apps","apps":[{"id":"cc_usage","name":"Claude 5h","vis":"gauge","min":0,"max":100,"unit":"%"},{"id":"pomodoro","name":"Pomodoro","vis":"timer","min":0,"max":1500,"unit":""}]}
 PC  {"t":"val","id":"cc_usage","v":63,"txt":"resets 2h10m","lvl":0}
-PC  {"t":"val","id":"prs","v":3,"txt":"oldest 4h","lvl":1,"quip":"3 PRs! They multiply when you look away."}
+PC  {"t":"val","id":"pomodoro","lvl":0,"v":1500,"tot":1500,"run":false,"txt":"Focus 1/4 - MAGIC: start"}
 PC  {"t":"mood","m":"antsy","n":4,"age":240}
-PC  {"t":"alert","id":"cc_wait","title":"Claude Code","txt":"DANTE repo is waiting on you","lvl":1}
-DEV {"t":"ack","id":"cc_wait"}
+DEV {"t":"btn","b":"magic","long":false,"scr":"pomodoro"}
+PC  {"t":"say","txt":"Focus 1/4: 25:00. Go!"}
+PC  {"t":"val","id":"pomodoro","lvl":0,"v":1500,"tot":1500,"run":true,"txt":"Focus 1/4"}
+PC  {"t":"alert","id":"calendar","title":"Meeting","txt":"Standup in 10 min","lvl":1}
+DEV {"t":"ack","id":"calendar"}
 ```

@@ -2,8 +2,8 @@
 
 **D**esk **A**ssistant for **N**otifications, **T**asks & **E**fficiency. See the [main README](../README.md) for the name.
 
-A tiny desk companion with opinions: animated robot eyes on a 0.91" 128x32 OLED (or two, or a
-1602/2004 LCD), four buttons (incl. a MAGIC button), and a Bluetooth LE link to the DANTE PC app, which does all the thinking and
+A tiny desk companion with opinions: animated robot eyes on one screen (a 0.91" 128x32 OLED, a
+1602/2004 character LCD, or a 3.5" 480x320 colour TFT), four buttons (incl. a MAGIC button), and a Bluetooth LE link to the DANTE PC app, which does all the thinking and
 pushes values, moods and nudges to the device.
 
 Protocol: [`../docs/protocol.md`](../docs/protocol.md)
@@ -28,11 +28,13 @@ The pins avoid the S3's strapping pins (0, 3, 45, 46), native USB (19/20), UART0
 GPIO 26-37, which the flash/PSRAM use on most S3 modules (octal-PSRAM "R8" modules included).
 All pins and timings live in [`src/config.h`](src/config.h).
 
+DANTE drives **one screen**: the OLED above, a character LCD, or the 3.5" TFT (both below).
+
 ### Alternative screen: 1602 (16×2) or 2004 (20×4) LCD
 
 A standard character LCD with a PCF8574 I2C backpack works instead of the OLED: 16×2 ("1602")
 or 20×4 ("2004"). Pick **Screen type → LCD 1602** or **LCD 2004** in the PC app (*Device →
-Screens*) and set its address (0x27 for PCF8574
+Screen*) and set its address (0x27 for PCF8574
 backpacks, 0x3F for PCF8574A). Before it has been configured, DANTE uses whichever screen it finds
 at boot (OLED preferred), and it reports what it found so the PC app can suggest the address.
 Both LCD sizes look the same on the I2C bus, so with *Automatic* the PC app also says which size
@@ -52,27 +54,32 @@ app screens add a line of detail and a `< 2/5 >` page indicator, and messages wr
 pull SDA/SCL up to 5 V. The ESP32-S3's pins are **not** 5 V tolerant, so use a level shifter
 (or remove the backpack's pull-up resistors and rely on 3.3 V pull-ups).
 
-### Optional: a second screen (one per eye)
+### Alternative screen: 3.5" colour TFT (ST7796, 480×320, SPI)
 
-By default (*Automatic*) DANTE uses the second screen whenever it answers at boot; you can also force
-**1 or 2 screens** in the PC app (*Device → Screens*). DANTE stores the choice in flash.
-With two screens each one shows one big eye. On app screens the PC app picks the layout:
-the app on one screen while the other eye *watches it*, or the app on both screens.
+The common 8-pin 3.5" SPI modules (ST7796 driver, no touch) work as DANTE's screen. The eyes fill the
+screen and take the colour of the mood (teal when happy, through yellow and orange, to red in a
+meltdown), a status bar on top shows the mood, the link and how many things are waiting, and app
+screens, bubbles and nudges are drawn 3.75× bigger in colour (amber for a warning, red when critical).
 
-This works with **two OLEDs** or **two LCDs** of the same size (1602 or 2004). On two LCDs each eye
-is 4×2 characters instead of 2×2, because every LCD has its own 8 custom characters.
+| TFT pin (label on the module) | ESP32-S3 pin | Notes |
+|-------------------------------|--------------|-------|
+| `VCC`                         | 3V3          | the logic is 3.3 V |
+| `GND`                         | GND          | |
+| `SCL` (= SCK)                 | GPIO 12      | SPI clock (the S3's native FSPI pin) |
+| `SDA` (= MOSI / SDI)          | GPIO 11      | SPI data |
+| `RST`                         | GPIO 14      | |
+| `DC` (or `RS`)                | GPIO 13      | data / command |
+| `CS`                          | GPIO 10      | |
+| `BL` (or `LED`)               | GPIO 21      | backlight, dimmed with the PC app's brightness slider |
 
-| Part                          | ESP32 pin | Notes                                              |
-|-------------------------------|-----------|----------------------------------------------------|
-| 2nd screen `SDA`              | GPIO 17   | second I2C bus (`Wire1`)                           |
-| 2nd screen `SCL`              | GPIO 18   |                                                    |
-| 2nd screen `VCC` / `GND`      | 3V3 / GND (OLED), 5V / GND (LCD) | same level-shifting advice as the first LCD |
+Pick **Screen type → TFT 3.5"** in the PC app. An SPI screen can't be detected, so *Automatic* only
+uses the TFT when no OLED or LCD answers on I2C; picking it explicitly is better. "Upside down" in the
+PC app rotates it 180°. The backlight draws roughly 60–100 mA from 3V3, which DevKit boards handle.
 
-Most 0.91" modules are at address `0x3C` (some are set to `0x3D`; both are found automatically), and two LCD backpacks usually both sit at `0x27`, so
-two screens can't share a bus — hence the second bus. Each LCD's address is found automatically. If your second module has an address jumper set to `0x3D`, you can put it on GPIO 8/9 instead:
-set `DISP2_SAME_BUS 1` and `DISP2_I2C_ADDR 0x3D` in `src/config.h`. Screens mounted the wrong way round
-or upside down are fixed in the PC app (swap / flip), no rewiring needed. DANTE reports whether it
-found the second screen at boot, and the PC app warns you if it didn't.
+Panels vary a little: if black shows as white, flip `TFT_INVERT` in [`src/config.h`](src/config.h);
+if red and blue are swapped, flip `TFT_BGR`. With short wires you can raise `TFT_SPI_HZ` to 80 MHz for
+smoother animation. DANTE draws in strips of 64 rows (61 KB of RAM), so no PSRAM is needed, and it
+only sends the strips that changed.
 
 ## Build and flash
 
@@ -91,25 +98,20 @@ The `huge_app.csv` partition table leaves room for the Bluetooth stack.
 
 ## Blank screen?
 
-Easiest: **Device → Check wiring** in the PC app. It asks DANTE to scan both I2C buses *right now*
+Easiest: **Device → Check wiring** in the PC app. It asks DANTE to scan its I2C bus *right now*
 (no reset needed) and explains the result. Without the PC app, open `pio device monitor`, type `?` and
 press Enter. (After **RST** the startup line itself is often missed, because the S3's native USB
-reconnects; `?` prints it again.) The first line says what
-DANTE found on both I2C buses and which screens it is driving, e.g.
+reconnects; `?` prints it again.) The first line says what DANTE found on the I2C bus and which screen
+it is driving, e.g.
 
 ```
-DANTE 2.5.2: bus 1 (SDA=8 SCL=9): OLED none, LCD 0x27 | bus 2 (SDA=17 SCL=18): OLED none, LCD 0x27 | screen: lcd1602 (auto) x2 (auto) | last reset: power on
-I2C scan now: bus 1 (SDA=8 SCL=9): 0x27 (LCD) | bus 2 (SDA=17 SCL=18): 0x27 (LCD)
+DANTE 3.0.0: I2C (SDA=8 SCL=9): OLED none, LCD 0x27 | TFT (SPI, SCK=12 MOSI=11 CS=10 DC=13 RST=14 BL=21) | screen: lcd1602 (auto) | last reset: power on
+I2C scan now: bus 1 (SDA=8 SCL=9): 0x27 (LCD)
 ```
 
-* **Power?** Two 0.91" OLEDs draw about 40 mA together, well within what the board's 3V3 pin can supply,
-  so running both from 3V3 is fine. If the power ever does dip, the line ends in `last reset: BROWNOUT`.
+* **Power?** A 0.91" OLED draws about 20 mA and the TFT's backlight 60–100 mA, both fine from the
+  board's 3V3 pin. If the power ever does dip, the line ends in `last reset: BROWNOUT`.
   Try another USB cable or port then.
-* **Second screen dark:** the `bus 2 (SDA=17 SCL=18)` part says whether an OLED or LCD answered there.
-  It must be the same kind as the first screen (two OLEDs, or two LCDs of the same size). If it was found
-  but the line ends in `x1 (set by PC app)`, set *Device → Screens* to *Automatic* or *2 screens*. If
-  nothing was found, check SDA → GPIO 17, SCL → GPIO 18 (not swapped), power and GND, and press **RST**
-  after wiring.
 * **Nothing found:** check SDA → GPIO 8, SCL → GPIO 9, power and GND (the old ESP32 build used
   21/22).
 * **Found, but the other screen is used:** in the PC app set *Device → Screen type* to
@@ -118,6 +120,11 @@ I2C scan now: bus 1 (SDA=8 SCL=9): 0x27 (LCD) | bus 2 (SDA=17 SCL=18): 0x27 (LCD
   and check the I2C level shifting described above.
 * **1602 shows a row of solid blocks:** it has power but never got initialised. Usually the wrong
   address or the SDA/SCL wires are swapped.
+* **TFT stays white (or black):** the scan can't see SPI screens. Check the six signal wires in the
+  TFT table (the module's `SCL`/`SDA` are the SPI clock and data, not I2C), that *Screen type* is
+  *TFT 3.5"*, and that brightness isn't 0. A white screen usually means `RST`, `CS` or `DC` is off. If
+  the `?` line ends in `NO MEMORY FOR THE FRAME BUFFER`, please report it.
+* **TFT colours look wrong:** see `TFT_INVERT` / `TFT_BGR` in the TFT section.
 
 ## Connecting to the PC
 
@@ -148,7 +155,8 @@ and blinks a small Bluetooth "no PC" sign in the corner.
 | Speech bubble    | any                  | Dismiss it.                                                     |
 | Takeover (nudge) | SELECT               | "I'm on it" -> `ack` to the PC, DANTE winks.                     |
 | Takeover (nudge) | LEFT / RIGHT         | "Later" -> `snooze` to the PC.                                  |
-| Anywhere         | MAGIC / long MAGIC   | Runs what the PC app's *Magic button* page says (mute mic, play/pause, ...); DANTE sparkles and shows the result. |
+| Timer screen     | MAGIC / long MAGIC   | Start or pause the countdown / reset it (the Pomodoro timer).   |
+| Anywhere else    | MAGIC / long MAGIC   | Runs what the PC app's *Magic button* page says (mute mic, play/pause, ...); DANTE sparkles and shows the result. |
 
 Every press is reported to the PC as a `btn` event (takeover presses are reported as
 `ack` / `snooze` instead).
@@ -192,6 +200,7 @@ The PC defines the app screens; each one picks a visual:
 | `text`    | scrolling text                                                        |
 | `spark`   | sparkline of the last 32 values                                       |
 | `status`  | OK / warning / error icon plus scrolling text                         |
+| `timer`   | countdown (m:ss, or 2h05) with a progress bar; DANTE ticks it down itself |
 
 Values tween smoothly, and level-2 (critical) values blink.
 
@@ -202,9 +211,11 @@ Values tween smoothly, and level-2 (critical) values blink.
 | `src/config.h`       | pins, timings, limits                                         |
 | `src/Link.*`         | JSON-lines over BLE + USB (native + UART port), heartbeat     |
 | `src/BleUart.*`      | Bluetooth LE Nordic UART Service (S3 has no Classic BT)       |
-| `src/Displays.*`     | one/two OLEDs or the LCD, settings stored in flash            |
+| `src/Displays.*`     | the one screen (OLED, LCD or TFT), settings stored in flash   |
+| `src/Gfx.h`          | drawing interface: the OLED layouts, drawn 1:1 or scaled      |
+| `src/Tft.*`          | 3.5" ST7796 TFT (LovyanGFX): scaled colour canvas, strips     |
 | `src/Lcd*.*`         | 1602/2004 LCD driver (PCF8574) and the 16x2 / 20x4 layouts    |
 | `src/Buttons.*`      | debounced short/long presses                                  |
 | `src/Face.*`         | procedural eyes, moods, gags, mini faces                      |
-| `src/Apps.*`         | app store + the six visuals, marquee helper                   |
+| `src/Apps.*`         | app store + the seven visuals, marquee helper                 |
 | `src/main.cpp`       | screens, slide transitions, toasts, takeovers, message handling |

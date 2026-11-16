@@ -23,6 +23,7 @@ class Canvas : public U8G2 {
   bool px(int x, int y) { return (frame[(y / 8) * 128 + x] >> (y % 8)) & 1; }
 };
 Canvas canvas;
+U8g2Gfx canvasGfx(canvas);   // what the face draws through
 
 // Glyph slots. The face uses all 8 (2x2 cells per eye); app screens reuse them.
 const uint8_t FULL = 0xFF;                  // ROM character: solid block
@@ -110,7 +111,7 @@ void pageLine(int row, int page, int pages) {
 void eyeGlyphs(int eye, int cy) {
   const int ox = eye * 16;   // separate canvas regions per eye
   canvas.setClipWindow(ox, 0, ox + 10, 16);
-  Face::drawEyeScaled(canvas, eye, ox + 5, cy, 0.42f, 0.62f, 2);
+  Face::drawEyeScaled(canvasGfx, eye, ox + 5, cy, 0.42f, 0.62f, 2);
   canvas.setMaxClipWindow();
   for (int cr = 0; cr < 2; cr++)
     for (int cc = 0; cc < 2; cc++) {
@@ -163,65 +164,9 @@ const char* mouth(const FaceInfo& f, uint32_t now) {
   return "-";
 }
 
-// Two-LCD mode: each eye is 4x2 cells (20x16 px), using all 8 glyphs of its own LCD.
-void bigEyeGlyphs(int eye, int cy) {
-  canvas.setClipWindow(0, 0, 20, 16);
-  Face::drawEyeScaled(canvas, eye, 10, cy, 0.8f, 0.68f, 3);
-  canvas.setMaxClipWindow();
-  for (int cr = 0; cr < 2; cr++)
-    for (int cc = 0; cc < 4; cc++) {
-      uint8_t rows[8];
-      for (int y = 0; y < 8; y++) {
-        uint8_t b = 0;
-        for (int x = 0; x < 5; x++)
-          if (canvas.px(cc * 5 + x, cr * 8 + y)) b |= (uint8_t)(0x10 >> x);
-        rows[y] = b;
-      }
-      Lcd::glyph(cr * 4 + cc, rows);
-    }
-}
-
 } // namespace
 
 namespace LcdUi {
-
-void faceSingle(int eye, float lookBias, uint32_t now) {
-  FaceInfo f = Face::info();
-  eye = eye ? 1 : 0;
-  canvas.clearBuffer();
-  bigEyeGlyphs(eye, 8 + (int)lroundf(f.lookY * 0.3f));
-
-  const int top = tall() ? 1 : 0;
-  // Decorations: this LCD only keeps its own side's half (left eye: left margin, right eye: right).
-  decorations(f, top, now);
-  for (int r = top; r < top + 2; r++)
-    for (int c = (eye == 0 ? W() / 2 : 0); c < (eye == 0 ? W() : W() / 2); c++) Lcd::put(c, r, ' ');
-  if (eye == 1 && f.pending > 0 && !f.alone) {
-    char b[6];
-    snprintf(b, sizeof(b), "[%d]", f.pending > 99 ? 99 : f.pending);
-    printRight(0, b);
-  }
-  if (eye == 0 && f.alone && (now / 700) % 2 == 0) Lcd::print(0, 0, "noPC");
-
-  int reach = W() >= 20 ? 5 : 4;
-  int look = (int)lroundf((f.lookX + lookBias) / 24.0f * reach);
-  look = look < -reach ? -reach : (look > reach ? reach : look);
-  int col = W() / 2 - 2 + look;
-  for (int r = 0; r < 2; r++)
-    for (int c = 0; c < 4; c++) Lcd::put(col + c, top + r, (uint8_t)(r * 4 + c));
-}
-
-void takeoverEye(int eye, float lookBias, uint8_t lvl, uint32_t since, uint32_t now, bool light) {
-  uint32_t t = now - since;
-  // Every few seconds it turns to look at the human: "...well?"
-  faceSingle(eye, (t / 2500) % 3 == 2 ? 0 : lookBias, now);
-  if ((t / 400) % 2 == 0) {
-    const char* bang = lvl >= 2 ? "!!" : "!";
-    if (eye == 0) Lcd::print(0, tall() ? 1 : 0, bang);
-    else printRight(tall() ? 1 : 0, bang);
-  }
-  Lcd::backlight(light && !(lvl >= 2 && (t % 1000) < 160));
-}
 
 void face(uint32_t now) {
   FaceInfo f = Face::info();
@@ -262,6 +207,10 @@ void app(const App& a, int page, int pages, uint32_t now) {
   if (a.vis != VIS_TEXT && a.vis != VIS_STATUS) {
     if (a.hasValue) fmtValue(a.vis == VIS_COUNTER ? a.value : a.shown, v, sizeof(v));
     snprintf(right, sizeof(right), "%s%s", v, a.unit);
+    if (a.vis == VIS_TIMER) {
+      if (a.hasValue) Apps::formatClock(Apps::secondsLeft(a, now), v, sizeof(v)); else snprintf(v, sizeof(v), "--:--");
+      snprintf(right, sizeof(right), "%s%s", a.hasTimer && !a.timerRun && a.hasValue ? "||" : "", v);
+    }
     if (blinkOff) memset(right, ' ', strlen(right));
   }
   int nameRoom = W() - (int)strlen(right) - (right[0] ? 1 : 0);
@@ -280,6 +229,24 @@ void app(const App& a, int page, int pages, uint32_t now) {
       for (int c = 0; c < W(); c++) {
         int lit = px - c * 5;
         Lcd::put(c, 1, lit >= 5 ? FULL : (lit > 0 ? (uint8_t)(G_BAR1 + lit - 1) : (a.vis == VIS_GAUGE && c % 4 == 3 ? '.' : ' ')));
+      }
+      break;
+    }
+    case VIS_TIMER: {
+      // 16x2: the text (e.g. "Focus 2/4"); 20x4: a progress bar here, the text on row 2.
+      if (!tall()) {
+        marquee(0, 1, W(), a.txt, now, a.changedAt);
+        textShown = true;
+        break;
+      }
+      loadBarGlyphs();
+      float left = Apps::secondsLeft(a, now);
+      float frac = a.hasTimer && a.timerTotal > 0 ? 1.0f - left / a.timerTotal : 0;
+      frac = frac < 0 ? 0 : (frac > 1 ? 1 : frac);
+      int px = (int)lroundf(frac * W() * 5);
+      for (int c = 0; c < W(); c++) {
+        int lit = px - c * 5;
+        Lcd::put(c, 1, lit >= 5 ? FULL : (lit > 0 ? (uint8_t)(G_BAR1 + lit - 1) : (uint8_t)'.'));
       }
       break;
     }

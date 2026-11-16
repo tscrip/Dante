@@ -5,7 +5,7 @@ namespace {
 // PCF8574 pin mapping used by practically every 1602/2004 backpack.
 const uint8_t RS = 0x01, EN = 0x04, BL = 0x08;
 
-// One LCD. Panel 0 sits on the main I2C bus, panel 1 on the second bus (one eye each).
+// The LCD on the I2C bus.
 struct Panel {
   explicit Panel(TwoWire* b) : bus(b) {}
   TwoWire* bus;
@@ -18,12 +18,8 @@ struct Panel {
   bool glyphValid[8] = {};
 };
 
-#if DISP2_SAME_BUS
-Panel panels[2] = { Panel(&Wire), Panel(&Wire) };
-#else
-Panel panels[2] = { Panel(&Wire), Panel(&Wire1) };
-#endif
-Panel* P = &panels[0];
+Panel panel(&Wire);
+Panel* const P = &panel;
 
 // DDRAM address of each row's first cell. Rows 3 and 4 continue rows 1 and 2, so their
 // offset depends on the width (0x14/0x54 on a 20x4, 0x10/0x50 on a 16x4).
@@ -63,8 +59,6 @@ inline void data(uint8_t d) { send(d, RS); }
 } // namespace
 
 namespace Lcd {
-
-void select(int panel) { P = &panels[panel ? 1 : 0]; }
 
 bool probe(uint8_t a) {
   P->bus->beginTransmission(a);

@@ -1,10 +1,10 @@
 #pragma once
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <U8g2lib.h>
+#include "Gfx.h"
 #include "config.h"
 
-enum Visual : uint8_t { VIS_GAUGE = 0, VIS_BAR, VIS_COUNTER, VIS_TEXT, VIS_SPARK, VIS_STATUS };
+enum Visual : uint8_t { VIS_GAUGE = 0, VIS_BAR, VIS_COUNTER, VIS_TEXT, VIS_SPARK, VIS_STATUS, VIS_TIMER };
 
 struct App {
   char id[ID_LEN];
@@ -24,6 +24,12 @@ struct App {
   float hist[HIST_LEN];
   uint8_t histN;     // number of samples stored
   uint8_t histHead;  // next write position
+
+  // Countdowns (`val` with `tot`): `value` = seconds left when it arrived, ticking down locally while `timerRun`.
+  bool hasTimer;
+  bool timerRun;
+  float timerTotal;  // seconds in the whole countdown (for the progress bar)
+  uint32_t timerAt;  // millis() when `value` arrived
 };
 
 namespace Apps {
@@ -35,9 +41,13 @@ namespace Apps {
   App* applyValue(JsonDocument& msg);
 
   void update(uint32_t now);
+  // Seconds left on a countdown app right now.
+  float secondsLeft(const App& a, uint32_t now);
+  // "24:59", or "2h05" for an hour or more.
+  void formatClock(float seconds, char* out, size_t n);
   // Draws app `index` full-screen. `page`/`pages` drive the page indicator dots.
-  void draw(U8G2& g, int index, int ox, int page, int pages, uint32_t now);
+  void draw(Gfx& g, int index, int ox, int page, int pages, uint32_t now);
 }
 
 // Shared helper: draw `text` scrolling inside [x, x+w) at baseline y with the current font.
-void drawMarquee(U8G2& g, const char* text, int x, int y, int w, uint32_t now, uint32_t startMs, int clipTop, int clipBottom);
+void drawMarquee(Gfx& g, const char* text, int x, int y, int w, uint32_t now, uint32_t startMs, int clipTop, int clipBottom);

@@ -1,76 +1,22 @@
 #include "Displays.h"
 #include "Lcd.h"
+#include "Tft.h"
 #include "config.h"
 #include <Wire.h>
 #include <Preferences.h>
 #include <esp_system.h>
 
-// ---- second panel driver ------------------------------------------------------------
-// U8g2's own "2ND_HW_I2C" driver is compiled out on ESP32 (it keys off WIRE_INTERFACES_COUNT,
-// which the ESP32 core doesn't define), so we drive the bus ourselves.
-#if DISP2_SAME_BUS
-#define BUS2 Wire
-#define BUS2_SDA PIN_SDA
-#define BUS2_SCL PIN_SCL
-#else
-#define BUS2 Wire1
-#define BUS2_SDA PIN_SDA2
-#define BUS2_SCL PIN_SCL2
-#endif
-
-extern "C" uint8_t dante_bus2_byte(u8x8_t* u8x8, uint8_t msg, uint8_t argInt, void* argPtr) {
-  switch (msg) {
-    case U8X8_MSG_BYTE_SEND:
-      BUS2.write((uint8_t*)argPtr, (size_t)argInt);
-      break;
-    case U8X8_MSG_BYTE_INIT:
-      BUS2.begin(BUS2_SDA, BUS2_SCL, 400000);
-      break;
-    case U8X8_MSG_BYTE_SET_DC:
-      break;
-    case U8X8_MSG_BYTE_START_TRANSFER:
-      BUS2.beginTransmission(u8x8_GetI2CAddress(u8x8) >> 1);
-      break;
-    case U8X8_MSG_BYTE_END_TRANSFER:
-      BUS2.endTransmission();
-      break;
-    default:
-      return 0;
-  }
-  return 1;
-}
-
-// Same as u8g2_Setup_ssd1306_i2c_128x32_univision_f, but with a frame buffer of its own: the
-// stock setup hands every panel of the same model one shared static buffer, so two panels
-// would always show the same picture.
-class SecondPanel : public U8G2 {
-  uint8_t frame[128 * 32 / 8];
- public:
-  SecondPanel() : U8G2() {
-    u8g2_SetupDisplay(&u8g2, u8x8_d_ssd1306_128x32_univision, u8x8_cad_ssd13xx_fast_i2c,
-                      dante_bus2_byte, u8x8_gpio_and_delay_arduino);
-    u8g2_SetupBuffer(&u8g2, frame, 4, u8g2_ll_hvline_vertical_top_lsb, U8G2_R0);
-    u8x8_SetPin_HW_I2C(getU8x8(), U8X8_PIN_NONE);
-  }
-};
-
-// Symbol names kept short: the host simulator dumps these buffers.
+// Symbol name kept short: the host simulator dumps this buffer.
 U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C panel1(U8G2_R0, U8X8_PIN_NONE, PIN_SCL, PIN_SDA);
-SecondPanel panel2;
 
 namespace {
 Displays::Settings cfg;
-bool detected2 = false;
-bool detected1 = false;
-// SSD1306 modules answer at 0x3C, or 0x3D when their address jumper/resistor is moved.
-uint8_t oledAddr1 = DISP1_I2C_ADDR, oledAddr2 = DISP2_I2C_ADDR;
+bool oledFound = false;
+uint8_t oledAddr = OLED_I2C_ADDR;   // SSD1306 modules answer at 0x3C, or 0x3D with the address jumper moved
 uint8_t lcdFound = 0;
-uint8_t lcdFound2 = 0;          // an LCD backpack on the second bus (two LCDs: one eye each)
-Displays::Kind active = Displays::KIND_OLED;   // cfg.kind with KIND_AUTO resolved
-bool panel2Awake = false;
+Displays::Kind current = Displays::KIND_OLED;   // cfg.kind with KIND_AUTO resolved
+bool tftFailed = false;
 Preferences prefs;
-
-U8G2* physical(int i) { return i == 0 ? (U8G2*)&panel1 : (U8G2*)&panel2; }
 
 void load() {
   // Note: opening a namespace read-only fails on a freshly flashed chip (it doesn't exist
@@ -79,15 +25,11 @@ void load() {
   if (!prefs.begin("dante", true) && !prefs.begin("hank", true) && !prefs.begin("deskbuddy", true)) return;
   uint8_t kind = prefs.getUChar("display", Displays::KIND_AUTO);
   cfg.kind = kind == Displays::KIND_LCD ? Displays::KIND_LCD
-           : kind == Displays::KIND_OLED ? Displays::KIND_OLED : Displays::KIND_AUTO;
+           : kind == Displays::KIND_OLED ? Displays::KIND_OLED
+           : kind == Displays::KIND_TFT ? Displays::KIND_TFT : Displays::KIND_AUTO;
   cfg.lcdAddr = prefs.getUChar("lcdAddr", LCD_DEFAULT_ADDR);
   cfg.lcdSize = prefs.getUChar("lcdSize", Displays::LCD_1602) == Displays::LCD_2004 ? Displays::LCD_2004 : Displays::LCD_1602;
-  cfg.screens = prefs.getUChar("screens", 0);
-  cfg.layout = (Displays::Layout)prefs.getUChar("layout", Displays::LAYOUT_WATCH);
-  cfg.contentSide = prefs.getUChar("content", 1);
-  cfg.swap = prefs.getBool("swap", false);
-  cfg.flip[0] = prefs.getBool("flip1", false);
-  cfg.flip[1] = prefs.getBool("flip2", false);
+  cfg.flip = prefs.isKey("flip") ? prefs.getBool("flip", false) : prefs.getBool("flip1", false);   // 2.x: one flag per screen
   cfg.bright = prefs.getUChar("bright", 200);
   prefs.end();
 }
@@ -97,61 +39,55 @@ void save() {
   prefs.putUChar("display", cfg.kind);
   prefs.putUChar("lcdAddr", cfg.lcdAddr);
   prefs.putUChar("lcdSize", cfg.lcdSize);
-  prefs.putUChar("screens", cfg.screens);
-  prefs.putUChar("layout", cfg.layout);
-  prefs.putUChar("content", cfg.contentSide);
-  prefs.putBool("swap", cfg.swap);
-  prefs.putBool("flip1", cfg.flip[0]);
-  prefs.putBool("flip2", cfg.flip[1]);
+  prefs.putBool("flip", cfg.flip);
   prefs.putUChar("bright", cfg.bright);
+  // Two-screen settings from 2.x firmware.
+  for (const char* old : { "screens", "layout", "content", "swap", "flip1", "flip2" })
+    if (prefs.isKey(old)) prefs.remove(old);
   prefs.end();
 }
 
 Displays::Kind resolve() {
   if (cfg.kind != Displays::KIND_AUTO) return cfg.kind;
-  return (!detected1 && lcdFound) ? Displays::KIND_LCD : Displays::KIND_OLED;
+  if (oledFound) return Displays::KIND_OLED;
+  if (lcdFound) return Displays::KIND_LCD;
+  return Displays::KIND_TFT;
 }
 
-// Push the settings to the hardware.
+// Push the settings to the hardware: wake the screen in use, put the others to sleep.
 void apply() {
-  active = resolve();
-  bool lcd = active == Displays::KIND_LCD;
-  uint8_t cols = cfg.lcdSize == Displays::LCD_2004 ? 20 : 16;
-  uint8_t rows = cfg.lcdSize == Displays::LCD_2004 ? 4 : 2;
-  // In automatic mode, talk to the backpack we actually found.
-  uint8_t lcdAddr = (cfg.kind == Displays::KIND_AUTO && lcdFound) ? lcdFound : cfg.lcdAddr;
-  for (int i = 0; i < 2; i++) {
-    physical(i)->setDisplayRotation(cfg.flip[i] ? U8G2_R2 : U8G2_R0);
-    physical(i)->setContrast(cfg.bright);
-  }
-  panel1.setPowerSave(lcd ? 1 : 0);
-  bool want2 = !lcd && Displays::count() == 2;
-  if (want2 != panel2Awake) {
-    if (!want2) { panel2.clearBuffer(); panel2.sendBuffer(); }
-    panel2.setPowerSave(want2 ? 0 : 1);
-    panel2Awake = want2;
-  }
-  // LCD 0 on the main bus; LCD 1 on the second bus when there are two (one eye each).
-  bool two = lcd && Displays::count() == 2;
-  uint8_t addrs[2] = { lcdAddr, lcdFound2 ? lcdFound2 : lcdAddr };
-  static uint8_t startedAt[2] = { 0, 0 };
-  for (int i = 0; i < 2; i++) {
-    Lcd::select(i);
-    if (i == 0 ? lcd : two) {
-      if (!Lcd::active() || startedAt[i] != addrs[i] || Lcd::cols() != cols || Lcd::rows() != rows) {
-        Lcd::begin(addrs[i], cols, rows);
-        startedAt[i] = addrs[i];
-      }
-      Lcd::backlight(cfg.bright > 0);
-    } else {
-      Lcd::end();
+  current = resolve();
+
+  panel1.setDisplayRotation(cfg.flip ? U8G2_R2 : U8G2_R0);
+  panel1.setContrast(cfg.bright);
+  panel1.setPowerSave(current == Displays::KIND_OLED ? 0 : 1);
+
+  if (current == Displays::KIND_LCD) {
+    uint8_t cols = cfg.lcdSize == Displays::LCD_2004 ? 20 : 16;
+    uint8_t rows = cfg.lcdSize == Displays::LCD_2004 ? 4 : 2;
+    // In automatic mode, talk to the backpack we actually found.
+    uint8_t addr = (cfg.kind == Displays::KIND_AUTO && lcdFound) ? lcdFound : cfg.lcdAddr;
+    static uint8_t startedAt = 0;
+    if (!Lcd::active() || startedAt != addr || Lcd::cols() != cols || Lcd::rows() != rows) {
+      Lcd::begin(addr, cols, rows);
+      startedAt = addr;
     }
+    Lcd::backlight(cfg.bright > 0);
+  } else if (Lcd::active()) {
+    Lcd::end();
   }
-  Lcd::select(0);
+
+  if (current == Displays::KIND_TFT) {
+    Tft::setFlip(cfg.flip);
+    Tft::setBrightness(cfg.bright);
+    if (!Tft::active()) tftFailed = !Tft::begin();
+  } else {
+    Tft::end();
+  }
 }
 
 // PCF8574 backpacks live at 0x20-0x27, PCF8574A at 0x38-0x3F (A0-A2 jumpers). Try the
-// preferred one first, then the usual 0x27 / 0x3F, then the rest. Probes the selected LCD's bus.
+// preferred one first, then the usual 0x27 / 0x3F, then the rest.
 uint8_t findLcd(uint8_t preferred) {
   uint8_t candidates[18] = { preferred, 0x27, 0x3F };
   int n = 3;
@@ -168,54 +104,31 @@ namespace Displays {
 void begin() {
   load();
   Wire.begin(PIN_SDA, PIN_SCL, 400000);
-  Lcd::select(0);
-  // First OLED: 0x3C, else 0x3D.
-  detected1 = Lcd::probe(DISP1_I2C_ADDR);
-  if (!detected1 && Lcd::probe(DISP1_I2C_ADDR ^ 0x01)) { detected1 = true; oledAddr1 = DISP1_I2C_ADDR ^ 0x01; }
+  oledFound = Lcd::probe(OLED_I2C_ADDR);
+  if (!oledFound && Lcd::probe(OLED_I2C_ADDR ^ 0x01)) { oledFound = true; oledAddr = OLED_I2C_ADDR ^ 0x01; }
   lcdFound = findLcd(cfg.lcdAddr);
 
-  panel1.setI2CAddress(oledAddr1 << 1);
+  panel1.setI2CAddress(oledAddr << 1);
   panel1.setBusClock(400000);
-  panel1.begin();
-
-  panel2.setI2CAddress(DISP2_I2C_ADDR << 1);
-  panel2.begin();               // inits the bus; harmless if nothing is attached
-  BUS2.beginTransmission(DISP2_I2C_ADDR);
-  detected2 = BUS2.endTransmission() == 0;
-#if !DISP2_SAME_BUS
-  if (!detected2) {             // second OLED at the other address? (on its own bus, either is fine)
-    BUS2.beginTransmission(DISP2_I2C_ADDR ^ 0x01);
-    if (BUS2.endTransmission() == 0) {
-      detected2 = true;
-      oledAddr2 = DISP2_I2C_ADDR ^ 0x01;
-      panel2.setI2CAddress(oledAddr2 << 1);
-      panel2.begin();           // re-run the init sequence at the right address
-    }
-  }
-#endif
-  Lcd::select(1);                // the second bus is up now: is there an LCD on it too?
-  lcdFound2 = findLcd(lcdFound ? lcdFound : cfg.lcdAddr);
-  Lcd::select(0);
-  panel2Awake = true;           // begin() wakes it; apply() puts it back to sleep if unused
+  panel1.begin();               // harmless if nothing is attached
   apply();
 }
 
 const Settings& settings() { return cfg; }
-bool secondDetected() { return isLcd() ? lcdFound2 != 0 : detected2; }
-uint8_t lcd2Detected() { return lcdFound2; }
-bool oledDetected() { return detected1; }
+bool oledDetected() { return oledFound; }
 uint8_t lcdDetected() { return lcdFound; }
-bool isLcd() { return active == KIND_LCD; }
-const char* kindName() { return !isLcd() ? "oled" : cfg.lcdSize == LCD_2004 ? "lcd2004" : "lcd1602"; }
-int count() {
-  if (isLcd()) return cfg.screens == 2 || (cfg.screens == 0 && lcdFound2) ? 2 : 1;
-  if (cfg.screens == 0) return detected2 ? 2 : 1;   // automatic
-  return cfg.screens == 2 ? 2 : 1;
+Kind active() { return current; }
+bool isLcd() { return current == KIND_LCD; }
+bool isTft() { return current == KIND_TFT; }
+U8G2& oled() { return panel1; }
+
+const char* kindName() {
+  switch (current) {
+    case KIND_LCD: return cfg.lcdSize == LCD_2004 ? "lcd2004" : "lcd1602";
+    case KIND_TFT: return "tft";
+    default:       return "oled";
+  }
 }
-
-int physicalIndex(int s) { return count() == 2 ? ((s ? 1 : 0) ^ (cfg.swap ? 1 : 0)) : 0; }
-
-U8G2& side(int s) { return *physical(physicalIndex(s)); }
 
 bool applyConfig(JsonDocument& m) {
   Settings before = cfg;
@@ -223,26 +136,20 @@ bool applyConfig(JsonDocument& m) {
   if (m["display"].is<const char*>()) {
     const char* d = m["display"];
     bool is2004 = !strcmp(d, "lcd2004");
-    cfg.kind = (is2004 || !strcmp(d, "lcd1602")) ? KIND_LCD : !strcmp(d, "oled") ? KIND_OLED : KIND_AUTO;
+    cfg.kind = (is2004 || !strcmp(d, "lcd1602")) ? KIND_LCD
+             : !strcmp(d, "oled") ? KIND_OLED
+             : !strcmp(d, "tft") ? KIND_TFT : KIND_AUTO;
     if (cfg.kind == KIND_LCD) cfg.lcdSize = is2004 ? LCD_2004 : LCD_1602;
   }
   if (m["lcdSize"].is<const char*>()) {   // lets "auto" know which LCD to expect
     cfg.lcdSize = strcmp(m["lcdSize"], "2004") == 0 ? LCD_2004 : LCD_1602;
   }
   if (m["lcdAddr"].is<int>()) cfg.lcdAddr = (uint8_t)constrain(m["lcdAddr"].as<int>(), 0x08, 0x77);
-  if (m["screens"].is<int>()) {
-    int sc = m["screens"].as<int>();
-    cfg.screens = sc == 1 || sc == 2 ? (uint8_t)sc : 0;   // anything else = automatic
-  }
-  if (m["layout"].is<const char*>()) cfg.layout = strcmp(m["layout"], "mirror") == 0 ? LAYOUT_MIRROR : LAYOUT_WATCH;
-  if (m["content"].is<const char*>()) cfg.contentSide = strcmp(m["content"], "left") == 0 ? 0 : 1;
-  if (m["swap"].is<bool>()) cfg.swap = m["swap"];
-  if (m["flip1"].is<bool>()) cfg.flip[0] = m["flip1"];
-  if (m["flip2"].is<bool>()) cfg.flip[1] = m["flip2"];
+  if (m["flip"].is<bool>()) cfg.flip = m["flip"];
+  else if (m["flip1"].is<bool>()) cfg.flip = m["flip1"];   // a PC app from before 3.0
 
-  bool changed = before.kind != cfg.kind || before.lcdAddr != cfg.lcdAddr || before.lcdSize != cfg.lcdSize || before.screens != cfg.screens || before.layout != cfg.layout || before.contentSide != cfg.contentSide ||
-                 before.swap != cfg.swap || before.flip[0] != cfg.flip[0] || before.flip[1] != cfg.flip[1] ||
-                 before.bright != cfg.bright;
+  bool changed = before.kind != cfg.kind || before.lcdAddr != cfg.lcdAddr || before.lcdSize != cfg.lcdSize ||
+                 before.flip != cfg.flip || before.bright != cfg.bright;
   if (changed) { apply(); save(); }
   return changed;
 }
@@ -264,35 +171,27 @@ const char* resetReason() {
 }
 
 void describe(char* out, size_t n) {
-  char lcd[8] = "none", lcd2[8] = "none", o1[8] = "none", o2[8] = "none";
+  char lcd[8] = "none", oled[8] = "none";
   if (lcdFound) snprintf(lcd, sizeof(lcd), "0x%02X", lcdFound);
-  if (lcdFound2) snprintf(lcd2, sizeof(lcd2), "0x%02X", lcdFound2);
-  if (detected1) snprintf(o1, sizeof(o1), "0x%02X", oledAddr1);
-  if (detected2) snprintf(o2, sizeof(o2), "0x%02X", oledAddr2);
-  snprintf(out, n, "DANTE " FW_VERSION ": bus 1 (SDA=%d SCL=%d): OLED %s, LCD %s | bus 2 (SDA=%d SCL=%d): OLED %s, LCD %s"
-                   " | screen: %s%s x%d%s | last reset: %s",
-           PIN_SDA, PIN_SCL, o1, lcd,
-           BUS2_SDA, BUS2_SCL, o2, lcd2,
-           kindName(), cfg.kind == KIND_AUTO ? " (auto)" : " (set by PC app)",
-           count(), cfg.screens == 0 ? " (auto)" : " (set by PC app)", resetReason());
+  if (oledFound) snprintf(oled, sizeof(oled), "0x%02X", oledAddr);
+  snprintf(out, n, "DANTE " FW_VERSION ": I2C (SDA=%d SCL=%d): OLED %s, LCD %s | TFT (SPI, SCK=%d MOSI=%d CS=%d DC=%d RST=%d BL=%d)%s"
+                   " | screen: %s%s | last reset: %s",
+           PIN_SDA, PIN_SCL, oled, lcd,
+           TFT_PIN_SCK, TFT_PIN_MOSI, TFT_PIN_CS, TFT_PIN_DC, TFT_PIN_RST, TFT_PIN_BL, tftFailed ? ": NO MEMORY FOR THE FRAME BUFFER" : "",
+           kindName(), cfg.kind == KIND_AUTO ? " (auto)" : " (set by PC app)", resetReason());
 }
 
 void scanNow(char* out, size_t n) {
-  TwoWire* buses[2] = { &Wire, &BUS2 };
-  const int sdas[2] = { PIN_SDA, BUS2_SDA }, scls[2] = { PIN_SCL, BUS2_SCL };
-  size_t used = snprintf(out, n, "I2C scan now:");
-  for (int b = 0; b < 2 && used < n; b++) {
-    used += snprintf(out + used, n - used, "%s bus %d (SDA=%d SCL=%d):", b ? " |" : "", b + 1, sdas[b], scls[b]);
-    int found = 0;
-    for (uint8_t a = 0x08; a <= 0x77 && used < n; a++) {
-      buses[b]->beginTransmission(a);
-      if (buses[b]->endTransmission() != 0) continue;
-      const char* what = a == 0x3C || a == 0x3D ? " (OLED)" : (a >= 0x20 && a <= 0x27) || (a >= 0x38 && a <= 0x3F) ? " (LCD)" : "";
-      used += snprintf(out + used, n - used, " 0x%02X%s", a, what);
-      found++;
-    }
-    if (!found && used < n) used += snprintf(out + used, n - used, " nothing");
+  size_t used = snprintf(out, n, "I2C scan now: bus 1 (SDA=%d SCL=%d):", PIN_SDA, PIN_SCL);
+  int found = 0;
+  for (uint8_t a = 0x08; a <= 0x77 && used < n; a++) {
+    Wire.beginTransmission(a);
+    if (Wire.endTransmission() != 0) continue;
+    const char* what = a == 0x3C || a == 0x3D ? " (OLED)" : (a >= 0x20 && a <= 0x27) || (a >= 0x38 && a <= 0x3F) ? " (LCD)" : "";
+    used += snprintf(out + used, n - used, " 0x%02X%s", a, what);
+    found++;
   }
+  if (!found && used < n) snprintf(out + used, n - used, " nothing");
 }
 
 } // namespace Displays

@@ -16,9 +16,7 @@ struct EyeStyle {
 enum Shape : uint8_t { SH_NORMAL, SH_HEART, SH_CROSS, SH_SPIRAL, SH_SQUINT };
 
 const int EYE_GAP = 16;
-// Dual-screen mode: each eye gets a whole 128x32 panel, so stretch it into a big wide eye.
-const float BIG_W = 2.3f, BIG_H = 1.2f, BIG_LOOK = 1.6f;
-int radiusCap = 6;   // corner radius limit; bigger for the big single eyes
+int radiusCap = 6;   // corner radius limit
 
 EyeStyle cur[2], tgt[2];
 float lookX = 0, lookY = 0, tgtLookX = 0, tgtLookY = 0;
@@ -38,6 +36,7 @@ uint8_t idleKind = 0;
 Gag gag = GAG_NONE;
 uint32_t gagStart = 0, gagDur = 0;
 uint32_t sideEyeUntil = 0;
+uint32_t frameNow = 0;   // time of the last update(): every strip of a TFT frame draws the same moment
 
 inline float rnd(float a, float b) { return a + (b - a) * (float)random(0, 10001) / 10000.0f; }
 inline uint32_t rndMs(uint32_t a, uint32_t b) { return (uint32_t)random(a, b + 1); }
@@ -225,7 +224,7 @@ void gagBehaviour(uint32_t now) {
 }
 
 // ---- drawing ---------------------------------------------------------------------
-void drawEye(U8G2& g, int cx, int cy, const EyeStyle& e, float blink, bool left, Shape sh, uint32_t now) {
+void drawEye(Gfx& g, int cx, int cy, const EyeStyle& e, float blink, bool left, Shape sh, uint32_t now) {
   int s = (int)fminf(e.w, e.h);
   switch (sh) {
     case SH_HEART: {
@@ -292,13 +291,13 @@ void drawEye(U8G2& g, int cx, int cy, const EyeStyle& e, float blink, bool left,
   g.setDrawColor(1);
 }
 
-void drawSmallHeart(U8G2& g, int x, int y) {
+void drawSmallHeart(Gfx& g, int x, int y) {
   g.drawDisc(x - 1, y, 1);
   g.drawDisc(x + 2, y, 1);
   g.drawTriangle(x - 3, y + 1, x + 4, y + 1, x, y + 4);
 }
 
-void drawDecor(U8G2& g, int ox, uint32_t now) {
+void drawDecor(Gfx& g, int ox, uint32_t now) {
   g.setFont(u8g2_font_5x7_tr);
   if (decor & DEC_Z) {
     for (int i = 0; i < 3; i++) {
@@ -403,6 +402,7 @@ void playRandomGag() {
 void react() { playGag(GAG_SURPRISED, 900); }
 
 void update(uint32_t now) {
+  frameNow = now;
   Mood m = alone ? MOOD_SLEEPY : moodNow;
 
   offX = offY = 0;
@@ -431,8 +431,8 @@ void update(uint32_t now) {
   lookY = approach(lookY, tgtLookY, 0.35f);
 }
 
-void draw(U8G2& g, int ox) {
-  uint32_t now = millis();
+void draw(Gfx& g, int ox, bool chrome) {
+  uint32_t now = frameNow;
   float blink = (gag == GAG_NONE) ? blinkFactor(now) : 1.0f;
   float lx = clampf(lookX + offX, -24, 24);
   float ly = clampf(lookY + offY, -5, 5);
@@ -444,6 +444,8 @@ void draw(U8G2& g, int ox) {
   drawEye(g, ox + cxL, cy, cur[0], blink, true, shape[0], now);
   drawEye(g, ox + cxR, cy, cur[1], blink, false, shape[1], now);
   drawDecor(g, ox, now);
+
+  if (!chrome) return;   // the TFT shows these in its status bar
 
   // Pending-items badge (top-right): "you have stuff to do, human".
   if (pending > 0 && !alone) {
@@ -470,44 +472,6 @@ void draw(U8G2& g, int ox) {
   }
 }
 
-void drawSingle(U8G2& g, int eye, int ox, float lookBias, int dy) {
-  uint32_t now = millis();
-  eye = eye ? 1 : 0;
-  float blink = (gag == GAG_NONE) ? blinkFactor(now) : 1.0f;
-  float lx = clampf((lookX + offX) * BIG_LOOK + lookBias, -36, 36);
-  float ly = clampf(lookY + offY + dy, -4, 4);
-
-  EyeStyle e = cur[eye];
-  e.w *= BIG_W;
-  e.h = fminf(e.h * BIG_H, 30.0f);
-
-  g.setDrawColor(1);
-  radiusCap = 9;
-  drawEye(g, ox + 64 + (int)lroundf(lx), 16 + (int)lroundf(ly), e, blink, eye == 0, shape[eye], now);
-  radiusCap = 6;
-
-  // Decorations live in the outer margins: the left screen gets the left-hand ones, the right
-  // screen the right-hand ones, so together the two panels read as one face.
-  if (eye == 0) g.setClipWindow(0, 0, 64, 32); else g.setClipWindow(64, 0, 128, 32);
-  drawDecor(g, ox, now);
-  g.setMaxClipWindow();
-
-  if (eye == 1 && pending > 0 && !alone) {
-    char b[6];
-    snprintf(b, sizeof(b), "%d", pending > 99 ? 99 : pending);
-    g.setFont(u8g2_font_5x7_tr);
-    int w = g.getStrWidth(b) + 4;
-    g.drawRBox(ox + 127 - w, 0, w, 9, 2);
-    g.setDrawColor(0);
-    g.drawStr(ox + 129 - w, 8, b);
-    g.setDrawColor(1);
-  }
-  if (eye == 0 && alone && (now / 700) % 2 == 0) {
-    g.setFont(u8g2_font_4x6_tr);
-    g.drawStr(ox + 1, 7, "no PC");
-  }
-}
-
 FaceInfo info() {
   FaceInfo f;
   f.mood = alone ? MOOD_SLEEPY : moodNow;
@@ -520,8 +484,8 @@ FaceInfo info() {
   return f;
 }
 
-void drawEyeScaled(U8G2& g, int eye, int cx, int cy, float sx, float sy, int radius) {
-  uint32_t now = millis();
+void drawEyeScaled(Gfx& g, int eye, int cx, int cy, float sx, float sy, int radius) {
+  uint32_t now = frameNow;
   eye = eye ? 1 : 0;
   float blink = (gag == GAG_NONE) ? blinkFactor(now) : 1.0f;
   EyeStyle e = cur[eye];
@@ -534,7 +498,7 @@ void drawEyeScaled(U8G2& g, int eye, int cx, int cy, float sx, float sy, int rad
   radiusCap = saved;
 }
 
-void drawMini(U8G2& g, int cx, int cy, float scale, MiniExpr expr, uint32_t now) {
+void drawMini(Gfx& g, int cx, int cy, float scale, MiniExpr expr, uint32_t now) {
   EyeStyle e = style(24 * scale, 22 * scale);
   Shape sh = SH_NORMAL;
   switch (expr) {
