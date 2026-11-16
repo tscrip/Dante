@@ -1,0 +1,116 @@
+@page "/pomodoro"
+@inherits LiveComponent
+@inject ConfigStore Store
+@inject PomodoroService Pomodoro
+
+<PageTitle>Pomodoro · DANTE</PageTitle>
+
+<h1>Pomodoro timer</h1>
+<p class="muted">Focus in short sessions with breaks in between. Go to the Pomodoro screen on DANTE with
+    LEFT/RIGHT, then press <strong>MAGIC</strong> to start or pause; hold MAGIC to reset. When a session ends DANTE
+    tells you, and SELECT starts the next one.</p>
+
+@if (_saved) { <div class="notice">Saved. New lengths apply from the next session.</div> }
+
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+    <div class="panel">
+        <h2>Now</h2>
+        @{ var s = Pomodoro.State; }
+        <div class="pomo-clock @(s.Phase == PomodoroPhase.Focus ? "focus" : "rest")">@PomodoroService.Clock(s.Remaining)</div>
+        <p>
+            <strong>@PomodoroService.PhaseName(s.Phase)@(s.Phase == PomodoroPhase.Focus ? $" {s.FocusNumber} of {s.SessionsBeforeLongBreak}" : "")</strong>
+            <span class="muted"> · @(s.Running ? "running" : s.Started ? "paused" : "ready")</span>
+        </p>
+        <div class="pomo-bar"><div style="width:@(Progress(s))%"></div></div>
+        <div class="row" style="margin-top:1rem">
+            <button class="btn primary" @onclick="Pomodoro.StartOrPause">@(s.Running ? "Pause" : s.Started ? "Resume" : "Start")</button>
+            <button class="btn" @onclick="Pomodoro.Skip">Skip to @NextName(s)</button>
+            <button class="btn" @onclick="Pomodoro.Reset">Reset</button>
+        </div>
+        @if (!OnDante)
+        {
+            <div class="notice small" style="margin-top:1rem">The timer isn't on DANTE yet.
+                <button class="btn sm" @onclick="AddToDante">Add the Pomodoro screen</button></div>
+        }
+        else
+        {
+            <p class="muted small" style="margin-top:1rem">On DANTE as the "@PomodoroApp!.Name" screen.
+                <a href="apps/@PomodoroApp.Id">Edit</a> · <a href="" @onclick="RemoveFromDante" @onclick:preventDefault>remove</a></p>
+        }
+    </div>
+
+    <div class="panel">
+        <h2>Settings</h2>
+        <div class="fields">
+            <label class="field"><span>Focus (minutes)</span><input type="number" min="1" max="180" @bind="_settings.FocusMinutes" /></label>
+            <label class="field"><span>Short break (minutes)</span><input type="number" min="1" max="60" @bind="_settings.ShortBreakMinutes" /></label>
+            <label class="field"><span>Long break (minutes)</span><input type="number" min="1" max="120" @bind="_settings.LongBreakMinutes" /></label>
+            <label class="field"><span>Long break after</span>
+                <input type="number" min="1" max="12" @bind="_settings.SessionsBeforeLongBreak" />
+                <span class="help">focus sessions</span></label>
+        </div>
+        <label class="check"><input type="checkbox" @bind="_settings.AutoStartBreaks" /> Start breaks automatically</label>
+        <label class="check"><input type="checkbox" @bind="_settings.AutoStartFocus" /> Start the next focus session automatically after a break</label>
+        <label class="check"><input type="checkbox" @bind="_settings.NudgeWhenDone" /> When a session ends, take over DANTE's screen until I answer</label>
+        @if (_settings.NudgeWhenDone)
+        {
+            <label class="check" style="margin-left:1.6rem"><input type="checkbox" checked="@(_settings.NudgeLevel == 2)"
+                @onchange="e => _settings.NudgeLevel = e.Value is true ? 2 : 1" /> Urgent (the screen flashes)</label>
+        }
+        <button class="btn primary" @onclick="Save">Save</button>
+    </div>
+</div>
+
+@code {
+    private PomodoroSettings _settings = new();
+    private bool _saved;
+
+    private AppDefinition? PomodoroApp => Store.Snapshot().Apps.FirstOrDefault(a => a.SourceType == PomodoroSource.TypeName);
+    private bool OnDante => PomodoroApp is { Enabled: true };
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _settings = Pomodoro.Settings;
+        Pomodoro.Changed += Refresh;
+    }
+
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+
+    private void Save()
+    {
+        var cfg = Store.Snapshot();
+        cfg.SetFeature(PomodoroSettings.Key, _settings.Normalized());
+        Store.Save(cfg);
+        _settings = Pomodoro.Settings;
+        _saved = true;
+    }
+
+    private void AddToDante()
+    {
+        var cfg = Store.Snapshot();
+        if (cfg.Apps.FirstOrDefault(a => a.SourceType == PomodoroSource.TypeName) is { } existing) existing.Enabled = true;
+        else cfg.Apps.Add(PomodoroSource.DefaultApp());
+        Store.Save(cfg);
+    }
+
+    private void RemoveFromDante()
+    {
+        var cfg = Store.Snapshot();
+        cfg.Apps.RemoveAll(a => a.SourceType == PomodoroSource.TypeName);
+        Store.Save(cfg);
+    }
+
+    private static double Progress(PomodoroState s) =>
+        s.Total <= TimeSpan.Zero ? 0 : Math.Round(100 * (1 - s.Remaining / s.Total), 1);
+
+    private static string NextName(PomodoroState s) =>
+        s.Phase != PomodoroPhase.Focus ? "focus"
+        : s.FocusDone + 1 >= s.SessionsBeforeLongBreak ? "long break" : "break";
+
+    public override void Dispose()
+    {
+        Pomodoro.Changed -= Refresh;
+        base.Dispose();
+    }
+}

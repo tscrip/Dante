@@ -118,3 +118,10 @@ th { color: var(--muted); font-weight: 600; font-size: .85rem; }
 .lcd-row { display: flex; gap: 2px; margin: 2px 0; }
 .lcd-row span { display: inline-block; width: 1.05em; height: 1.5em; line-height: 1.5em; text-align: center; background: #3d68ff;
     color: #f2f6ff; font: 600 14px/1.5 ui-monospace, Menlo, monospace; white-space: pre; }
+
+/* Pomodoro */
+.pomo-clock { font-size: 3.5rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .02em; line-height: 1.1; }
+.pomo-clock.focus { color: var(--accent); }
+.pomo-clock.rest { color: var(--ok); }
+.pomo-bar { height: .5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.pomo-bar > div { height: 100%; background: var(--accent); transition: width .9s linear; }

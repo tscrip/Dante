@@ -23,6 +23,9 @@
 
     private double Fraction => Value is { } v && Max > Min ? Math.Clamp((v - Min) / (Max - Min), 0, 1) : Sample ? 0.6 : 0;
     private string ValueText => Value is null && !Sample ? "-" : Format.Number(Value ?? Min + (Max - Min) * 0.6);
+    // Timer: the value is the seconds left; the bar fills up as time passes.
+    private string Clock => Value is { } s ? $"{(int)(s / 60)}:{(int)(s % 60):00}" : Sample ? "18:42" : "--:--";
+    private double TimerFraction => Value is { } s && Max > 0 ? Math.Clamp(1 - s / Max, 0, 1) : Sample ? 0.25 : 0;
 
     private string Svg()
     {
@@ -52,6 +55,11 @@
                 T(14, 21, 14, Level switch { 0 => "✓", 1 => "!", _ => "×" },
                     $"font-weight=\"700\" text-anchor=\"middle\" fill=\"{(Level == 0 ? Px : Bg)}\"") +
                 T(30, 11, 8, Name) + T(30, 25, 8, Text ?? "all quiet", "opacity=\".85\""),
+            VisualKind.Timer =>
+                T(1, 7, 7, Name) + T(126, 7, 7, Text ?? "Focus 1/4", "text-anchor=\"end\" opacity=\".85\"") +
+                T(64, 24, 17, Clock, "font-weight=\"700\" text-anchor=\"middle\"") +
+                """<rect x="1" y="28" width="126" height="3" fill="none" stroke-width=".6"/>""" +
+                $"""<rect x="1" y="28" width="{N(126 * TimerFraction)}" height="3" stroke="none"/>""",
             _ => "",
         };
         return $"""<svg viewBox="0 0 128 32" width="{128 * Scale}" height="{32 * Scale}" font-family="monospace" fill="{Px}" stroke="{Px}">{body}</svg>""";

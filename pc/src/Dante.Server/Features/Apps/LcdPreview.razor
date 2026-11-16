@@ -57,6 +57,7 @@
 
         var right = Visual is VisualKind.Text or VisualKind.Status ? "" : Format.Number(Shown) + Unit;
         if (Visual == VisualKind.Counter && Shown is { } c) right = Format.Number(Math.Round(c));
+        if (Visual == VisualKind.Timer) right = Shown is { } secs ? $"{(int)(secs / 60)}:{(int)(secs % 60):00}" : "--:--";
         var nameRoom = Cols - right.Length - (right.Length > 0 ? 1 : 0);
         var name = Name.Length > nameRoom ? Name[..Math.Max(0, nameRoom)] : Name;
         yield return name + right.PadLeft(Cols - name.Length);
@@ -65,6 +66,7 @@
         yield return Fit(Visual switch
         {
             VisualKind.Gauge or VisualKind.Bar => Bar(),
+            VisualKind.Timer => Text ?? (Sample ? "Focus 1/4" : ""),
             VisualKind.Sparkline => "▂▃▅▄▆▅▃▄▆▇▅▆▄▅▆▇▃▅▆▇"[..Cols],
             VisualKind.Status => (Level == 0 ? "✓ " : Level == 1 ? "! " : "X ") + (Text ?? (Level == 0 ? "all good" : "needs a look")),
             _ => text,
