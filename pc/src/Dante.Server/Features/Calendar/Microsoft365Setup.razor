@@ -1,0 +1,102 @@
+@* Set-up for the Outlook / Microsoft 365 calendar: app registration, then a device-code sign-in. *@
+@inject ConfigStore Store
+@implements IDisposable
+
+<label class="field"><span>Application (client) ID</span>
+    <input type="text" @bind="_settings.ClientId" placeholder="00000000-0000-0000-0000-000000000000" />
+    <span class="help">From your app registration in Microsoft Entra ID (see the steps below).</span>
+</label>
+<label class="field"><span>Account type</span>
+    <select @bind="_settings.Tenant">
+        <option value="common">Work, school or personal Microsoft account</option>
+        <option value="organizations">Work or school account only</option>
+        <option value="consumers">Personal account only (Outlook.com)</option>
+        @if (_settings.Tenant is not ("common" or "organizations" or "consumers")) { <option value="@_settings.Tenant">Tenant @_settings.Tenant</option> }
+    </select>
+    <span class="help">If your organisation requires it, put your tenant's ID or domain here instead (edit config.json).</span>
+</label>
+<button class="btn sm" @onclick="SaveSettings">Save</button>
+
+<hr style="border:none;border-top:1px solid var(--border);margin:1rem 0" />
+
+@if (M365.PendingSignIn is { } prompt)
+{
+    <div class="notice">
+        <p style="margin:0 0 .5rem">Open <a href="@prompt.Url" target="_blank" rel="noopener">@prompt.Url</a> and enter this code:</p>
+        <div class="big" style="letter-spacing:.15em">@prompt.Code</div>
+        <p class="small muted" style="margin:.5rem 0 0">Waiting for you to finish signing in... (the code expires at @prompt.ExpiresAt.ToLocalTime().ToString("HH:mm"))</p>
+    </div>
+}
+else if (Provider.IsReady)
+{
+    <p><span class="ok"><span class="dot"></span>Signed in</span> as <strong>@Provider.AccountName</strong></p>
+    <button class="btn sm" @onclick="SignOut">Sign out</button>
+}
+else
+{
+    <p class="muted small">Not signed in.</p>
+    <button class="btn primary" @onclick="SignIn" disabled="@(string.IsNullOrWhiteSpace(M365.Settings.ClientId) || _busy)">Sign in to Microsoft</button>
+}
+@if ((_error ?? M365.LastError) is { } error) { <div class="notice error small" style="margin-top:.75rem">@error</div> }
+
+<details style="margin-top:1rem">
+    <summary class="small">How to get a client ID (one-time, about 3 minutes)</summary>
+    <ol class="small">
+        <li>Go to <a href="https://entra.microsoft.com" target="_blank" rel="noopener">entra.microsoft.com</a> → <strong>App registrations</strong> → <strong>New registration</strong>.</li>
+        <li>Name it "DANTE". Supported account types: <em>Accounts in any organizational directory and personal Microsoft accounts</em>
+            (or only your organisation). No redirect URI is needed. Register.</li>
+        <li>Copy the <strong>Application (client) ID</strong> into the box above.</li>
+        <li><strong>Authentication</strong> → <em>Advanced settings</em> → <strong>Allow public client flows: Yes</strong> → Save.</li>
+        <li><strong>API permissions</strong>: Microsoft Graph → Delegated → <code>Calendars.Read</code> (and <code>User.Read</code>, there by default).
+            Some organisations need an admin to grant consent.</li>
+    </ol>
+    <p class="small muted">DANTE only reads your calendar. The sign-in is cached in your OS's secure store (DPAPI / Keychain / keyring)
+        next to config.json.</p>
+</details>
+
+@code {
+    [Parameter, EditorRequired] public ICalendarProvider Provider { get; set; } = default!;
+    [Parameter] public EventCallback OnSignedIn { get; set; }
+
+    private Microsoft365CalendarProvider M365 => (Microsoft365CalendarProvider)Provider;
+    private Microsoft365Settings _settings = new();
+    private string? _error;
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        _settings = M365.Settings;
+        M365.Changed += Refresh;
+    }
+
+    private void Refresh() => _ = InvokeAsync(async () =>
+    {
+        if (M365.IsReady) await OnSignedIn.InvokeAsync();
+        StateHasChanged();
+    });
+
+    private void SaveSettings()
+    {
+        var cfg = Store.Snapshot();
+        _settings.ClientId = _settings.ClientId.Trim();
+        cfg.SetFeature(Microsoft365Settings.Key, _settings);
+        Store.Save(cfg);
+    }
+
+    private async Task SignIn()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            if (_settings.ClientId.Trim() != M365.Settings.ClientId || _settings.Tenant != M365.Settings.Tenant) SaveSettings();
+            await M365.BeginSignInAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task SignOut() => await M365.SignOutAsync();
+
+    public void Dispose() => M365.Changed -= Refresh;
+}

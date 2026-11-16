@@ -1,0 +1,140 @@
+@page "/calendar"
+@inherits LiveComponent
+@inject ConfigStore Store
+@inject CalendarService Calendar
+
+<PageTitle>Calendar · DANTE</PageTitle>
+
+<h1>Calendar</h1>
+<p class="muted">DANTE reminds you before meetings start. On the reminder, <strong>SELECT</strong> ("I'm on it") opens the
+    meeting's Teams / Zoom link on this PC and stops the reminders for that meeting; <strong>LEFT/RIGHT</strong> ("later")
+    waits for the next reminder.</p>
+
+@if (_saved) { <div class="notice">Saved.</div> }
+
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr))">
+    <div class="panel">
+        <h2>1 · Calendar account</h2>
+        <label class="field"><span>Calendar</span>
+            <select @bind="_settings.Provider">
+                @foreach (var p in Calendar.Providers) { <option value="@p.Id">@p.DisplayName</option> }
+            </select>
+        </label>
+        @if (Calendar.Providers.FirstOrDefault(p => p.Id == _settings.Provider) is { } provider)
+        {
+            <DynamicComponent Type="provider.SetupComponent" Parameters="@(new Dictionary<string, object> { ["Provider"] = provider, ["OnSignedIn"] = EventCallback.Factory.Create(this, Calendar.SyncSoon) })" />
+        }
+    </div>
+
+    <div class="panel">
+        <h2>2 · Reminders</h2>
+        <label class="check"><input type="checkbox" @bind="_settings.Enabled" /> <strong>Remind me about meetings on DANTE</strong></label>
+        <label class="field"><span>Remind me this many minutes before</span>
+            <input type="text" @bind="_minutes" placeholder="10, 1" />
+            <span class="help">Comma-separated, e.g. <code>15, 5, 1</code>. Use <code>0</code> for "it's starting now".</span>
+        </label>
+        <label class="field"><span>Message</span>
+            <input type="text" @bind="_settings.Message" maxlength="63" />
+            <span class="help">Tokens: {title} {minutes} {time} {location}</span>
+        </label>
+        <label class="field"><span>Message when it starts</span>
+            <input type="text" @bind="_settings.StartingMessage" maxlength="63" />
+        </label>
+        <label class="check"><input type="checkbox" checked="@(_settings.NudgeLevel == 2)" @onchange="e => _settings.NudgeLevel = e.Value is true ? 2 : 1" /> All reminders are urgent (the screen flashes)</label>
+        <label class="check"><input type="checkbox" @bind="_settings.LastReminderUrgent" /> The last reminder before a meeting is urgent</label>
+        <label class="check"><input type="checkbox" @bind="_settings.OpenJoinLinkOnSelect" /> SELECT opens the meeting's join link</label>
+        <h3 class="small muted">Skip</h3>
+        <label class="check"><input type="checkbox" @bind="_settings.SkipAllDay" /> All-day events</label>
+        <label class="check"><input type="checkbox" @bind="_settings.SkipDeclined" /> Meetings I declined</label>
+        <label class="check"><input type="checkbox" @bind="_settings.SkipTentative" /> Tentative meetings</label>
+        <label class="check"><input type="checkbox" @bind="_settings.SkipFree" /> Events that show me as free</label>
+        <label class="field"><span>Check the calendar every (minutes)</span><input type="number" min="1" max="60" @bind="_settings.SyncMinutes" /></label>
+        <div class="row">
+            <button class="btn primary" @onclick="Save">Save</button>
+            <button class="btn" @onclick="Calendar.TestReminder">Test reminder on DANTE</button>
+        </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="row spread">
+        <h2>Coming up</h2>
+        <div class="row">
+            <span class="muted small">@SyncText</span>
+            <button class="btn sm" @onclick="Calendar.SyncSoon" disabled="@(Calendar.Provider is not { IsReady: true })">Sync now</button>
+        </div>
+    </div>
+    @if (Calendar.LastError is { } error) { <div class="notice error small">@error</div> }
+    @if (Calendar.Upcoming.Count == 0)
+    {
+        <p class="muted">@(Calendar.Provider is { IsReady: true } ? "Nothing in the next 12 hours that needs a reminder." : "Sign in to see your meetings.")</p>
+    }
+    else
+    {
+        <table>
+            <thead><tr><th>When</th><th>Meeting</th><th>Where</th></tr></thead>
+            <tbody>
+                @foreach (var e in Calendar.Upcoming.Take(15))
+                {
+                    <tr>
+                        <td>@Local(e.Start).ToString("ddd HH:mm") – @Local(e.End).ToString("HH:mm")</td>
+                        <td>@e.Title @if (e.Response == ResponseStatus.Tentative) { <span class="pill warn">tentative</span> }</td>
+                        <td class="small">@if (e.JoinUrl is not null) { <a href="@e.JoinUrl" target="_blank" rel="noopener">join link</a> } else { @e.Location }</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    @if (!OnDante)
+    {
+        <p class="small" style="margin-top:.75rem">Want a countdown to your next meeting on DANTE?
+            <button class="btn sm" @onclick="AddNextMeetingScreen">Add the "Next meeting" screen</button></p>
+    }
+</div>
+
+@code {
+    private CalendarSettings _settings = new();
+    private string _minutes = "";
+    private bool _saved;
+
+    private bool OnDante => Store.Snapshot().Apps.Any(a => a.SourceType == NextMeetingSource.TypeName);
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _settings = Calendar.Settings;
+        _minutes = string.Join(", ", _settings.ReminderMinutes);
+        Calendar.Changed += Refresh;
+    }
+
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+
+    private DateTimeOffset Local(DateTimeOffset t) => TimeZoneInfo.ConvertTime(t, Calendar.LocalZone);
+
+    private string SyncText => Calendar.LastSync is { } at ? $"synced {Format.Age(DateTimeOffset.UtcNow - at)} ago" : "not synced yet";
+
+    private void Save()
+    {
+        _settings.ReminderMinutes = [.. _minutes.Split([',', ' ', ';'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => int.TryParse(s, out var m) ? m : -1).Where(m => m >= 0)];
+        var cfg = Store.Snapshot();
+        cfg.SetFeature(CalendarSettings.Key, _settings.Normalized());
+        Store.Save(cfg);
+        _settings = Calendar.Settings;
+        _minutes = string.Join(", ", _settings.ReminderMinutes);
+        _saved = true;
+    }
+
+    private void AddNextMeetingScreen()
+    {
+        var cfg = Store.Snapshot();
+        cfg.Apps.Add(NextMeetingSource.DefaultApp());
+        Store.Save(cfg);
+    }
+
+    public override void Dispose()
+    {
+        Calendar.Changed -= Refresh;
+        base.Dispose();
+    }
+}
