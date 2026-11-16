@@ -16,6 +16,9 @@ public interface IDataSource
     /// <summary>Push-style sources update instantly; the poll interval is just a safety net.</summary>
     bool IsPushBased => false;
 
+    /// <summary>An optional sample shown under the description in the app editor (e.g. how to push a value to this app).</summary>
+    string? Example(AppDefinition app) => null;
+
     Task<SourceReading> ReadAsync(AppDefinition app, CancellationToken ct);
 }
 
@@ -37,10 +40,15 @@ public sealed record SourceReading
     public double? Value { get; init; }
     public string? Text { get; init; }
     public IReadOnlyList<PendingItem>? Pending { get; init; }
+    /// <summary>For countdowns (<see cref="VisualKind.Timer"/>): DANTE ticks the clock down by itself between readings.</summary>
+    public TimerReading? Timer { get; init; }
     public string? Error { get; init; }
 
     public static SourceReading Fail(string error) => new() { Error = error };
 }
+
+/// <summary>A countdown: seconds left, the length of the whole countdown (for the progress bar), and whether it is ticking.</summary>
+public sealed record TimerReading(int RemainingSeconds, int TotalSeconds, bool Running);
 
 public static class SourceSettingsExtensions
 {

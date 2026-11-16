@@ -4,6 +4,6 @@
     <Project Path="src/Dante.Server/Dante.Server.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Dante.Core.Tests/Dante.Core.Tests.csproj" />
+    <Project Path="tests/Dante.Tests/Dante.Tests.csproj" />
   </Folder>
 </Solution>

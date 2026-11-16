@@ -1,0 +1,102 @@
+@page "/claude-code"
+@inherits LiveComponent
+@inject ClaudeCodeSessionTracker Tracker
+@inject NavigationManager Nav
+
+<PageTitle>Claude Code · DANTE</PageTitle>
+
+<h1>Claude Code</h1>
+
+@if (_message is not null) { <div class="notice @(_error ? "error" : "")">@_message</div> }
+
+<div class="grid">
+    <div class="panel">
+        <h2>"Waiting for me" hooks</h2>
+        <p class="small">Claude Code hooks tell DANTE the moment a session needs you (a permission prompt, a question, or
+            it finished its turn) and when you're back. The <em>Claude Code</em> app then takes over the face and nudges you.</p>
+        <p>Status: @if (_installed) { <strong class="ok">installed</strong> } else { <strong class="warn">not installed</strong> }
+            <span class="muted small">in <code>@_installer.SettingsPath</code></span></p>
+        <div class="row">
+            <button class="btn primary" @onclick="Install" disabled="@_installed">Install hooks</button>
+            <button class="btn danger" @onclick="Uninstall" disabled="@(!_installed)">Remove</button>
+        </div>
+        <p class="muted small">A backup is written next to it as <code>settings.json.dante.bak</code>. Requires <code>curl</code>
+            (built into Windows 10+, macOS and most Linux). Restart running Claude Code sessions to pick up the hooks.</p>
+    </div>
+
+    <div class="panel">
+        <h2>Right now</h2>
+        <p class="small muted">Last hook event: @(Tracker.LastEventAt is { } at ? $"{Tracker.LastEventName}, {Format.Age(DateTimeOffset.UtcNow - at)} ago" : "none yet")</p>
+        @if (Tracker.Waiting.Count == 0)
+        {
+            <p>No sessions waiting. <span class="muted">(^‿^)</span></p>
+        }
+        else
+        {
+            <table>
+                <thead><tr><th>Project</th><th>Why</th><th>Waiting</th></tr></thead>
+                <tbody>
+                @foreach (var w in Tracker.Waiting)
+                {
+                    <tr><td>@w.Project</td><td class="small">@w.Reason</td><td>@Format.Age(DateTimeOffset.UtcNow - w.Since)</td></tr>
+                }
+                </tbody>
+            </table>
+            <button class="btn sm" @onclick="Tracker.Clear" style="margin-top:.5rem">Clear all</button>
+        }
+    </div>
+</div>
+
+<div class="panel">
+    <h2>Manual setup</h2>
+    <p class="small">Prefer to edit it yourself? Merge this into <code>~/.claude/settings.json</code> (or a project's <code>.claude/settings.json</code>):</p>
+    <pre>@_installer.Snippet()</pre>
+</div>
+
+<div class="panel">
+    <h2>Subscription usage</h2>
+    <p class="small">The <em>Claude Code: subscription usage</em> source reads your Claude Code login and shows how much of the
+        5-hour or weekly window you've used — the same numbers as <code>/usage</code>. It uses an unofficial endpoint, so if it stops working,
+        switch that app to the <em>push</em> or <em>command</em> source.</p>
+</div>
+
+@code {
+    private ClaudeHookInstaller _installer = default!;
+    private bool _installed;
+    private string? _message;
+    private bool _error;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        var server = new Uri(Nav.BaseUri).GetLeftPart(UriPartial.Authority);
+        _installer = new ClaudeHookInstaller(ClaudeHookInstaller.DefaultSettingsPath(), server);
+        Check();
+    }
+
+    private void Check()
+    {
+        try { _installed = _installer.IsInstalled(); }
+        catch (Exception ex) { Show($"Couldn't read settings.json: {ex.Message}", true); }
+    }
+
+    private void Install() => Run(() => _installer.Install(), "Hooks installed");
+    private void Uninstall() => Run(() => _installer.Uninstall(), "Hooks removed");
+
+    private void Run(Func<string?> action, string done)
+    {
+        try
+        {
+            var backup = action();
+            Show(backup is null ? $"{done}." : $"{done}. Backup: {backup}", false);
+        }
+        catch (Exception ex) { Show(ex.Message, true); }
+        Check();
+    }
+
+    private void Show(string message, bool error)
+    {
+        _message = message;
+        _error = error;
+    }
+}

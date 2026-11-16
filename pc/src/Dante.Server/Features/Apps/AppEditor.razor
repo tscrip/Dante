@@ -1,0 +1,260 @@
+@page "/apps/new"
+@page "/apps/{Id}"
+@inject ConfigStore Store
+@inject SourceRegistry Sources
+@inject DanteEngine Engine
+@inject NavigationManager Nav
+
+<PageTitle>@(_isNew ? "New app" : _app.Name) · DANTE</PageTitle>
+
+@if (_app is null)
+{
+    <p>App not found. <a href="apps">Back to apps</a></p>
+    return;
+}
+
+<div class="row spread">
+    <h1>@(_isNew ? "New app" : _app.Name)</h1>
+    <AppPreview Page="PreviewPage" Pages="PreviewPages" Visual="_app.Visual" Name="@_app.Name" Value="_test?.Value" Min="_app.Min" Max="_app.Max" Unit="@_app.Unit" Text="@_test?.Text"
+                 Level="LevelEvaluator.Evaluate(_app.Levels, _test?.Value)" />
+</div>
+
+@if (_message is not null) { <div class="notice @(_messageIsError ? "error" : "")">@_message</div> }
+
+<div class="panel">
+    <h2>1 · Name &amp; visual</h2>
+    <div class="fields">
+        <label class="field"><span>Name</span><input type="text" @bind="_app.Name" @bind:event="oninput" maxlength="19" /></label>
+        <label class="field"><span>Visual</span>
+            <select @bind="_app.Visual">
+                @foreach (var v in Enum.GetValues<VisualKind>()) { <option value="@v">@v</option> }
+            </select>
+            <span class="help">@VisualHelp(_app.Visual)</span>
+        </label>
+        <label class="field"><span>Min</span><input type="number" step="any" @bind="_app.Min" /></label>
+        <label class="field"><span>Max</span><input type="number" step="any" @bind="_app.Max" /></label>
+        <label class="field"><span>Unit</span><input type="text" @bind="_app.Unit" maxlength="5" placeholder="%, PRs, °C" /></label>
+    </div>
+    <label class="check"><input type="checkbox" @bind="_app.Enabled" /> Enabled</label>
+</div>
+
+<div class="panel">
+    <h2>2 · Data source <span class="muted small">(runs on this PC)</span></h2>
+    <div class="fields">
+        <label class="field"><span>Source</span>
+            <select value="@_app.SourceType" @onchange="e => _app.SourceType = e.Value?.ToString() ?? DefaultSource">
+                @foreach (var s in Sources.All.OrderBy(s => s.DisplayName)) { <option value="@s.Type">@s.DisplayName</option> }
+            </select>
+        </label>
+        <label class="field"><span>Poll every (seconds)</span><input type="number" min="2" @bind="_app.PollSeconds" />
+            @if (Source?.IsPushBased == true) { <span class="help">Push-based: updates arrive instantly; polling is a safety net.</span> }
+        </label>
+    </div>
+    @if (Source is not null)
+    {
+        <p class="muted small">@Source.Description</p>
+        @if (Source.Example(_app) is { } example)
+        {
+            <pre>@example</pre>
+        }
+        <div class="fields">
+            @foreach (var f in Source.Settings)
+            {
+                <label class="field">
+                    @switch (f.Kind)
+                    {
+                        case SettingKind.Bool:
+                            <span class="check" style="font-weight:400"><input type="checkbox" checked="@IsOn(f)" @onchange="e => SetSetting(f, BoolText(e.Value))" /> @f.Label</span>
+                            break;
+                        case SettingKind.Choice:
+                            <span>@f.Label</span>
+                            <select value="@GetSetting(f)" @onchange="e => SetSetting(f, e.Value?.ToString())">
+                                @foreach (var c in f.Choices ?? []) { <option value="@c">@c</option> }
+                            </select>
+                            break;
+                        case SettingKind.Multiline:
+                            <span>@f.Label</span>
+                            <textarea value="@GetSetting(f)" @onchange="e => SetSetting(f, e.Value?.ToString())"></textarea>
+                            break;
+                        default:
+                            <span>@f.Label</span>
+                            <input type="@(f.Kind == SettingKind.Secret ? "password" : f.Kind == SettingKind.Number ? "number" : "text")"
+                                   value="@GetSetting(f)" @onchange="e => SetSetting(f, e.Value?.ToString())" autocomplete="off" />
+                            break;
+                    }
+                    @if (f.Help is not null) { <span class="help">@f.Help</span> }
+                </label>
+            }
+        </div>
+    }
+    <div class="row">
+        <button class="btn" @onclick="TestSource" disabled="@_testing">@(_testing ? "Testing..." : "Test source")</button>
+        @if (_test is not null)
+        {
+            if (_test.Error is not null) { <span class="crit small">@_test.Error</span> }
+            else
+            {
+                <span class="small">value <strong>@Format.Number(_test.Value)</strong> · @_test.Text
+                    @if (_test.Pending is { Count: > 0 } p) { <span> · @p.Count pending (oldest: @p.OrderBy(x => x.Since).First().Title)</span> }
+                </span>
+            }
+        }
+    </div>
+</div>
+
+<div class="panel">
+    <h2>3 · What happens</h2>
+    <label class="check"><input type="checkbox" @bind="_app.ShowInCarousel" /> Show as a screen on DANTE</label>
+    <label class="check"><input type="checkbox" @bind="_app.CountsTowardMood" /> Waiting items affect DANTE's mood</label>
+
+    <h3 class="small muted">Levels (ok → warn → crit)</h3>
+    <div class="fields">
+        <label class="field"><span>Warn at</span><input type="number" step="any" @bind="_app.Levels.WarnAt" placeholder="none" /></label>
+        <label class="field"><span>Critical at</span><input type="number" step="any" @bind="_app.Levels.CritAt" placeholder="none" /></label>
+        <label class="check" style="align-self:end"><input type="checkbox" @bind="_app.Levels.HigherIsWorse" /> Higher is worse</label>
+    </div>
+
+    <h3 class="small muted">Take over the face &amp; nudge me</h3>
+    <div class="fields">
+        <label class="field"><span>When</span>
+            <select @bind="_app.Takeover.Mode">
+                <option value="@TakeoverMode.Never">Never</option>
+                <option value="@TakeoverMode.WhenPending">Something is waiting</option>
+                <option value="@TakeoverMode.WhenAbove">Value ≥ threshold</option>
+                <option value="@TakeoverMode.WhenBelow">Value ≤ threshold</option>
+            </select>
+        </label>
+        @if (_app.Takeover.Mode != TakeoverMode.Never)
+        {
+            @if (_app.Takeover.Mode is TakeoverMode.WhenAbove or TakeoverMode.WhenBelow)
+            {
+                <label class="field"><span>Threshold</span><input type="number" step="any" @bind="_app.Takeover.Threshold" /></label>
+            }
+            <label class="field"><span>After (seconds)</span><input type="number" min="0" @bind="_app.Takeover.DelaySeconds" /><span class="help">Grace period before nudging.</span></label>
+            <label class="field"><span>Re-nudge after ack (min)</span><input type="number" min="0" @bind="_app.Takeover.RenudgeMinutes" /><span class="help">0 = only when it happens again.</span></label>
+            <label class="field"><span>Snooze (min)</span><input type="number" min="1" @bind="_app.Takeover.SnoozeMinutes" /></label>
+            <label class="field"><span>Intensity</span>
+                <select @bind="_app.Takeover.Level"><option value="1">Nudge</option><option value="2">Urgent (flashing)</option></select>
+            </label>
+            <label class="field" style="grid-column:1/-1"><span>Message</span><input type="text" @bind="_app.Takeover.Message" maxlength="63" placeholder="{item} is waiting on you!" />
+                <span class="help">Tokens: {name} {value} {unit} {text} {count} {item} {oldest}</span></label>
+        }
+    </div>
+
+    <h3 class="small muted">SELECT button on this screen</h3>
+    <label class="field"><span>Open URL</span><input type="text" @bind="_app.OnSelectUrl" placeholder="https://... or {url} = first waiting item's link" /></label>
+
+    <h3 class="small muted">Personality</h3>
+    <label class="check"><input type="checkbox" @bind="_app.QuipsEnabled" /> Deliver changes with a quip</label>
+    @if (_app.QuipsEnabled)
+    {
+        <div class="fields">
+            <label class="field"><span>Only when it moves by at least</span><input type="number" step="any" min="0" @bind="_app.QuipMinDelta" /></label>
+        </div>
+        <div class="fields">
+            <label class="field"><span>Custom "went up" lines</span><textarea @bind="IncreaseText" placeholder="One per line. Blank = personality defaults."></textarea></label>
+            <label class="field"><span>Custom "went down" lines</span><textarea @bind="DecreaseText" placeholder="Tokens: {name} {value} {delta} {unit}"></textarea></label>
+        </div>
+    }
+</div>
+
+<div class="row">
+    <button class="btn primary" @onclick="Save">Save</button>
+    <a class="btn" href="apps">Cancel</a>
+    @if (!_isNew) { <button class="btn danger" @onclick="Delete" style="margin-left:auto">Delete</button> }
+</div>
+
+@code {
+    [Parameter] public string? Id { get; set; }
+
+    private DanteConfig _cfg = new();
+    private AppDefinition _app = new();
+    private bool _isNew;
+    private SourceReading? _test;
+    private bool _testing;
+    private string? _message;
+    private bool _messageIsError;
+
+    private IDataSource? Source => Sources.Find(_app.SourceType);
+    private List<AppDefinition> OnCarousel => [.. _cfg.Apps.Where(a => a.Enabled && a.ShowInCarousel)];
+    private int PreviewPages => OnCarousel.Count + (OnCarousel.Contains(_app) ? 0 : 1);
+    private int PreviewPage => OnCarousel.Contains(_app) ? OnCarousel.IndexOf(_app) + 1 : PreviewPages;
+    // New apps start with the REST "push" source when it exists: it needs no settings.
+    private string DefaultSource => Sources.Find("push")?.Type ?? Sources.All.OrderBy(s => s.DisplayName).First().Type;
+
+    protected override void OnParametersSet()
+    {
+        _cfg = Store.Snapshot();
+        _isNew = Id is null;
+        _app = _isNew
+            ? new AppDefinition { Name = "New app", SourceType = DefaultSource }
+            : _cfg.Apps.FirstOrDefault(a => a.Id.Equals(Id, StringComparison.OrdinalIgnoreCase))!;
+    }
+
+    private string GetSetting(SettingField f) =>
+        _app.SourceSettings.TryGetValue(f.Key, out var v) ? v : f.Default ?? "";
+
+    private void SetSetting(SettingField f, string? value) => _app.SourceSettings[f.Key] = value ?? "";
+    private bool IsOn(SettingField f) => GetSetting(f).Equals("true", StringComparison.OrdinalIgnoreCase);
+    private static string BoolText(object? v) => v is true ? "true" : "false";
+
+    private string IncreaseText
+    {
+        get => string.Join('\n', _app.IncreaseQuips);
+        set => _app.IncreaseQuips = Lines(value);
+    }
+
+    private string DecreaseText
+    {
+        get => string.Join('\n', _app.DecreaseQuips);
+        set => _app.DecreaseQuips = Lines(value);
+    }
+
+    private static List<string> Lines(string? s) =>
+        [.. (s ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
+    private async Task TestSource()
+    {
+        _testing = true;
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            _test = await Engine.TestAsync(_app, cts.Token);
+        }
+        finally { _testing = false; }
+    }
+
+    private void Save()
+    {
+        try
+        {
+            if (_isNew) _cfg.Apps.Add(_app);
+            Store.Save(_cfg);
+            Nav.NavigateTo("apps");
+        }
+        catch (Exception ex)
+        {
+            if (_isNew) _cfg.Apps.Remove(_app);
+            _message = ex.Message;
+            _messageIsError = true;
+        }
+    }
+
+    private void Delete()
+    {
+        _cfg.Apps.Remove(_app);
+        Store.Save(_cfg);
+        Nav.NavigateTo("apps");
+    }
+
+    private static string VisualHelp(VisualKind v) => v switch
+    {
+        VisualKind.Gauge => "Semicircle gauge with a sweeping needle. Great for percentages.",
+        VisualKind.Bar => "Horizontal progress bar.",
+        VisualKind.Counter => "Big number that drops in with a bounce when it changes.",
+        VisualKind.Text => "A line of scrolling text.",
+        VisualKind.Sparkline => "Mini history graph (DANTE remembers the last 32 values).",
+        VisualKind.Status => "OK / ! / ✕ icon by level, plus text.",
+        _ => "",
+    };
+}

@@ -13,7 +13,7 @@ public static class DefaultConfig
                 Name = "Claude 5h",
                 Visual = VisualKind.Gauge,
                 Min = 0, Max = 100, Unit = "%",
-                SourceType = Sources.ClaudeCodeUsageSource.TypeName,
+                SourceType = "claude-code-usage",
                 SourceSettings = new() { ["window"] = "five_hour" },
                 PollSeconds = 120,
                 Levels = new LevelRule { WarnAt = 70, CritAt = 90 },
@@ -26,7 +26,7 @@ public static class DefaultConfig
                 Name = "Claude Code",
                 Visual = VisualKind.Status,
                 Min = 0, Max = 5,
-                SourceType = Sources.ClaudeCodeWaitingSource.TypeName,
+                SourceType = "claude-code-waiting",
                 PollSeconds = 5,
                 CountsTowardMood = true,
                 Levels = new LevelRule { WarnAt = 1, CritAt = 3 },
@@ -47,7 +47,7 @@ public static class DefaultConfig
                 Enabled = false, // fill in organisation + PAT first
                 Visual = VisualKind.Counter,
                 Min = 0, Max = 20,
-                SourceType = Sources.AzureDevOpsPullRequestSource.TypeName,
+                SourceType = "azure-devops-prs",
                 SourceSettings = new()
                 {
                     ["organization"] = "https://dev.azure.com/your-org",

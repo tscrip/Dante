@@ -92,12 +92,29 @@ public sealed class ConfigStore
             app.Takeover.Level = Math.Clamp(app.Takeover.Level, 1, 2);
         }
         config.Device.Brightness = Math.Clamp(config.Device.Brightness, 0, 255);
-        config.Device.ScreenCount = config.Device.ScreenCount is 1 or 2 ? config.Device.ScreenCount : 0;
+        MigrateLegacy(config);
         config.Device.LcdAddress = Math.Clamp(config.Device.LcdAddress, 0x08, 0x77);
         config.Device.LcdSize = config.Device.EffectiveLcdSize;   // remember the size of an explicitly picked LCD
         // Firmware advertised "DeskBuddy", then "HANK", before the project became DANTE.
         if (LegacyNames.Contains(config.Device.BluetoothName?.Trim() ?? "", StringComparer.OrdinalIgnoreCase))
             config.Device.BluetoothName = "DANTE";
+    }
+
+    /// <summary>Carries settings from older config layouts over to the current one (idempotent).</summary>
+    public static void MigrateLegacy(DanteConfig config)
+    {
+        // The MAGIC button became a feature slice: its settings moved from "magic" to "features.magic".
+        if (config.LegacyMagic is { } magic)
+        {
+            config.Features.TryAdd("magic", magic);
+            config.LegacyMagic = null;
+        }
+        // DANTE dropped two-screen mode: keep the first screen's "upside down" setting.
+        if (config.Device.LegacyFlipScreen1 is { } flip)
+        {
+            config.Device.Flip |= flip;
+            config.Device.LegacyFlipScreen1 = null;
+        }
     }
 
     public static string Slug(string s)

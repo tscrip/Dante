@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace Dante.Core.Config;
@@ -8,8 +10,26 @@ public sealed class DanteConfig
     public DeviceSettings Device { get; set; } = new();
     public MoodSettings Mood { get; set; } = new();
     public Personality Personality { get; set; } = Personality.Cheerful;
-    public MagicButtonSettings Magic { get; set; } = new();
     public List<AppDefinition> Apps { get; set; } = [];
+
+    /// <summary>
+    /// Settings owned by feature slices (Features/&lt;Name&gt; in the server), one JSON object per feature,
+    /// keyed by the feature's settings key. The kernel never looks inside: a new feature adds its own
+    /// settings class and reads it with <see cref="Feature{T}"/>, without touching this file.
+    /// </summary>
+    public Dictionary<string, JsonObject> Features { get; set; } = [];
+
+    /// <summary>Before feature slices, the MAGIC button's settings lived at the top level ("magic").</summary>
+    [JsonPropertyName("magic")]
+    public JsonObject? LegacyMagic { get; set; }
+
+    /// <summary>A copy of a feature's settings (defaults when it has none yet).</summary>
+    public T Feature<T>(string key) where T : new() =>
+        Features.TryGetValue(key, out var node) && node.Deserialize<T>(ConfigStore.JsonOptions) is { } value ? value : new T();
+
+    /// <summary>Stores a feature's settings; save the config with <see cref="ConfigStore.Save"/> afterwards.</summary>
+    public void SetFeature<T>(string key, T value) =>
+        Features[key] = JsonSerializer.SerializeToNode(value, ConfigStore.JsonOptions)!.AsObject();
 }
 
 public sealed class DeviceSettings
@@ -22,10 +42,10 @@ public sealed class DeviceSettings
     public string? PortName { get; set; }
     public int BaudRate { get; set; } = 115200;
     public bool AutoConnect { get; set; } = true;
-    /// <summary>OLED contrast 0-255.</summary>
+    /// <summary>OLED contrast / LCD and TFT backlight, 0-255.</summary>
     public int Brightness { get; set; } = 200;
 
-    /// <summary>What kind of screen DANTE has.</summary>
+    /// <summary>What kind of screen DANTE has. DANTE always drives exactly one screen.</summary>
     public DisplayType Display { get; set; } = DisplayType.Auto;
     /// <summary>I2C address of the LCD's PCF8574 backpack (usually 0x27, or 0x3F for the PCF8574A).</summary>
     public int LcdAddress { get; set; } = 0x27;
@@ -34,6 +54,12 @@ public sealed class DeviceSettings
     /// <see cref="DisplayType.Auto"/> it tells DANTE which LCD to expect (both look the same on the bus).
     /// </summary>
     public LcdSize LcdSize { get; set; } = LcdSize.Size16x2;
+    /// <summary>The screen is mounted upside down: rotate it 180° (OLED and TFT; character LCDs can't rotate).</summary>
+    public bool Flip { get; set; }
+
+    /// <summary>Older configs had one flag per screen (two-screen mode); the first screen's flag carries over.</summary>
+    [JsonPropertyName("flipScreen1")]
+    public bool? LegacyFlipScreen1 { get; set; }
 
     [JsonIgnore]
     public bool IsLcd => Display is DisplayType.Lcd1602 or DisplayType.Lcd2004;
@@ -45,22 +71,6 @@ public sealed class DeviceSettings
         DisplayType.Lcd2004 => LcdSize.Size20x4,
         _ => LcdSize,
     };
-
-    /// <summary>
-    /// OLED only: 1 = both eyes on one screen; 2 = one screen per eye; 0 = automatic (DANTE uses a second
-    /// screen if one answers when it starts).
-    /// </summary>
-    public int ScreenCount { get; set; } = 0;
-    /// <summary>Two screens only: what app screens look like.</summary>
-    public DualLayout DualLayout { get; set; } = DualLayout.Watch;
-    /// <summary>Two screens, <see cref="DualLayout.Watch"/>: which screen shows the app (the other one watches it).</summary>
-    public ScreenSide ContentScreen { get; set; } = ScreenSide.Right;
-    /// <summary>The screens are wired the other way round: swap left and right.</summary>
-    public bool SwapScreens { get; set; }
-    /// <summary>Rotate screen 1 (the one on the first I2C bus) by 180°.</summary>
-    public bool FlipScreen1 { get; set; }
-    /// <summary>Rotate screen 2 by 180°.</summary>
-    public bool FlipScreen2 { get; set; }
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<ConnectionKind>))]
@@ -75,67 +85,23 @@ public enum ConnectionKind
 [JsonConverter(typeof(JsonStringEnumConverter<DisplayType>))]
 public enum DisplayType
 {
-    /// <summary>DANTE uses whichever screen it finds on its I2C bus (OLED preferred).</summary>
+    /// <summary>
+    /// DANTE uses whichever I2C screen it finds (OLED preferred, then a character LCD); with neither it
+    /// assumes the SPI colour TFT, which it can't detect.
+    /// </summary>
     Auto,
-    /// <summary>0.91" SSD1306 128x32 OLED (one, or two for one-eye-per-screen).</summary>
+    /// <summary>0.91" SSD1306 128x32 OLED.</summary>
     Oled128x32,
     /// <summary>16x2 HD44780 character LCD with a PCF8574 I2C backpack ("1602 I2C").</summary>
     Lcd1602,
     /// <summary>20x4 HD44780 character LCD with a PCF8574 I2C backpack ("2004 I2C").</summary>
     Lcd2004,
+    /// <summary>3.5" 480x320 colour TFT, ST7796 driver, SPI.</summary>
+    Tft35,
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<LcdSize>))]
 public enum LcdSize { Size16x2, Size20x4 }
-
-[JsonConverter(typeof(JsonStringEnumConverter<DualLayout>))]
-public enum DualLayout
-{
-    /// <summary>One screen shows the app, the other is an eye that keeps watching it.</summary>
-    Watch,
-    /// <summary>Both screens show the app.</summary>
-    Mirror,
-}
-
-[JsonConverter(typeof(JsonStringEnumConverter<ScreenSide>))]
-public enum ScreenSide { Left, Right }
-
-/// <summary>What the MAGIC button on top of DANTE does on the PC.</summary>
-public sealed class MagicButtonSettings
-{
-    public MagicAction Press { get; set; } = new() { Kind = MagicActionKind.PlayPause };
-    public MagicAction LongPress { get; set; } = new() { Kind = MagicActionKind.ToggleMicMute };
-}
-
-[JsonConverter(typeof(JsonStringEnumConverter<MagicActionKind>))]
-public enum MagicActionKind
-{
-    Nothing,
-    PlayPause,
-    NextTrack,
-    PreviousTrack,
-    ToggleSpeakerMute,
-    ToggleMicMute,
-    VolumeUp,
-    VolumeDown,
-    /// <summary>Opens <see cref="MagicAction.Target"/>: a web page, a file, or an app link like spotify: or ms-teams:.</summary>
-    OpenUrl,
-    /// <summary>Runs <see cref="MagicAction.Target"/> with <see cref="MagicAction.Arguments"/> (one per line).</summary>
-    RunCommand,
-    /// <summary>Re-polls every app on DANTE right now.</summary>
-    RefreshApps,
-}
-
-public sealed class MagicAction
-{
-    public MagicActionKind Kind { get; set; } = MagicActionKind.Nothing;
-    /// <summary>OpenUrl: the URL. RunCommand: the program.</summary>
-    public string? Target { get; set; }
-    /// <summary>RunCommand: one argument per line.</summary>
-    public string? Arguments { get; set; }
-    /// <summary>Show the result ("Mic muted") in a speech bubble on DANTE.</summary>
-    public bool ConfirmOnBuddy { get; set; } = true;
-}
 
 [JsonConverter(typeof(JsonStringEnumConverter<Personality>))]
 public enum Personality { Cheerful, Sarcastic, Dramatic }
@@ -169,7 +135,12 @@ public sealed class MoodRule
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<VisualKind>))]
-public enum VisualKind { Gauge, Bar, Counter, Text, Sparkline, Status }
+public enum VisualKind
+{
+    Gauge, Bar, Counter, Text, Sparkline, Status,
+    /// <summary>A countdown (mm:ss and a progress bar). The value is the seconds left; DANTE counts down by itself while it runs.</summary>
+    Timer,
+}
 
 [JsonConverter(typeof(JsonStringEnumConverter<TakeoverMode>))]
 public enum TakeoverMode

@@ -1,4 +1,5 @@
 ﻿@inherits LayoutComponentBase
+@inject FeatureCatalog Features
 
 <div class="shell">
     <nav class="sidebar">
@@ -10,12 +11,10 @@
             </svg>
             <span class="brand-name">DANTE<small>Desk Assistant for Notifications, Tasks &amp; Efficiency</small></span>
         </a>
-        <NavLink href="" Match="NavLinkMatch.All">Dashboard</NavLink>
-        <NavLink href="apps">Apps</NavLink>
-        <NavLink href="mood">Mood &amp; personality</NavLink>
-        <NavLink href="magic">Magic button</NavLink>
-        <NavLink href="device">Device</NavLink>
-        <NavLink href="claude-code">Claude Code</NavLink>
+        @foreach (var item in Features.Navigation)
+        {
+            <NavLink href="@item.Href" Match="@(item.Href.Length == 0 ? NavLinkMatch.All : NavLinkMatch.Prefix)">@item.Title</NavLink>
+        }
     </nav>
     <main class="content">
         @Body

@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Dante.Core.Behavior;
 using Dante.Core.Config;
+using Dante.Core.Sources;
 
 namespace Dante.Core.Device;
 
@@ -28,10 +29,20 @@ public static class DeviceProtocol
         })]),
     };
 
-    public static JsonObject Value(string appId, double? value, string? text, int level, string? quip)
+    /// <param name="timer">For countdowns: <c>v</c> becomes the seconds left, plus <c>tot</c> (whole length) and <c>run</c>.</param>
+    public static JsonObject Value(string appId, double? value, string? text, int level, string? quip, TimerReading? timer = null)
     {
         var msg = new JsonObject { ["t"] = "val", ["id"] = appId, ["lvl"] = level };
-        if (value is { } v && double.IsFinite(v)) msg["v"] = Math.Round(v, 2);
+        if (timer is not null)
+        {
+            msg["v"] = Math.Max(0, timer.RemainingSeconds);
+            msg["tot"] = Math.Max(1, timer.TotalSeconds);
+            msg["run"] = timer.Running;
+        }
+        else if (value is { } v && double.IsFinite(v))
+        {
+            msg["v"] = Math.Round(v, 2);
+        }
         if (text is not null) msg["txt"] = Format.ToDeviceText(text, 47);
         if (!string.IsNullOrWhiteSpace(quip)) msg["quip"] = Format.ToDeviceText(quip, 63);
         return msg;
@@ -61,21 +72,19 @@ public static class DeviceProtocol
     {
         ["t"] = "cfg",
         ["bright"] = Math.Clamp(d.Brightness, 0, 255),
-        ["display"] = d.Display switch
-        {
-            DisplayType.Lcd1602 => "lcd1602",
-            DisplayType.Lcd2004 => "lcd2004",
-            DisplayType.Oled128x32 => "oled",
-            _ => "auto",
-        },
+        ["display"] = DisplayWireName(d.Display),
         ["lcdSize"] = d.EffectiveLcdSize == LcdSize.Size20x4 ? "2004" : "1602",
         ["lcdAddr"] = Math.Clamp(d.LcdAddress, 0x08, 0x77),
-        ["screens"] = d.ScreenCount is 1 or 2 ? d.ScreenCount : 0,   // 0 = automatic
-        ["layout"] = d.DualLayout == DualLayout.Mirror ? "mirror" : "watch",
-        ["content"] = d.ContentScreen == ScreenSide.Left ? "left" : "right",
-        ["swap"] = d.SwapScreens,
-        ["flip1"] = d.FlipScreen1,
-        ["flip2"] = d.FlipScreen2,
+        ["flip"] = d.Flip,
+    };
+
+    public static string DisplayWireName(DisplayType d) => d switch
+    {
+        DisplayType.Lcd1602 => "lcd1602",
+        DisplayType.Lcd2004 => "lcd2004",
+        DisplayType.Oled128x32 => "oled",
+        DisplayType.Tft35 => "tft",
+        _ => "auto",
     };
 
     public static string VisualWireName(VisualKind v) => v switch

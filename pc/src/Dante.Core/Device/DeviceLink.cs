@@ -79,13 +79,9 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
     public LinkStatus Status { get; private set; } = LinkStatus.Disconnected;
     public string? PortName { get; private set; }
     public string? Firmware { get; private set; }
-    /// <summary>Screens DANTE is currently using (from its hello).</summary>
-    public int? DeviceScreens { get; private set; }
-    /// <summary>Whether a second screen answered on DANTE's second display address.</summary>
-    public bool? SecondScreenDetected { get; private set; }
-    /// <summary>Display type DANTE is using ("oled" / "lcd1602" / "lcd2004").</summary>
+    /// <summary>Display type DANTE is using ("oled" / "lcd1602" / "lcd2004" / "tft").</summary>
     public string? DeviceDisplay { get; private set; }
-    /// <summary>The LCD size DANTE is driving, or null when it's using an OLED.</summary>
+    /// <summary>The LCD size DANTE is driving, or null when it is using an OLED or the TFT.</summary>
     public LcdSize? DeviceLcd => DeviceDisplay switch
     {
         "lcd1602" => LcdSize.Size16x2,
@@ -96,8 +92,8 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
     public bool? OledDetected { get; private set; }
     /// <summary>I2C address an LCD backpack answered at during boot (0 = none found).</summary>
     public int? LcdDetectedAddress { get; private set; }
-    /// <summary>I2C address an LCD answered at on the second bus (GPIO 17/18) during boot (0 = none).</summary>
-    public int? Lcd2DetectedAddress { get; private set; }
+    /// <summary>DANTE is driving the 3.5" colour TFT.</summary>
+    public bool DeviceTft => DeviceDisplay == "tft";
     /// <summary>Latest reply to <see cref="DeviceProtocol.Diag"/>.</summary>
     public WiringReport? LastDiag { get; private set; }
     public string? LastError { get; private set; }
@@ -171,12 +167,9 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
         while (_outbox.Reader.TryRead(out _)) { } // stale messages from a previous session
         LastError = null;
         Firmware = null;
-        DeviceScreens = null;
-        SecondScreenDetected = null;
         DeviceDisplay = null;
         OledDetected = null;
         LcdDetectedAddress = null;
-        Lcd2DetectedAddress = null;
         SetStatus(LinkStatus.Connected, Target(settings));
 
         Write(transport, DeviceProtocol.Hello().ToJsonString());
@@ -230,12 +223,9 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
                 if (evt.Type == "hello")
                 {
                     Firmware = evt.Raw["fw"]?.GetValue<string>();
-                    DeviceScreens = evt.Raw["screens"]?.GetValue<int>();
-                    SecondScreenDetected = evt.Raw["disp2"]?.GetValue<bool>();
                     DeviceDisplay = evt.Raw["display"]?.GetValue<string>();
                     OledDetected = evt.Raw["oled"]?.GetValue<bool>();
                     LcdDetectedAddress = evt.Raw["lcd"]?.GetValue<int>();
-                    Lcd2DetectedAddress = evt.Raw["lcd2"]?.GetValue<int>();
                 }
                 StatusChanged?.Invoke();
                 EventReceived?.Invoke(evt);

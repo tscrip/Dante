@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using Dante.Core.Actions;
 using Dante.Core.Behavior;
 using Dante.Core.Config;
 using Dante.Core.Device;
@@ -31,6 +30,8 @@ public sealed record AppStatus(
 /// <summary>
 /// Polls every app's data source, turns readings into levels/quips/nudges, works out DANTE's
 /// mood and pushes the results to the device. All "thinking" happens here, on the PC.
+/// Feature slices plug in through data sources (<see cref="IDataSource"/>), button handlers
+/// (<see cref="AddHandler"/>) and their own nudges (<see cref="DeviceAlerts"/>).
 /// </summary>
 public sealed class DanteEngine : BackgroundService
 {
@@ -55,9 +56,10 @@ public sealed class DanteEngine : BackgroundService
     private readonly IUrlOpener _urls;
     private readonly TimeProvider _time;
     private readonly ILogger<DanteEngine> _log;
-    private readonly IPcActions _actions;
+    private readonly DeviceAlerts _alerts;
     private readonly Random _rng = new();
     private readonly Lock _gate = new();
+    private volatile (IDeviceEventHandler Handler, int Order)[] _handlers = [];
 
     private DanteConfig _cfg;
     private List<Runtime> _apps = [];
@@ -66,25 +68,33 @@ public sealed class DanteEngine : BackgroundService
     private (Mood Mood, DateTimeOffset Until)? _moodOverride;
 
     public DanteEngine(ConfigStore config, SourceRegistry sources, DeviceLink link, IUrlOpener urls,
-        TimeProvider time, ILogger<DanteEngine> log, PushStore push, ClaudeCodeSessionTracker claude, IPcActions actions)
+        TimeProvider time, ILogger<DanteEngine> log, DeviceAlerts alerts)
     {
-        _actions = actions;
         _config = config;
         _sources = sources;
         _link = link;
         _urls = urls;
         _time = time;
         _log = log;
+        _alerts = alerts;
         _cfg = config.Snapshot();
         Rebuild(_cfg);
 
         config.Changed += OnConfigChanged;
         link.EventReceived += OnDeviceEvent;
-        push.Pushed += PollNow;
-        claude.Changed += () => PollSourceType(ClaudeCodeWaitingSource.TypeName);
+        alerts.Changed += () => StateChanged?.Invoke();
     }
 
     public event Action? StateChanged;
+
+    /// <summary>
+    /// Lets a feature react to DANTE's buttons before the engine does (see <see cref="IDeviceEventHandler"/>).
+    /// Features register their handlers when the app starts.
+    /// </summary>
+    /// <param name="order">Lower runs first. Handlers for a specific screen (e.g. a timer that MAGIC starts) should
+    /// come before catch-all ones (the MAGIC button's PC action).</param>
+    public void AddHandler(IDeviceEventHandler handler, int order = 0) =>
+        _handlers = [.. _handlers.Append((Handler: handler, Order: order)).OrderBy(h => h.Order)];
 
     public MoodResult CurrentMood
     {
@@ -105,6 +115,14 @@ public sealed class DanteEngine : BackgroundService
                 r.NextPoll = DateTimeOffset.MinValue;
     }
 
+    /// <summary>Poll every app fed by this kind of source right away (e.g. when the source's data changed).</summary>
+    public void PollSourceType(string type)
+    {
+        lock (_gate)
+            foreach (var r in _apps.Where(r => r.Def.SourceType.Equals(type, StringComparison.OrdinalIgnoreCase)))
+                r.NextPoll = DateTimeOffset.MinValue;
+    }
+
     public void PollAll()
     {
         lock (_gate)
@@ -115,38 +133,6 @@ public sealed class DanteEngine : BackgroundService
 
     public void TestAlert(string text, int level) =>
         _link.Send(DeviceProtocol.Alert("test", "DANTE", text, level));
-
-    /// <summary>Runs the MAGIC button's action (also used by the "Try it" button in the UI).</summary>
-    /// <returns>What happened, e.g. "Mic muted" (also shown on DANTE if configured).</returns>
-    public async Task<string> RunMagicAsync(bool longPress, CancellationToken ct = default)
-    {
-        MagicAction action;
-        lock (_gate) action = longPress ? _cfg.Magic.LongPress : _cfg.Magic.Press;
-        if (action.Kind == MagicActionKind.Nothing) return "";
-
-        string message;
-        try
-        {
-            if (action.Kind == MagicActionKind.RefreshApps)
-            {
-                PollAll();
-                message = "Refreshing apps!";
-            }
-            else
-            {
-                message = await _actions.RunAsync(action, ct);
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _log.LogWarning(ex, "Magic button action {Action} failed", action.Kind);
-            message = ex is ActionFailedException or PlatformNotSupportedException ? ex.Message : $"Magic failed: {ex.Message}";
-            _link.Send(DeviceProtocol.Say(message));   // always tell the human when it didn't work
-            return message;
-        }
-        if (action.ConfirmOnBuddy && !string.IsNullOrWhiteSpace(message)) _link.Send(DeviceProtocol.Say(message));
-        return message;
-    }
 
     /// <summary>Lets the config UI preview a mood on the device for a little while.</summary>
     public void PreviewMood(Mood mood, TimeSpan duration)
@@ -237,8 +223,9 @@ public sealed class DanteEngine : BackgroundService
         r.UpdatedAt = now;
         r.NonZeroSince = reading.Value > 0 ? r.NonZeroSince ?? now : null;
 
-        var changed = old is null || old.Value != reading.Value || old.Text != reading.Text || r.Level != level;
-        var quip = old is null ? null
+        var changed = old is null || old.Value != reading.Value || old.Text != reading.Text || r.Level != level || old.Timer != reading.Timer;
+        // A running countdown changes every poll, but that's not news worth a quip.
+        var quip = old is null || reading.Timer is not null ? null
             : QuipBank.Pick(_cfg.Personality, new QuipContext(r.Def, old.Value, reading.Value, r.Level, level, reading.Text), _rng);
         r.Level = level;
 
@@ -250,7 +237,7 @@ public sealed class DanteEngine : BackgroundService
     {
         if (!r.Def.ShowInCarousel && quip is null) return;
         if (r.Def.ShowInCarousel)
-            _link.Send(DeviceProtocol.Value(r.Def.Id, r.Reading?.Value, r.Reading?.Text, r.Level, quip));
+            _link.Send(DeviceProtocol.Value(r.Def.Id, r.Reading?.Value, r.Reading?.Text, r.Level, quip, r.Reading?.Timer));
         else
             _link.Send(DeviceProtocol.Say(quip!));
     }
@@ -386,15 +373,40 @@ public sealed class DanteEngine : BackgroundService
         _link.Send(DeviceProtocol.Cfg(_cfg.Device));
         _link.Send(DeviceProtocol.Apps(_apps.Where(r => r.Def.ShowInCarousel).Select(r => r.Def)));
         foreach (var r in _apps.Where(r => r.Def.ShowInCarousel && r.Reading is not null))
-            _link.Send(DeviceProtocol.Value(r.Def.Id, r.Reading!.Value, r.Reading.Text, r.Level, null));
+            _link.Send(DeviceProtocol.Value(r.Def.Id, r.Reading!.Value, r.Reading.Text, r.Level, null, r.Reading.Timer));
         foreach (var r in _apps.Where(r => r.Takeover.Raised))
             _link.Send(DeviceProtocol.Alert(r.Def.Id, r.Def.Name, r.AlertText ?? r.Def.Name, r.Def.Takeover.Level));
+        _alerts.ResendAll();
         _sentMood = null; // forces a mood message on the next tick
         if (greeting) _link.Send(DeviceProtocol.Say(QuipBank.Greeting(_cfg.Personality, _rng)));
+        // Countdowns must be re-read: the device's clock restarted with the link.
+        foreach (var r in _apps.Where(r => r.Reading?.Timer is not null)) r.NextPoll = DateTimeOffset.MinValue;
     }
 
     private void OnDeviceEvent(DeviceEvent evt)
     {
+        // Feature nudges answered on the device belong to the feature that raised them.
+        if (_alerts.TryAnswer(evt)) return;
+
+        AppDefinition? screen;
+        lock (_gate)
+        {
+            var id = evt.Id ?? evt.Screen;
+            screen = _apps.FirstOrDefault(r => r.Def.Id.Equals(id, StringComparison.OrdinalIgnoreCase))?.Def;
+        }
+        // Feature slices first (outside the lock: they may call back into the engine).
+        foreach (var (handler, _) in _handlers)
+        {
+            try
+            {
+                if (handler.Handle(evt, screen)) { StateChanged?.Invoke(); return; }
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Device event handler {Handler} failed", handler.GetType().Name);
+            }
+        }
+
         var now = _time.GetUtcNow();
         lock (_gate)
         {
@@ -410,9 +422,6 @@ public sealed class DanteEngine : BackgroundService
                     break;
                 case "snooze" when runtime is not null:
                     runtime.Takeover.Snooze(runtime.Def.Takeover, now);
-                    break;
-                case "btn" when evt.Button == "magic":
-                    _ = RunMagicAsync(evt.Long);   // never block the device link on a slow action
                     break;
                 case "btn" when evt.Button == "sel" && evt.Long:
                     foreach (var r in _apps) r.NextPoll = DateTimeOffset.MinValue;
@@ -442,11 +451,5 @@ public sealed class DanteEngine : BackgroundService
         {
             _log.LogWarning(ex, "Could not open {Url}", uri);
         }
-    }
-
-    private void PollSourceType(string type)
-    {
-        lock (_gate)
-            foreach (var r in _apps.Where(r => r.Def.SourceType == type)) r.NextPoll = DateTimeOffset.MinValue;
     }
 }
