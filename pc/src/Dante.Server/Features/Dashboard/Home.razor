@@ -42,20 +42,20 @@
             <button class="btn" @onclick="SayIt" disabled="@string.IsNullOrWhiteSpace(_say)">Send</button>
         </div>
         <div class="row" style="margin-top:.75rem">
-            <button class="btn sm" @onclick="Engine.PollAll">Refresh all apps</button>
+            <button class="btn sm" @onclick="Engine.PollAll">Refresh all widgets</button>
             <button class="btn sm" @onclick='() => Engine.TestAlert("Hey! Over here!", 1)'>Test nudge</button>
         </div>
     </div>
 </div>
 
 <div class="panel">
-    <div class="row spread"><h2>Apps</h2><a class="btn sm primary" href="apps/new">+ New app</a></div>
-    @if (Apps.Count == 0)
+    <div class="row spread"><h2>Active widgets</h2><a class="btn sm primary" href="widgets/new">+ Add widget</a></div>
+    @if (Widgets.Count == 0)
     {
-        <p class="muted">No enabled apps. <a href="apps">Configure some</a>.</p>
+        <p class="muted">No active widgets. <a href="widgets">Switch some on</a> or <a href="plugins">browse the plugins</a>.</p>
     }
     <div class="grid">
-        @foreach (var a in Apps)
+        @foreach (var a in Widgets)
         {
             <div class="panel" style="margin:0">
                 <div class="row spread">
@@ -70,7 +70,7 @@
                 @if (a.Error is not null) { <p class="crit small">@a.Error</p> }
                 <p class="muted small">
                     @(a.UpdatedAt is { } u ? $"updated {Format.Age(DateTimeOffset.UtcNow - u)} ago" : "no data yet")
-                    · <a href="apps/@a.Definition.Id">edit</a>
+                    · <a href="widgets/@a.Definition.Id">edit</a>
                     · <a href="" @onclick="() => Engine.PollNow(a.Definition.Id)" @onclick:preventDefault>refresh</a>
                 </p>
             </div>
@@ -80,9 +80,9 @@
 
 @code {
     private string _say = "";
-    private IReadOnlyList<AppStatus> Apps => Engine.Snapshot();
-    // Apps that are screens on DANTE, in carousel order.
-    private List<string> Carousel => [.. Apps.Where(a => a.Definition.ShowInCarousel).Select(a => a.Definition.Id)];
+    private IReadOnlyList<WidgetStatus> Widgets => Engine.Snapshot();
+    // Widgets that are screens on DANTE, in carousel order.
+    private List<string> Carousel => [.. Widgets.Where(a => a.Definition.ShowInCarousel).Select(a => a.Definition.Id)];
     private MoodResult Mood => Engine.CurrentMood;
 
     private void SayIt()

@@ -3,7 +3,8 @@ using System.Net.Http.Headers;
 using System.Text.Json.Nodes;
 using Dante.Core;
 using Dante.Core.Config;
-using Dante.Core.Sources;
+using Dante.Core.Plugins;
+using Dante.Core.Widgets;
 
 namespace Dante.Server.Features.ClaudeCode;
 
@@ -15,32 +16,43 @@ namespace Dante.Server.Features.ClaudeCode;
 /// public API and may change; if it breaks, switch the app to the "push" or "command" source.
 /// </para>
 /// </summary>
-public sealed class ClaudeCodeUsageSource(IHttpClientFactory http, TimeProvider time) : IDataSource
+public sealed class ClaudeCodeUsageSource(IHttpClientFactory http, TimeProvider time, PluginSettings plugins, ClaudeCodePlugin plugin) : IWidgetType
 {
     public const string TypeName = "claude-code-usage";
     private const string UsageUrl = "https://api.anthropic.com/api/oauth/usage";
 
     public string Type => TypeName;
-    public string DisplayName => "Claude Code: subscription usage";
+    public string PluginId => ClaudeCodePlugin.PluginId;
+    public string DisplayName => "Subscription usage";
     public string Description =>
-        "Percentage of your Claude subscription window used (what /usage shows). Reads the Claude Code login " +
-        "from ~/.claude/.credentials.json (or the macOS keychain). Unofficial endpoint - may change.";
+        "How much of your Claude subscription window you've used (what /usage shows): the 5-hour window, the week, " +
+        "or the week's Opus share. Uses your Claude Code login. Unofficial endpoint - may change.";
 
-    public IReadOnlyList<SettingField> Settings { get; } =
+    public IReadOnlyList<SettingField> Fields { get; } =
     [
         new("window", "Usage window", SettingKind.Choice, "five_hour", Choices: ["five_hour", "seven_day", "seven_day_opus"]),
-        new("credentialsPath", "Credentials file", SettingKind.Text, "",
-            "Blank = ~/.claude/.credentials.json (macOS: keychain item 'Claude Code-credentials')."),
-        new("token", "Access token override", SettingKind.Secret, "", "Optional. Use env:VAR_NAME to read it from an environment variable."),
     ];
 
-    public async Task<SourceReading> ReadAsync(AppDefinition app, CancellationToken ct)
+    public WidgetDefinition CreateDefault() => new()
     {
-        var token = app.Get(this, "token");
+        Name = "Claude 5h",
+        Type = TypeName,
+        Visual = VisualKind.Gauge,
+        Min = 0, Max = 100, Unit = "%",
+        Settings = new() { ["window"] = "five_hour" },
+        PollSeconds = 120,
+        Levels = new LevelRule { WarnAt = 70, CritAt = 90 },
+        QuipMinDelta = 10,
+        OnSelectUrl = "https://claude.ai/settings/usage",
+    };
+
+    public async Task<WidgetReading> ReadAsync(WidgetDefinition app, CancellationToken ct)
+    {
+        var token = plugins.Get(plugin, "token", app);
         if (string.IsNullOrWhiteSpace(token))
-            token = await ReadLocalTokenAsync(app.Get(this, "credentialsPath"), ct);
+            token = await ReadLocalTokenAsync(plugins.Get(plugin, "credentialsPath", app), ct);
         if (string.IsNullOrWhiteSpace(token))
-            return SourceReading.Fail("No Claude Code login found - run `claude` and log in, or set a token.");
+            return WidgetReading.Fail("No Claude Code login found - run `claude` and log in, or set a token.");
 
         using var req = new HttpRequestMessage(HttpMethod.Get, UsageUrl);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -49,22 +61,22 @@ public sealed class ClaudeCodeUsageSource(IHttpClientFactory http, TimeProvider 
 
         using var resp = await http.CreateClient(nameof(ClaudeCodeUsageSource)).SendAsync(req, ct);
         if (!resp.IsSuccessStatusCode)
-            return SourceReading.Fail($"Usage endpoint returned {(int)resp.StatusCode}. Try `claude` to refresh your login.");
+            return WidgetReading.Fail($"Usage endpoint returned {(int)resp.StatusCode}. Try `claude` to refresh your login.");
 
         var json = JsonNode.Parse(await resp.Content.ReadAsStringAsync(ct)) as JsonObject;
         return Parse(json, app.Get(this, "window"), time.GetUtcNow());
     }
 
-    public static SourceReading Parse(JsonObject? json, string window, DateTimeOffset now)
+    public static WidgetReading Parse(JsonObject? json, string window, DateTimeOffset now)
     {
         if (json?[window] is not JsonObject w)
-            return SourceReading.Fail($"Window '{window}' not in response (not on this plan?).");
+            return WidgetReading.Fail($"Window '{window}' not in response (not on this plan?).");
 
         var utilization = w["utilization"]?.GetValue<double>() ?? 0;
         string text = "";
         if (w["resets_at"]?.GetValue<string>() is { } resets && DateTimeOffset.TryParse(resets, out var at))
             text = $"resets in {Format.Age(at - now)}";
-        return new SourceReading { Value = Math.Round(utilization, 1, MidpointRounding.AwayFromZero), Text = text };
+        return new WidgetReading { Value = Math.Round(utilization, 1, MidpointRounding.AwayFromZero), Text = text };
     }
 
     private static async Task<string?> ReadLocalTokenAsync(string configuredPath, CancellationToken ct)

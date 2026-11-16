@@ -1,0 +1,30 @@
+@page "/plugins"
+@inject PluginRegistry Plugins
+@inject ConfigStore Store
+
+<PageTitle>Plugins · DANTE</PageTitle>
+
+<h1>Plugins</h1>
+<p class="muted">A plugin adds something to DANTE. Each one has a page with its settings and the widgets it offers:
+    the screens it can put on DANTE.</p>
+
+<div class="grid">
+    @foreach (var p in Plugins.All)
+    {
+        var types = Plugins.WidgetTypes(p.Id);
+        var widgets = _cfg.Widgets.Where(w => types.Any(t => t.Type.Equals(w.Type, StringComparison.OrdinalIgnoreCase))).ToList();
+        <a class="panel plugin-card" href="plugins/@p.Id">
+            <h2>@p.Name</h2>
+            <p class="small">@p.Description</p>
+            <p class="muted small">
+                @(types.Count == 1 ? "1 widget type" : $"{types.Count} widget types")
+                · @(widgets.Count(w => w.Active)) active @(widgets.Count(w => w.Active) == 1 ? "widget" : "widgets")
+            </p>
+        </a>
+    }
+</div>
+
+@code {
+    private DanteConfig _cfg = new();
+    protected override void OnInitialized() => _cfg = Store.Snapshot();
+}

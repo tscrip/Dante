@@ -1,25 +1,34 @@
 using Dante.Core.Config;
 
-namespace Dante.Core.Sources;
+namespace Dante.Core.Widgets;
 
 /// <summary>
-/// A data source does all the processing on the PC and boils it down to one reading
-/// (a number, a short text and optionally the list of things waiting on the human).
+/// A kind of widget a plugin offers, e.g. the Claude Code plugin's "5-hour usage". It does all the work on
+/// the PC and boils it down to one reading (a number, a short text, optionally the things waiting on the
+/// human, or a countdown). The human adds widgets of this type and sets each one's <see cref="Fields"/>.
 /// </summary>
-public interface IDataSource
+public interface IWidgetType
 {
     /// <summary>Stable id stored in config (e.g. "azure-devops-prs").</summary>
     string Type { get; }
+    /// <summary>The <see cref="Plugins.IPlugin.Id"/> this widget type belongs to.</summary>
+    string PluginId { get; }
     string DisplayName { get; }
     string Description { get; }
-    IReadOnlyList<SettingField> Settings { get; }
-    /// <summary>Push-style sources update instantly; the poll interval is just a safety net.</summary>
+    /// <summary>Settings each widget of this type has (shared settings belong on the plugin).</summary>
+    IReadOnlyList<SettingField> Fields { get; }
+    /// <summary>Push-style types update instantly; the poll interval is just a safety net.</summary>
     bool IsPushBased => false;
+    /// <summary>False for things there is only one of (the Pomodoro timer, the next meeting).</summary>
+    bool AllowMultiple => true;
 
-    /// <summary>An optional sample shown under the description in the app editor (e.g. how to push a value to this app).</summary>
-    string? Example(AppDefinition app) => null;
+    /// <summary>A new widget of this type, with sensible looks and behaviour.</summary>
+    WidgetDefinition CreateDefault() => new() { Name = DisplayName, Type = Type };
 
-    Task<SourceReading> ReadAsync(AppDefinition app, CancellationToken ct);
+    /// <summary>An optional sample shown under the description in the widget editor (e.g. how to push a value).</summary>
+    string? Example(WidgetDefinition widget) => null;
+
+    Task<WidgetReading> ReadAsync(WidgetDefinition widget, CancellationToken ct);
 }
 
 public enum SettingKind { Text, Secret, Number, Bool, Choice, Multiline }
@@ -35,7 +44,7 @@ public sealed record SettingField(
 /// <summary>Something that needs the human, used for the mood and for takeovers.</summary>
 public sealed record PendingItem(string Key, string Title, DateTimeOffset Since, string? Url = null);
 
-public sealed record SourceReading
+public sealed record WidgetReading
 {
     public double? Value { get; init; }
     public string? Text { get; init; }
@@ -44,20 +53,20 @@ public sealed record SourceReading
     public TimerReading? Timer { get; init; }
     public string? Error { get; init; }
 
-    public static SourceReading Fail(string error) => new() { Error = error };
+    public static WidgetReading Fail(string error) => new() { Error = error };
 }
 
 /// <summary>A countdown: seconds left, the length of the whole countdown (for the progress bar), and whether it is ticking.</summary>
 public sealed record TimerReading(int RemainingSeconds, int TotalSeconds, bool Running);
 
-public static class SourceSettingsExtensions
+public static class WidgetSettingsExtensions
 {
     /// <summary>Reads a setting, falling back to the field default. "env:NAME" resolves an environment variable.</summary>
-    public static string Get(this AppDefinition app, IDataSource source, string key)
+    public static string Get(this WidgetDefinition app, IWidgetType source, string key)
     {
-        app.SourceSettings.TryGetValue(key, out var value);
+        app.Settings.TryGetValue(key, out var value);
         if (string.IsNullOrEmpty(value))
-            value = source.Settings.FirstOrDefault(f => f.Key == key)?.Default ?? "";
+            value = source.Fields.FirstOrDefault(f => f.Key == key)?.Default ?? "";
         return ResolveSecret(value);
     }
 
@@ -84,13 +93,16 @@ public static class SourceSettingsExtensions
     }
 }
 
-/// <summary>All registered sources, looked up by type.</summary>
-public sealed class SourceRegistry(IEnumerable<IDataSource> sources)
+/// <summary>All registered widget types, looked up by type.</summary>
+public sealed class WidgetTypeRegistry(IEnumerable<IWidgetType> types)
 {
-    private readonly Dictionary<string, IDataSource> _byType =
-        sources.ToDictionary(s => s.Type, StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, IWidgetType> _byType =
+        types.ToDictionary(s => s.Type, StringComparer.OrdinalIgnoreCase);
 
-    public IReadOnlyCollection<IDataSource> All => _byType.Values;
+    public IReadOnlyCollection<IWidgetType> All => _byType.Values;
 
-    public IDataSource? Find(string type) => _byType.GetValueOrDefault(type);
+    public IReadOnlyList<IWidgetType> ForPlugin(string pluginId) =>
+        [.. _byType.Values.Where(t => t.PluginId.Equals(pluginId, StringComparison.OrdinalIgnoreCase)).OrderBy(t => t.DisplayName)];
+
+    public IWidgetType? Find(string type) => _byType.GetValueOrDefault(type);
 }

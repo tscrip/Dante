@@ -1,14 +1,6 @@
-@page "/calendar"
 @inherits LiveComponent
 @inject ConfigStore Store
 @inject CalendarService Calendar
-
-<PageTitle>Calendar · DANTE</PageTitle>
-
-<h1>Calendar</h1>
-<p class="muted">DANTE reminds you before meetings start. On the reminder, <strong>SELECT</strong> ("I'm on it") opens the
-    meeting's Teams / Zoom link on this PC and stops the reminders for that meeting; <strong>LEFT/RIGHT</strong> ("later")
-    waits for the next reminder.</p>
 
 @if (_saved) { <div class="notice">Saved.</div> }
 
@@ -85,19 +77,12 @@
             </tbody>
         </table>
     }
-    @if (!OnDante)
-    {
-        <p class="small" style="margin-top:.75rem">Want a countdown to your next meeting on DANTE?
-            <button class="btn sm" @onclick="AddNextMeetingScreen">Add the "Next meeting" screen</button></p>
-    }
 </div>
 
 @code {
     private CalendarSettings _settings = new();
     private string _minutes = "";
     private bool _saved;
-
-    private bool OnDante => Store.Snapshot().Apps.Any(a => a.SourceType == NextMeetingSource.TypeName);
 
     protected override void OnInitialized()
     {
@@ -123,13 +108,6 @@
         _settings = Calendar.Settings;
         _minutes = string.Join(", ", _settings.ReminderMinutes);
         _saved = true;
-    }
-
-    private void AddNextMeetingScreen()
-    {
-        var cfg = Store.Snapshot();
-        cfg.Apps.Add(NextMeetingSource.DefaultApp());
-        Store.Save(cfg);
     }
 
     public override void Dispose()

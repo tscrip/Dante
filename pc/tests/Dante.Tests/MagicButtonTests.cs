@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 using Dante.Core.Config;
 using Dante.Core.Device;
 using Dante.Core.Engine;
-using Dante.Core.Sources;
+using Dante.Core.Widgets;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Dante.Tests;
@@ -172,7 +172,7 @@ public class MagicButtonEngineTests : IAsyncLifetime
         _store.Save(cfg);
         var push = new PushStore();
         _link = new DeviceLink(_store, NullLogger<DeviceLink>.Instance, TimeProvider.System, _ => _buddy);
-        _engine = new DanteEngine(_store, new SourceRegistry([new PushSource(push)]), _link, new RecordingOpener(), TimeProvider.System,
+        _engine = new DanteEngine(_store, new WidgetTypeRegistry([new PushSource(push)]), _link, new RecordingOpener(), TimeProvider.System,
             NullLogger<DanteEngine>.Instance, new DeviceAlerts(_link));
         _magic = new MagicButtonService(_store, _actions, _engine, _link, NullLogger<MagicButtonService>.Instance);
         _engine.AddHandler(_magic, MagicButtonService.HandlerOrder);   // what MagicButtonFeature.Start does

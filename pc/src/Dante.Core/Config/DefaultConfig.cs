@@ -1,32 +1,32 @@
 namespace Dante.Core.Config;
 
-/// <summary>The first-run config: the three example apps from the design brief.</summary>
+/// <summary>The first-run config: three example widgets (the plugins' shared settings start at their defaults).</summary>
 public static class DefaultConfig
 {
     public static DanteConfig Create() => new()
     {
-        Apps =
+        Widgets =
         [
-            new AppDefinition
+            new WidgetDefinition
             {
                 Id = "cc_usage",
                 Name = "Claude 5h",
                 Visual = VisualKind.Gauge,
                 Min = 0, Max = 100, Unit = "%",
-                SourceType = "claude-code-usage",
-                SourceSettings = new() { ["window"] = "five_hour" },
+                Type = "claude-code-usage",
+                Settings = new() { ["window"] = "five_hour" },
                 PollSeconds = 120,
                 Levels = new LevelRule { WarnAt = 70, CritAt = 90 },
                 QuipMinDelta = 10,
                 OnSelectUrl = "https://claude.ai/settings/usage",
             },
-            new AppDefinition
+            new WidgetDefinition
             {
                 Id = "cc_wait",
                 Name = "Claude Code",
                 Visual = VisualKind.Status,
                 Min = 0, Max = 5,
-                SourceType = "claude-code-waiting",
+                Type = "claude-code-waiting",
                 PollSeconds = 5,
                 CountsTowardMood = true,
                 Levels = new LevelRule { WarnAt = 1, CritAt = 3 },
@@ -40,19 +40,17 @@ public static class DefaultConfig
                     Message = "{item} is waiting on you!",
                 },
             },
-            new AppDefinition
+            new WidgetDefinition
             {
                 Id = "prs",
                 Name = "PRs for me",
-                Enabled = false, // fill in organisation + PAT first
+                Active = false, // set the organisation + PAT on the Azure DevOps plugin page first
                 Visual = VisualKind.Counter,
                 Min = 0, Max = 20,
-                SourceType = "azure-devops-prs",
-                SourceSettings = new()
+                Type = "azure-devops-prs",
+                Settings = new()
                 {
-                    ["organization"] = "https://dev.azure.com/your-org",
                     ["project"] = "",
-                    ["pat"] = "env:DANTE_ADO_PAT",
                     ["mode"] = "review",
                 },
                 PollSeconds = 300,

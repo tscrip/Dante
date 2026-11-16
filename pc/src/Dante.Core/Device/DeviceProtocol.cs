@@ -1,24 +1,24 @@
 using System.Text.Json.Nodes;
 using Dante.Core.Behavior;
 using Dante.Core.Config;
-using Dante.Core.Sources;
+using Dante.Core.Widgets;
 
 namespace Dante.Core.Device;
 
 /// <summary>Builds the PC→device messages from docs/protocol.md, enforcing the device's string limits.</summary>
 public static class DeviceProtocol
 {
-    public const int MaxApps = 12;
+    public const int MaxWidgets = 12;
 
     public static JsonObject Hello() => new() { ["t"] = "hello" };
     public static JsonObject Ping() => new() { ["t"] = "ping" };
     /// <summary>Asks DANTE what it found at boot plus a live I2C scan of both buses.</summary>
     public static JsonObject Diag() => new() { ["t"] = "diag" };
 
-    public static JsonObject Apps(IEnumerable<AppDefinition> apps) => new()
+    public static JsonObject Widgets(IEnumerable<WidgetDefinition> apps) => new()
     {
         ["t"] = "apps",
-        ["apps"] = new JsonArray([.. apps.Take(MaxApps).Select(a => (JsonNode)new JsonObject
+        ["apps"] = new JsonArray([.. apps.Take(MaxWidgets).Select(a => (JsonNode)new JsonObject
         {
             ["id"] = Format.ToDeviceText(a.Id, 15),
             ["name"] = Format.ToDeviceText(a.Name, 19),

@@ -1,6 +1,6 @@
 using Dante.Core.Behavior;
 using Dante.Core.Config;
-using Dante.Core.Sources;
+using Dante.Core.Widgets;
 
 namespace Dante.Tests;
 
@@ -131,43 +131,43 @@ public class TakeoverTrackerTests
     [InlineData(TakeoverMode.WhenPending, 0, 0.0, false)]
     [InlineData(TakeoverMode.Never, 0, 99.0, false)]
     public void Conditions(TakeoverMode mode, double threshold, double value, bool expected) =>
-        Assert.Equal(expected, TakeoverTracker.ConditionHolds(new TakeoverRule { Mode = mode, Threshold = threshold }, new SourceReading { Value = value }));
+        Assert.Equal(expected, TakeoverTracker.ConditionHolds(new TakeoverRule { Mode = mode, Threshold = threshold }, new WidgetReading { Value = value }));
 
     [Fact]
     public void Pending_list_wins_over_value()
     {
         var rule = new TakeoverRule { Mode = TakeoverMode.WhenPending };
-        Assert.False(TakeoverTracker.ConditionHolds(rule, new SourceReading { Value = 5, Pending = [] }));
+        Assert.False(TakeoverTracker.ConditionHolds(rule, new WidgetReading { Value = 5, Pending = [] }));
     }
 }
 
 public class QuipBankTests
 {
-    private static readonly AppDefinition App = new() { Name = "PRs", QuipMinDelta = 1 };
+    private static readonly WidgetDefinition App = new() { Name = "PRs", QuipMinDelta = 1 };
 
     [Fact]
     public void No_quip_on_first_reading_or_small_change()
     {
         Assert.Null(QuipBank.Pick(Personality.Cheerful, new QuipContext(App, null, 3, 0, 0, null), new Random(1)));
-        var gauge = new AppDefinition { Name = "Usage", QuipMinDelta = 10 };
+        var gauge = new WidgetDefinition { Name = "Usage", QuipMinDelta = 10 };
         Assert.Null(QuipBank.Pick(Personality.Cheerful, new QuipContext(gauge, 40, 45, 0, 0, null), new Random(1)));
     }
 
     [Fact]
     public void Level_change_always_quips()
     {
-        var gauge = new AppDefinition { Name = "Usage", QuipMinDelta = 50 };
+        var gauge = new WidgetDefinition { Name = "Usage", QuipMinDelta = 50 };
         Assert.NotNull(QuipBank.Pick(Personality.Dramatic, new QuipContext(gauge, 68, 71, 0, 1, null), new Random(1)));
     }
 
     [Fact]
     public void Custom_lines_and_tokens()
     {
-        var app = new AppDefinition { Name = "PRs", IncreaseQuips = ["{delta} more {name}, now {value}!"] };
+        var app = new WidgetDefinition { Name = "PRs", IncreaseQuips = ["{delta} more {name}, now {value}!"] };
         Assert.Equal("2 more PRs, now 5!", QuipBank.Pick(Personality.Sarcastic, new QuipContext(app, 3, 5, 0, 0, null), new Random(1)));
     }
 
     [Fact]
     public void Disabled_means_silent() =>
-        Assert.Null(QuipBank.Pick(Personality.Cheerful, new QuipContext(new AppDefinition { QuipsEnabled = false }, 1, 9, 0, 2, null), new Random(1)));
+        Assert.Null(QuipBank.Pick(Personality.Cheerful, new QuipContext(new WidgetDefinition { QuipsEnabled = false }, 1, 9, 0, 2, null), new Random(1)));
 }

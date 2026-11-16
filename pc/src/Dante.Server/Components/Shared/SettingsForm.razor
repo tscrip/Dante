@@ -1,0 +1,41 @@
+@* Renders a list of SettingFields against a dictionary of values (a plugin's shared settings or one widget's). *@
+
+<div class="fields">
+    @foreach (var f in Fields)
+    {
+        <label class="field">
+            @switch (f.Kind)
+            {
+                case SettingKind.Bool:
+                    <span class="check" style="font-weight:400"><input type="checkbox" checked="@IsOn(f)" @onchange="e => Set(f, BoolText(e.Value))" /> @f.Label</span>
+                    break;
+                case SettingKind.Choice:
+                    <span>@f.Label</span>
+                    <select value="@Get(f)" @onchange="e => Set(f, e.Value?.ToString())">
+                        @foreach (var c in f.Choices ?? []) { <option value="@c">@c</option> }
+                    </select>
+                    break;
+                case SettingKind.Multiline:
+                    <span>@f.Label</span>
+                    <textarea value="@Get(f)" @onchange="e => Set(f, e.Value?.ToString())"></textarea>
+                    break;
+                default:
+                    <span>@f.Label</span>
+                    <input type="@(f.Kind == SettingKind.Secret ? "password" : f.Kind == SettingKind.Number ? "number" : "text")"
+                           value="@Get(f)" @onchange="e => Set(f, e.Value?.ToString())" autocomplete="off" />
+                    break;
+            }
+            @if (f.Help is not null) { <span class="help">@f.Help</span> }
+        </label>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<SettingField> Fields { get; set; } = [];
+    [Parameter, EditorRequired] public Dictionary<string, string> Values { get; set; } = [];
+
+    private string Get(SettingField f) => Values.TryGetValue(f.Key, out var v) ? v : f.Default ?? "";
+    private void Set(SettingField f, string? value) => Values[f.Key] = value ?? "";
+    private bool IsOn(SettingField f) => Get(f).Equals("true", StringComparison.OrdinalIgnoreCase);
+    private static string BoolText(object? v) => v is true ? "true" : "false";
+}

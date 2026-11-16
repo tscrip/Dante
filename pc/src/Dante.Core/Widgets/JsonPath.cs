@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
-namespace Dante.Core.Sources;
+namespace Dante.Core.Widgets;
 
 /// <summary>Tiny dotted-path reader for JSON: "data.items[0].count", or "$count:items" to count an array.</summary>
 public static partial class JsonPath

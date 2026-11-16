@@ -10,7 +10,8 @@ public sealed class DanteConfig
     public DeviceSettings Device { get; set; } = new();
     public MoodSettings Mood { get; set; } = new();
     public Personality Personality { get; set; } = Personality.Cheerful;
-    public List<AppDefinition> Apps { get; set; } = [];
+    /// <summary>The widgets: screens on DANTE, each one fed by a widget type from a plugin. List order = screen order.</summary>
+    public List<WidgetDefinition> Widgets { get; set; } = [];
 
     /// <summary>
     /// Settings owned by feature slices (Features/&lt;Name&gt; in the server), one JSON object per feature,
@@ -152,12 +153,16 @@ public enum TakeoverMode
     WhenBelow,
 }
 
-/// <summary>One "app" — a screen on DANTE fed by a data source running on the PC.</summary>
-public sealed class AppDefinition
+/// <summary>
+/// A widget: one screen (and its nudges) on DANTE, made from one of the widget types a plugin offers
+/// (e.g. the Claude Code plugin offers "5-hour usage" and "Sessions waiting"). Called an "app" on the wire.
+/// </summary>
+public sealed class WidgetDefinition
 {
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
-    public bool Enabled { get; set; } = true;
+    /// <summary>Only active widgets run: they are polled, show on DANTE, nudge and count toward the mood.</summary>
+    public bool Active { get; set; } = true;
 
     // ---- What it looks like
     public VisualKind Visual { get; set; } = VisualKind.Counter;
@@ -165,12 +170,15 @@ public sealed class AppDefinition
     public double Max { get; set; } = 100;
     public string Unit { get; set; } = "";
 
-    // ---- Where the data comes from
-    public string SourceType { get; set; } = "push";
-    public Dictionary<string, string> SourceSettings { get; set; } = [];
+    // ---- Where the data comes from (runs on the PC)
+    /// <summary>The widget type (<see cref="Widgets.IWidgetType.Type"/>), e.g. "claude-code-usage".</summary>
+    public string Type { get; set; } = "push";
+    /// <summary>This widget's values for its type's <see cref="Widgets.IWidgetType.Fields"/>.</summary>
+    public Dictionary<string, string> Settings { get; set; } = [];
     public int PollSeconds { get; set; } = 60;
 
     // ---- What happens
+    /// <summary>Has its own screen in the LEFT/RIGHT rotation. Off = it only nudges and affects the mood.</summary>
     public bool ShowInCarousel { get; set; } = true;
     public bool CountsTowardMood { get; set; }
     public LevelRule Levels { get; set; } = new();

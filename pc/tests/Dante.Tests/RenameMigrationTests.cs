@@ -1,5 +1,5 @@
 using Dante.Core.Config;
-using Dante.Core.Sources;
+using Dante.Core.Widgets;
 
 namespace Dante.Tests;
 
@@ -50,12 +50,12 @@ public class RenameMigrationTests
     {
         var suffix = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
         Environment.SetEnvironmentVariable($"DESKBUDDY_PAT_{suffix}", "deskbuddy-token");
-        Assert.Equal("deskbuddy-token", SourceSettingsExtensions.ResolveSecret($"env:DANTE_PAT_{suffix}"));
-        Assert.Equal("deskbuddy-token", SourceSettingsExtensions.ResolveSecret($"env:HANK_PAT_{suffix}"));
+        Assert.Equal("deskbuddy-token", WidgetSettingsExtensions.ResolveSecret($"env:DANTE_PAT_{suffix}"));
+        Assert.Equal("deskbuddy-token", WidgetSettingsExtensions.ResolveSecret($"env:HANK_PAT_{suffix}"));
 
         Environment.SetEnvironmentVariable($"DANTE_PAT_{suffix}", "dante-token");
-        Assert.Equal("dante-token", SourceSettingsExtensions.ResolveSecret($"env:DANTE_PAT_{suffix}"));
-        Assert.Equal("deskbuddy-token", SourceSettingsExtensions.ResolveSecret($"env:DESKBUDDY_PAT_{suffix}"));   // exact name first
-        Assert.Equal("", SourceSettingsExtensions.ResolveSecret($"env:OTHER_PAT_{suffix}"));
+        Assert.Equal("dante-token", WidgetSettingsExtensions.ResolveSecret($"env:DANTE_PAT_{suffix}"));
+        Assert.Equal("deskbuddy-token", WidgetSettingsExtensions.ResolveSecret($"env:DESKBUDDY_PAT_{suffix}"));   // exact name first
+        Assert.Equal("", WidgetSettingsExtensions.ResolveSecret($"env:OTHER_PAT_{suffix}"));
     }
 }

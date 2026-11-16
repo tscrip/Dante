@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 using Dante.Core.Config;
 using Dante.Core.Device;
 using Dante.Core.Engine;
-using Dante.Core.Sources;
+using Dante.Core.Widgets;
 using Dante.Server.Features.Pomodoro;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -115,7 +115,7 @@ public class PomodoroOnDanteTests : IAsyncLifetime
     private sealed class MagicSpy : IDeviceEventHandler
     {
         public ConcurrentQueue<string?> Screens { get; } = new();
-        public bool Handle(DeviceEvent evt, AppDefinition? screen)
+        public bool Handle(DeviceEvent evt, WidgetDefinition? screen)
         {
             if (evt.Type != "btn" || evt.Button != "magic") return false;
             Screens.Enqueue(screen?.Id ?? "face");
@@ -134,14 +134,14 @@ public class PomodoroOnDanteTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _store = new ConfigStore(Path.Combine(_dir, "config.json"));
-        var cfg = new DanteConfig { Device = { Connection = ConnectionKind.Usb, PortName = "FAKE" }, Apps = [PomodoroSource.DefaultApp()] };
+        var cfg = new DanteConfig { Device = { Connection = ConnectionKind.Usb, PortName = "FAKE" }, Widgets = [new PomodoroSource(null!).CreateDefault()] };
         cfg.SetFeature(PomodoroSettings.Key, new PomodoroSettings { FocusMinutes = 20, SessionsBeforeLongBreak = 3 });
         _store.Save(cfg);
 
         _link = new DeviceLink(_store, NullLogger<DeviceLink>.Instance, TimeProvider.System, _ => _buddy);
         var alerts = new DeviceAlerts(_link);
         _pomodoro = new PomodoroService(_store, alerts, TimeProvider.System, NullLogger<PomodoroService>.Instance);
-        var registry = new SourceRegistry([new PomodoroSource(_pomodoro)]);
+        var registry = new WidgetTypeRegistry([new PomodoroSource(_pomodoro)]);
         _engine = new DanteEngine(_store, registry, _link, new RecordingOpener(), TimeProvider.System, NullLogger<DanteEngine>.Instance, alerts);
         _engine.AddHandler(_magic, 1000);   // stands in for the MAGIC button's PC action
         _pomodoro.Initialize(_engine);   // what PomodoroFeature.Start does

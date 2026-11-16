@@ -12,7 +12,7 @@ public sealed record NavItem(string Title, string Href, int Order = 500);
 /// implements <see cref="IFeature"/> is all it takes: no edits to Program.cs, the layout or the kernel.
 /// </summary>
 /// <remarks>
-/// The kernel (Dante.Core) offers the extension points: <see cref="Dante.Core.Sources.IDataSource"/> for a new
+/// The kernel (Dante.Core) offers the extension points: <see cref="Dante.Core.Widgets.IWidgetType"/> for a new
 /// kind of app screen, <see cref="Dante.Core.Engine.DanteEngine.AddHandler"/> to react to DANTE's buttons,
 /// <see cref="Dante.Core.Device.DeviceAlerts"/> to nudge the human, and
 /// <see cref="Dante.Core.Config.DanteConfig.Feature{T}"/> for the feature's own settings.

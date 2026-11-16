@@ -1,0 +1,105 @@
+@page "/plugins/{Id}"
+@inject PluginRegistry Plugins
+@inject PluginSettings Settings
+@inject ConfigStore Store
+@inject NavigationManager Nav
+@implements IDisposable
+
+@if (_plugin is null)
+{
+    <PageTitle>Plugin not found · DANTE</PageTitle>
+    <p>No plugin called "@Id". <a href="plugins">All plugins</a></p>
+    return;
+}
+
+<PageTitle>@_plugin.Name · DANTE</PageTitle>
+
+<h1>@_plugin.Name</h1>
+<p class="muted">@_plugin.Description</p>
+
+@if (_plugin.Fields.Count > 0)
+{
+    <div class="panel">
+        <h2>Settings</h2>
+        <SettingsForm Fields="_plugin.Fields" Values="_values" />
+        <div class="row">
+            <button class="btn primary" @onclick="SaveSettings">Save</button>
+            @if (_saved) { <span class="ok small">Saved.</span> }
+        </div>
+    </div>
+}
+
+@if (_plugin.ConfigComponent is { } panel)
+{
+    <DynamicComponent Type="panel" />
+}
+
+<div class="panel">
+    <h2>Widgets</h2>
+    <p class="muted small">The screens this plugin can put on DANTE. Only <strong>active</strong> widgets run and show up;
+        LEFT/RIGHT on DANTE browses them in the order set on the <a href="widgets">Widgets</a> page.</p>
+    @foreach (var type in Plugins.WidgetTypes(_plugin.Id))
+    {
+        var mine = _cfg.Widgets.Where(w => w.Type.Equals(type.Type, StringComparison.OrdinalIgnoreCase)).ToList();
+        <div class="widget-type">
+            <div class="row spread">
+                <div>
+                    <strong>@type.DisplayName</strong>
+                    <div class="muted small">@type.Description</div>
+                </div>
+                @if (type.AllowMultiple || mine.Count == 0)
+                {
+                    <a class="btn sm" href="widgets/new/@type.Type?back=@Uri.EscapeDataString(Here)">+ Add</a>
+                }
+            </div>
+            @foreach (var w in mine)
+            {
+                <div class="row widget-row">
+                    <label class="switch" title="Active"><input type="checkbox" checked="@w.Active" @onchange="e => SetActive(w, e.Value is true)" /> <span>@(w.Active ? "Active" : "Off")</span></label>
+                    <a href="widgets/@w.Id?back=@Uri.EscapeDataString(Here)"><strong>@w.Name</strong></a>
+                    <span class="muted small">@w.Visual@(w.ShowInCarousel ? "" : " · no screen, nudges only")</span>
+                </div>
+            }
+            @if (mine.Count == 0) { <p class="muted small" style="margin:.4rem 0 0">Not on DANTE.</p> }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private IPlugin? _plugin;
+    private DanteConfig _cfg = new();
+    private Dictionary<string, string> _values = [];
+    private bool _saved;
+
+    private string Here => $"plugins/{Id}";
+
+    protected override void OnInitialized() => Store.Changed += OnConfigChanged;
+
+    protected override void OnParametersSet()
+    {
+        _plugin = Plugins.Find(Id);
+        _cfg = Store.Snapshot();
+        _values = _plugin is null ? [] : Settings.Load(_plugin.Id);
+        _saved = false;
+    }
+
+    private void OnConfigChanged(DanteConfig cfg) => _ = InvokeAsync(() => { _cfg = Store.Snapshot(); StateHasChanged(); });
+
+    private void SaveSettings()
+    {
+        Settings.Save(_plugin!.Id, _values);
+        _saved = true;
+    }
+
+    private void SetActive(WidgetDefinition widget, bool active)
+    {
+        var cfg = Store.Snapshot();
+        if (cfg.Widgets.FirstOrDefault(w => w.Id == widget.Id) is not { } w) return;
+        w.Active = active;
+        Store.Save(cfg);
+    }
+
+    public void Dispose() => Store.Changed -= OnConfigChanged;
+}

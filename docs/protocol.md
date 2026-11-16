@@ -9,6 +9,8 @@ link it last heard from. (The ESP32-S3 has no Bluetooth Classic, so there is no 
 Framing: one compact JSON object per line, terminated by `\n`. Max line length 1024 bytes.
 Every message has a `t` (type) field. Unknown types/fields are ignored by both sides.
 
+The PC app calls the screens *widgets*; on the wire they are still `apps`.
+
 Limits on the device: max 12 apps, `id` ≤ 15 chars, `name` ≤ 19 chars, `unit` ≤ 5 chars,
 `txt` ≤ 47 chars, `quip`/`title` ≤ 63 chars. Longer strings are truncated by the device.
 

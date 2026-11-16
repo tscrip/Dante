@@ -86,7 +86,7 @@
         ("Audio", MagicActionKind.VolumeDown, "Volume down"),
         ("Other", MagicActionKind.OpenUrl, "Open a URL or app"),
         ("Other", MagicActionKind.RunCommand, "Run a command"),
-        ("Other", MagicActionKind.RefreshApps, "Refresh DANTE's apps"),
+        ("Other", MagicActionKind.RefreshApps, "Refresh DANTE's widgets"),
     }.ToLookup(c => c.Group == "" ? "General" : c.Group, c => (c.Kind, c.Label));
 
     protected override void OnInitialized()
@@ -106,7 +106,7 @@
         MagicActionKind.ToggleMicMute => "Mutes the microphone for every app, so it works whatever meeting app you use.",
         MagicActionKind.ToggleSpeakerMute => "Mutes the PC's sound output.",
         MagicActionKind.VolumeUp or MagicActionKind.VolumeDown => "Changes the PC's volume a step.",
-        MagicActionKind.RefreshApps => "Same as long-pressing SELECT: polls every app now.",
+        MagicActionKind.RefreshApps => "Same as long-pressing SELECT: polls every widget now.",
         _ => "",
     };
 

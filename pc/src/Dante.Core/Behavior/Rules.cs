@@ -1,5 +1,5 @@
 using Dante.Core.Config;
-using Dante.Core.Sources;
+using Dante.Core.Widgets;
 
 namespace Dante.Core.Behavior;
 
@@ -55,7 +55,7 @@ public sealed class TakeoverTracker
 
     public bool Raised { get; private set; }
 
-    public static bool ConditionHolds(TakeoverRule rule, SourceReading? reading) => rule.Mode switch
+    public static bool ConditionHolds(TakeoverRule rule, WidgetReading? reading) => rule.Mode switch
     {
         TakeoverMode.WhenPending => (reading?.Pending?.Count ?? 0) > 0 || (reading?.Pending is null && reading?.Value > 0),
         TakeoverMode.WhenAbove => reading?.Value >= rule.Threshold,

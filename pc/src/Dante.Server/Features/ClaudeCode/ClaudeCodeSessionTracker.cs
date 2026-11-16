@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.Json.Nodes;
 using Dante.Core;
 using Dante.Core.Config;
-using Dante.Core.Sources;
+using Dante.Core.Widgets;
 
 namespace Dante.Server.Features.ClaudeCode;
 
@@ -68,24 +68,46 @@ public sealed class ClaudeCodeSessionTracker(TimeProvider time)
     }
 }
 
-public sealed class ClaudeCodeWaitingSource(ClaudeCodeSessionTracker tracker, TimeProvider time) : IDataSource
+public sealed class ClaudeCodeWaitingSource(ClaudeCodeSessionTracker tracker, TimeProvider time) : IWidgetType
 {
     public const string TypeName = "claude-code-waiting";
 
     public string Type => TypeName;
-    public string DisplayName => "Claude Code: waiting for me";
+    public string PluginId => ClaudeCodePlugin.PluginId;
+    public string DisplayName => "Sessions waiting on me";
     public string Description =>
         "Counts Claude Code sessions that are waiting for your feedback. Fed instantly by Claude Code hooks " +
-        "(see the Claude Code page to install them).";
+        "(install them on this page).";
     public bool IsPushBased => true;
+    public bool AllowMultiple => false;
 
-    public IReadOnlyList<SettingField> Settings { get; } =
+    public WidgetDefinition CreateDefault() => new()
+    {
+        Name = "Claude Code",
+        Type = TypeName,
+        Visual = VisualKind.Status,
+        Min = 0, Max = 5,
+        PollSeconds = 5,
+        CountsTowardMood = true,
+        Levels = new LevelRule { WarnAt = 1, CritAt = 3 },
+        Takeover = new TakeoverRule
+        {
+            Mode = TakeoverMode.WhenPending,
+            DelaySeconds = 20,
+            RenudgeMinutes = 5,
+            SnoozeMinutes = 5,
+            Level = 1,
+            Message = "{item} is waiting on you!",
+        },
+    };
+
+    public IReadOnlyList<SettingField> Fields { get; } =
     [
         new("includeFinished", "Count 'finished, your turn' as waiting", SettingKind.Bool, "true",
             "Off = only count permission prompts / explicit questions."),
     ];
 
-    public Task<SourceReading> ReadAsync(AppDefinition app, CancellationToken ct)
+    public Task<WidgetReading> ReadAsync(WidgetDefinition app, CancellationToken ct)
     {
         var includeFinished = !string.Equals(app.Get(this, "includeFinished"), "false", StringComparison.OrdinalIgnoreCase);
         var waiting = tracker.Waiting
@@ -99,6 +121,6 @@ public sealed class ClaudeCodeWaitingSource(ClaudeCodeSessionTracker tracker, Ti
             1 => $"{waiting[0].Project}: {waiting[0].Reason}",
             _ => $"{waiting.Count} sessions, oldest {Format.Age(time.GetUtcNow() - waiting[0].Since)}",
         };
-        return Task.FromResult(new SourceReading { Value = waiting.Count, Text = text, Pending = pending });
+        return Task.FromResult(new WidgetReading { Value = waiting.Count, Text = text, Pending = pending });
     }
 }

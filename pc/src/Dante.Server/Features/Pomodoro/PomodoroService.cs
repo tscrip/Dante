@@ -89,9 +89,9 @@ public sealed class PomodoroService(ConfigStore config, DeviceAlerts alerts, Tim
         Notify();
     }
 
-    public bool Handle(DeviceEvent evt, AppDefinition? screen)
+    public bool Handle(DeviceEvent evt, WidgetDefinition? screen)
     {
-        if (evt.Type != "btn" || evt.Button != "magic" || screen?.SourceType != PomodoroSource.TypeName) return false;
+        if (evt.Type != "btn" || evt.Button != "magic" || screen?.Type != PomodoroSource.TypeName) return false;
         if (evt.Long) Reset(); else StartOrPause();
         return true;
     }
@@ -134,7 +134,7 @@ public sealed class PomodoroService(ConfigStore config, DeviceAlerts alerts, Tim
 
     private void Notify()
     {
-        _engine?.PollSourceType(PomodoroSource.TypeName);   // DANTE gets the new clock right away
+        _engine?.PollWidgetType(PomodoroSource.TypeName);   // DANTE gets the new clock right away
         Changed?.Invoke();
     }
 

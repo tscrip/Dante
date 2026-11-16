@@ -14,7 +14,7 @@ public sealed class MagicButtonService(ConfigStore config, IPcActions actions, D
     /// <summary>Runs after every screen-specific handler.</summary>
     public const int HandlerOrder = 1000;
 
-    public bool Handle(DeviceEvent evt, AppDefinition? screen)
+    public bool Handle(DeviceEvent evt, WidgetDefinition? screen)
     {
         if (evt.Type != "btn" || evt.Button != "magic") return false;
         _ = RunAsync(evt.Long);   // never block the device link on a slow action

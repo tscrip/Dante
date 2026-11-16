@@ -5,7 +5,7 @@
 <PageTitle>Mood · DANTE</PageTitle>
 
 <h1>Mood &amp; personality</h1>
-<p class="muted">DANTE's mood depends on how many things are waiting on you (from apps marked
+<p class="muted">DANTE's mood depends on how many things are waiting on you (from widgets marked
     "affects mood") and how long the oldest one has waited. A rule fires when <em>either</em> limit is reached;
     the most severe firing rule wins. 0 disables a limit.</p>
 
@@ -83,7 +83,7 @@
 
     private string Sample =>
         QuipBank.Pick(_cfg.Personality,
-            new QuipContext(new AppDefinition { Name = "PRs", QuipMinDelta = 1 }, 2, 4, 0, 0, null),
+            new QuipContext(new WidgetDefinition { Name = "PRs", QuipMinDelta = 1 }, 2, 4, 0, 0, null),
             new Random(42)) ?? "";
 
     private void Preview(Mood mood) => Engine.PreviewMood(mood, TimeSpan.FromSeconds(15));

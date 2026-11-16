@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 using Dante.Core.Config;
 using Dante.Core.Device;
 using Dante.Core.Engine;
-using Dante.Core.Sources;
+using Dante.Core.Widgets;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Dante.Tests;
@@ -53,11 +53,11 @@ public class EngineIntegrationTests : IAsyncLifetime
         _store.Save(new DanteConfig
         {
             Device = new DeviceSettings { PortName = "FAKE", AutoConnect = true },
-            Apps =
+            Widgets =
             [
-                new AppDefinition
+                new WidgetDefinition
                 {
-                    Id = "builds", Name = "Broken builds", Visual = VisualKind.Counter, SourceType = PushSource.TypeName,
+                    Id = "builds", Name = "Broken builds", Visual = VisualKind.Counter, Type = PushSource.TypeName,
                     CountsTowardMood = true, OnSelectUrl = "{url}",
                     Takeover = new TakeoverRule { Mode = TakeoverMode.WhenPending, DelaySeconds = 0, Message = "{item} broke!" },
                 },
@@ -65,7 +65,7 @@ public class EngineIntegrationTests : IAsyncLifetime
         });
 
         var time = TimeProvider.System;
-        var registry = new SourceRegistry([new PushSource(_push)]);
+        var registry = new WidgetTypeRegistry([new PushSource(_push)]);
         _link = new DeviceLink(_store, NullLogger<DeviceLink>.Instance, time, _ => _buddy);
         _engine = new DanteEngine(_store, registry, _link, _opener, time, NullLogger<DanteEngine>.Instance, new DeviceAlerts(_link));
         _push.Pushed += _engine.PollNow;   // what PushFeature.Start wires up in the app
@@ -126,7 +126,7 @@ public class EngineIntegrationTests : IAsyncLifetime
     {
         await WaitFor(m => Is(m, "apps"));
 
-        _push.Set("builds", new SourceReading
+        _push.Set("builds", new WidgetReading
         {
             Value = 1,
             Text = "main is red",
@@ -150,7 +150,7 @@ public class EngineIntegrationTests : IAsyncLifetime
         // "I'm on it" ack, then the problem goes away -> no further alerts, mood relaxes.
         _buddy.Press("""{"t":"ack","id":"builds"}""");
         await Task.Delay(300);
-        _push.Set("builds", new SourceReading { Value = 0, Pending = [] });
+        _push.Set("builds", new WidgetReading { Value = 0, Pending = [] });
         await WaitFor(m => Is(m, "mood") && m["m"]!.GetValue<string>() == "happy" && m["n"]!.GetValue<int>() == 0);
         Assert.Single(_buddy.Received, m => Is(m, "alert"));
     }

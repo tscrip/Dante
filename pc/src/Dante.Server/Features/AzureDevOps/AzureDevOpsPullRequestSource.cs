@@ -4,7 +4,8 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Dante.Core;
 using Dante.Core.Config;
-using Dante.Core.Sources;
+using Dante.Core.Plugins;
+using Dante.Core.Widgets;
 
 namespace Dante.Server.Features.AzureDevOps;
 
@@ -13,7 +14,7 @@ namespace Dante.Server.Features.AzureDevOps;
 /// haven't voted yet ("review"), ones you authored that reviewers are waiting on you for
 /// ("mine" = waiting-for-author votes), or both.
 /// </summary>
-public sealed class AzureDevOpsPullRequestSource(IHttpClientFactory http, TimeProvider time) : IDataSource
+public sealed class AzureDevOpsPullRequestSource(IHttpClientFactory http, TimeProvider time, PluginSettings plugins, AzureDevOpsPlugin plugin) : IWidgetType
 {
     public const string TypeName = "azure-devops-prs";
     private const string ApiVersion = "7.1";
@@ -22,34 +23,44 @@ public sealed class AzureDevOpsPullRequestSource(IHttpClientFactory http, TimePr
     private readonly ConcurrentDictionary<string, string> _identityCache = new();
 
     public string Type => TypeName;
-    public string DisplayName => "Azure DevOps: pull requests";
-    public string Description => "Counts active pull requests that need your attention. Needs a PAT with Code (Read) scope.";
+    public string PluginId => AzureDevOpsPlugin.PluginId;
+    public string DisplayName => "Pull requests";
+    public string Description => "Counts active pull requests that need you: to review, your own waiting on you, or both.";
 
-    public IReadOnlyList<SettingField> Settings { get; } =
+    public WidgetDefinition CreateDefault() => new()
+    {
+        Name = "PRs for me",
+        Type = TypeName,
+        Visual = VisualKind.Counter,
+        Min = 0, Max = 20,
+        PollSeconds = 300,
+        CountsTowardMood = true,
+        Levels = new LevelRule { WarnAt = 3, CritAt = 6 },
+        OnSelectUrl = "{url}",
+    };
+
+    public IReadOnlyList<SettingField> Fields { get; } =
     [
-        new("organization", "Organization URL", SettingKind.Text, "https://dev.azure.com/your-org"),
         new("project", "Project", SettingKind.Text, "", "Blank = every project in the organization."),
-        new("pat", "Personal access token", SettingKind.Secret, "env:DANTE_ADO_PAT",
-            "Prefer env:VAR_NAME so the token isn't stored in config.json."),
         new("mode", "Count", SettingKind.Choice, "review", Choices: ["review", "mine", "both"]),
         new("includeDrafts", "Include drafts", SettingKind.Bool, "false"),
     ];
 
-    public async Task<SourceReading> ReadAsync(AppDefinition app, CancellationToken ct)
+    public async Task<WidgetReading> ReadAsync(WidgetDefinition app, CancellationToken ct)
     {
-        var org = app.Get(this, "organization").TrimEnd('/');
+        var org = plugins.Get(plugin, "organization", app).TrimEnd('/');
         var project = app.Get(this, "project").Trim();
-        var pat = app.Get(this, "pat");
+        var pat = plugins.Get(plugin, "pat", app);
         if (string.IsNullOrWhiteSpace(org) || org.Contains("your-org"))
-            return SourceReading.Fail("Set the organization URL.");
+            return WidgetReading.Fail("Set the organization URL.");
         if (string.IsNullOrWhiteSpace(pat))
-            return SourceReading.Fail("No PAT (is the environment variable set?).");
+            return WidgetReading.Fail("No PAT (is the environment variable set?).");
 
         var client = http.CreateClient(nameof(AzureDevOpsPullRequestSource));
         var auth = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.ASCII.GetBytes(":" + pat)));
 
         var me = await GetMyIdAsync(client, auth, org, pat, ct);
-        if (me is null) return SourceReading.Fail("Could not resolve your identity - check the PAT.");
+        if (me is null) return WidgetReading.Fail("Could not resolve your identity - check the PAT.");
 
         var mode = app.Get(this, "mode");
         var includeDrafts = app.Get(this, "includeDrafts").Equals("true", StringComparison.OrdinalIgnoreCase);
@@ -65,7 +76,7 @@ public sealed class AzureDevOpsPullRequestSource(IHttpClientFactory http, TimePr
     }
 
     /// <summary>Pure filtering logic, separated for tests.</summary>
-    public static SourceReading Evaluate(IEnumerable<JsonObject> prs, string me, string mode, bool includeDrafts, string org, DateTimeOffset now)
+    public static WidgetReading Evaluate(IEnumerable<JsonObject> prs, string me, string mode, bool includeDrafts, string org, DateTimeOffset now)
     {
         var items = new Dictionary<string, PendingItem>();
         foreach (var pr in prs)
@@ -94,7 +105,7 @@ public sealed class AzureDevOpsPullRequestSource(IHttpClientFactory http, TimePr
 
         var pending = items.Values.OrderBy(i => i.Since).ToList();
         var text = pending.Count == 0 ? "inbox zero!" : $"oldest {Format.Age(now - pending[0].Since)}";
-        return new SourceReading { Value = pending.Count, Text = text, Pending = pending };
+        return new WidgetReading { Value = pending.Count, Text = text, Pending = pending };
     }
 
     private static bool Same(JsonNode? node, string id) =>

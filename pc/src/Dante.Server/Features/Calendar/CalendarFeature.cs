@@ -1,5 +1,6 @@
 using Dante.Core.Engine;
-using Dante.Core.Sources;
+using Dante.Core.Plugins;
+using Dante.Core.Widgets;
 
 namespace Dante.Server.Features.Calendar;
 
@@ -9,17 +10,16 @@ namespace Dante.Server.Features.Calendar;
 /// </summary>
 public sealed class CalendarFeature : IFeature
 {
-    public IEnumerable<NavItem> Navigation => [new("Calendar", "calendar", 45)];
-
     public void AddServices(IServiceCollection services)
     {
+        services.AddSingleton<IPlugin, CalendarPlugin>();
         services.AddSingleton<Microsoft365CalendarProvider>();
         services.AddSingleton<ICalendarProvider>(sp => sp.GetRequiredService<Microsoft365CalendarProvider>());
         // More providers: services.AddSingleton<ICalendarProvider, MyProvider>();
 
         services.AddSingleton<CalendarService>();
         services.AddHostedService(sp => sp.GetRequiredService<CalendarService>());
-        services.AddSingleton<IDataSource, NextMeetingSource>();
+        services.AddSingleton<IWidgetType, NextMeetingSource>();
     }
 
     public void Start(IServiceProvider services) =>

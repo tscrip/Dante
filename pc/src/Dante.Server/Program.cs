@@ -1,7 +1,8 @@
 using Dante.Core.Config;
 using Dante.Core.Device;
 using Dante.Core.Engine;
-using Dante.Core.Sources;
+using Dante.Core.Plugins;
+using Dante.Core.Widgets;
 using Dante.Server.Components;
 using Dante.Server.Features;
 
@@ -21,7 +22,9 @@ builder.Services.AddSingleton(sp => new DeviceLink(
     sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DeviceLink>());
 builder.Services.AddSingleton<DeviceAlerts>();
-builder.Services.AddSingleton<SourceRegistry>();
+builder.Services.AddSingleton<WidgetTypeRegistry>();
+builder.Services.AddSingleton<PluginRegistry>();
+builder.Services.AddSingleton<PluginSettings>();
 builder.Services.AddSingleton<DanteEngine>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DanteEngine>());
 

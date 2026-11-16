@@ -1,0 +1,33 @@
+@page "/widgets/new"
+@inject PluginRegistry Plugins
+@inject ConfigStore Store
+
+<PageTitle>Add a widget · DANTE</PageTitle>
+
+<h1>Add a widget</h1>
+<p class="muted">Pick what the new screen on DANTE shows. Widgets come from <a href="plugins">plugins</a>; some can be
+    added once, others as often as you like (one per URL, per command...).</p>
+
+@foreach (var p in Plugins.All)
+{
+    var types = Plugins.WidgetTypes(p.Id);
+    if (types.Count == 0) continue;
+    <div class="panel">
+        <div class="row spread"><h2>@p.Name</h2><a class="small" href="plugins/@p.Id">plugin settings</a></div>
+        <div class="type-picker">
+            @foreach (var t in types)
+            {
+                var taken = !t.AllowMultiple && _cfg.Widgets.Any(w => w.Type.Equals(t.Type, StringComparison.OrdinalIgnoreCase));
+                <a class="btn @(taken ? "disabled" : "")" href="@(taken ? null : $"widgets/new/{t.Type}")" aria-disabled="@taken">
+                    <strong>@t.DisplayName</strong>
+                    <div class="muted small">@(taken ? "Already added (there can be only one). Switch it on from the Widgets page." : t.Description)</div>
+                </a>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private DanteConfig _cfg = new();
+    protected override void OnInitialized() => _cfg = Store.Snapshot();
+}

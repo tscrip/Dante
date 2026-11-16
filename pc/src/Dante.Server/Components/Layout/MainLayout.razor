@@ -1,5 +1,6 @@
 ﻿@inherits LayoutComponentBase
 @inject FeatureCatalog Features
+@inject PluginRegistry Plugins
 
 <div class="shell">
     <nav class="sidebar">
@@ -13,7 +14,16 @@
         </a>
         @foreach (var item in Features.Navigation)
         {
-            <NavLink href="@item.Href" Match="@(item.Href.Length == 0 ? NavLinkMatch.All : NavLinkMatch.Prefix)">@item.Title</NavLink>
+            <NavLink href="@item.Href" Match="@(item.Href.Length == 0 || item.Href == Dante.Server.Features.Plugins.PluginsFeature.Href ? NavLinkMatch.All : NavLinkMatch.Prefix)">@item.Title</NavLink>
+            @if (item.Href == Dante.Server.Features.Plugins.PluginsFeature.Href)
+            {
+                <div class="nav-group">
+                    @foreach (var p in Plugins.All)
+                    {
+                        <NavLink href="@($"plugins/{p.Id}")">@p.Name</NavLink>
+                    }
+                </div>
+            }
         }
     </nav>
     <main class="content">

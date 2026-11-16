@@ -1,22 +1,24 @@
 using System.Text.Json.Nodes;
+using Dante.Core.Config;
 using Dante.Core.Engine;
-using Dante.Core.Sources;
+using Dante.Core.Plugins;
+using Dante.Core.Widgets;
 
 namespace Dante.Server.Features.ClaudeCode;
 
-/// <summary>Claude Code: usage gauge, "a session is waiting on you" (via hooks) and the hook installer page.</summary>
+/// <summary>Claude Code: usage gauge, "a session is waiting on you" (via hooks) and the hook installer.</summary>
 public sealed class ClaudeCodeFeature : IFeature
 {
-    public IEnumerable<NavItem> Navigation => [new("Claude Code", "claude-code", 60)];
-
     public void AddServices(IServiceCollection services)
     {
+        services.AddSingleton<ClaudeCodePlugin>();
+        services.AddSingleton<IPlugin>(sp => sp.GetRequiredService<ClaudeCodePlugin>());
         services.AddSingleton<ClaudeCodeSessionTracker>();
-        services.AddSingleton<IDataSource, ClaudeCodeUsageSource>();
-        services.AddSingleton<IDataSource, ClaudeCodeWaitingSource>();
+        services.AddSingleton<IWidgetType, ClaudeCodeUsageSource>();
+        services.AddSingleton<IWidgetType, ClaudeCodeWaitingSource>();
     }
 
-    // Claude Code hooks pipe their event JSON here (see the Claude Code page).
+    // Claude Code hooks pipe their event JSON here (see the plugin page).
     public void MapEndpoints(IEndpointRouteBuilder endpoints) =>
         endpoints.MapPost(ClaudeHookInstaller.Marker, (JsonObject payload, ClaudeCodeSessionTracker tracker) =>
         {
@@ -24,11 +26,13 @@ public sealed class ClaudeCodeFeature : IFeature
             return Results.Ok();
         });
 
-    // A hook event updates DANTE immediately instead of at the next poll.
     public void Start(IServiceProvider services)
     {
+        PluginMigration.MoveToPlugin(services.GetRequiredService<ConfigStore>(), ClaudeCodePlugin.PluginId,
+            ClaudeCodeUsageSource.TypeName, "credentialsPath", "token");
+        // A hook event updates DANTE immediately instead of at the next poll.
         var engine = services.GetRequiredService<DanteEngine>();
         services.GetRequiredService<ClaudeCodeSessionTracker>().Changed +=
-            () => engine.PollSourceType(ClaudeCodeWaitingSource.TypeName);
+            () => engine.PollWidgetType(ClaudeCodeWaitingSource.TypeName);
     }
 }

@@ -11,7 +11,7 @@ public interface IDeviceEventHandler
     /// <param name="evt">The message from DANTE.</param>
     /// <param name="screen">The app on screen when the button was pressed, or null on the face.</param>
     /// <returns>True if the event was handled and the engine should not act on it too.</returns>
-    bool Handle(DeviceEvent evt, AppDefinition? screen);
+    bool Handle(DeviceEvent evt, WidgetDefinition? screen);
 }
 
 /// <summary>A nudge raised by a feature (not by an app's takeover rule).</summary>

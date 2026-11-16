@@ -1,0 +1,73 @@
+@page "/widgets"
+@page "/apps"
+@inject ConfigStore Store
+@inject PluginRegistry Plugins
+@inject WidgetTypeRegistry Types
+
+<PageTitle>Widgets · DANTE</PageTitle>
+
+<div class="row spread"><h1>Widgets</h1><a class="btn primary" href="widgets/new">+ Add widget</a></div>
+<p class="muted">Each widget is a screen on DANTE (LEFT/RIGHT to browse), made by a <a href="plugins">plugin</a>.
+    Only <strong>active</strong> widgets run and show up: switch off the ones you don't want to see right now.
+    Order here = order on DANTE; the face is always first.</p>
+
+<div class="panel">
+    @if (_cfg.Widgets.Count == 0)
+    {
+        <p class="muted">No widgets yet. <a href="widgets/new">Add one</a>.</p>
+    }
+    else
+    {
+        <table>
+            <thead><tr><th>Active</th><th>Widget</th><th>Plugin</th><th>Behavior</th><th></th></tr></thead>
+            <tbody>
+            @for (var i = 0; i < _cfg.Widgets.Count; i++)
+            {
+                var index = i;
+                var w = _cfg.Widgets[i];
+                var type = Types.Find(w.Type);
+                var plugin = Plugins.For(w);
+                <tr class="@(w.Active ? "" : "inactive")">
+                    <td><label class="switch"><input type="checkbox" checked="@w.Active" @onchange="e => SetActive(w, e.Value is true)" /> @(w.Active ? "On" : "Off")</label></td>
+                    <td><a href="widgets/@w.Id"><strong>@w.Name</strong></a>
+                        <div class="muted small">@(type?.DisplayName ?? $"unknown type '{w.Type}'") · @w.Visual</div></td>
+                    <td>@if (plugin is not null) { <a href="plugins/@plugin.Id">@plugin.Name</a> } else { <span class="crit small">missing</span> }</td>
+                    <td class="small">
+                        @if (!w.ShowInCarousel) { <div>no screen (nudges only)</div> }
+                        @if (w.CountsTowardMood) { <div>affects mood</div> }
+                        @if (w.Takeover.Mode != TakeoverMode.Never) { <div>nudges: @w.Takeover.Mode</div> }
+                    </td>
+                    <td class="row" style="flex-wrap:nowrap">
+                        <button class="btn sm" disabled="@(index == 0)" @onclick="() => Move(index, -1)" title="Move up">↑</button>
+                        <button class="btn sm" disabled="@(index == _cfg.Widgets.Count - 1)" @onclick="() => Move(index, 1)" title="Move down">↓</button>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+    @if (_cfg.Widgets.Count(w => w.Active && w.ShowInCarousel) > DeviceProtocol.MaxWidgets)
+    {
+        <p class="warn small">DANTE shows at most @DeviceProtocol.MaxWidgets widget screens; switch some off.</p>
+    }
+</div>
+
+@code {
+    private DanteConfig _cfg = new();
+
+    protected override void OnInitialized() => _cfg = Store.Snapshot();
+
+    private void SetActive(WidgetDefinition widget, bool active)
+    {
+        widget.Active = active;
+        Store.Save(_cfg);
+    }
+
+    private void Move(int index, int delta)
+    {
+        var w = _cfg.Widgets[index];
+        _cfg.Widgets.RemoveAt(index);
+        _cfg.Widgets.Insert(index + delta, w);
+        Store.Save(_cfg);
+    }
+}

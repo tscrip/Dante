@@ -2,7 +2,7 @@ using System.Diagnostics;
 using Dante.Core.Behavior;
 using Dante.Core.Config;
 using Dante.Core.Device;
-using Dante.Core.Sources;
+using Dante.Core.Widgets;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -19,9 +19,9 @@ public sealed class ShellUrlOpener : IUrlOpener
 }
 
 /// <summary>What the UI shows per app.</summary>
-public sealed record AppStatus(
-    AppDefinition Definition,
-    SourceReading? Reading,
+public sealed record WidgetStatus(
+    WidgetDefinition Definition,
+    WidgetReading? Reading,
     int Level,
     bool AlertRaised,
     DateTimeOffset? UpdatedAt,
@@ -30,16 +30,16 @@ public sealed record AppStatus(
 /// <summary>
 /// Polls every app's data source, turns readings into levels/quips/nudges, works out DANTE's
 /// mood and pushes the results to the device. All "thinking" happens here, on the PC.
-/// Feature slices plug in through data sources (<see cref="IDataSource"/>), button handlers
+/// Feature slices plug in through data sources (<see cref="IWidgetType"/>), button handlers
 /// (<see cref="AddHandler"/>) and their own nudges (<see cref="DeviceAlerts"/>).
 /// </summary>
 public sealed class DanteEngine : BackgroundService
 {
-    private sealed class Runtime(AppDefinition def)
+    private sealed class Runtime(WidgetDefinition def)
     {
-        public AppDefinition Def = def;
+        public WidgetDefinition Def = def;
         public readonly TakeoverTracker Takeover = new();
-        public SourceReading? Reading;
+        public WidgetReading? Reading;
         public int Level;
         public DateTimeOffset NextPoll = DateTimeOffset.MinValue;
         public DateTimeOffset? UpdatedAt;
@@ -51,7 +51,7 @@ public sealed class DanteEngine : BackgroundService
     }
 
     private readonly ConfigStore _config;
-    private readonly SourceRegistry _sources;
+    private readonly WidgetTypeRegistry _sources;
     private readonly DeviceLink _link;
     private readonly IUrlOpener _urls;
     private readonly TimeProvider _time;
@@ -67,7 +67,7 @@ public sealed class DanteEngine : BackgroundService
     private MoodResult? _sentMood;
     private (Mood Mood, DateTimeOffset Until)? _moodOverride;
 
-    public DanteEngine(ConfigStore config, SourceRegistry sources, DeviceLink link, IUrlOpener urls,
+    public DanteEngine(ConfigStore config, WidgetTypeRegistry sources, DeviceLink link, IUrlOpener urls,
         TimeProvider time, ILogger<DanteEngine> log, DeviceAlerts alerts)
     {
         _config = config;
@@ -101,10 +101,10 @@ public sealed class DanteEngine : BackgroundService
         get { lock (_gate) return EffectiveMood(_time.GetUtcNow()); }
     }
 
-    public IReadOnlyList<AppStatus> Snapshot()
+    public IReadOnlyList<WidgetStatus> Snapshot()
     {
         lock (_gate)
-            return [.. _apps.Select(r => new AppStatus(r.Def, r.Reading, r.Level, r.Takeover.Raised, r.UpdatedAt, r.Error))];
+            return [.. _apps.Select(r => new WidgetStatus(r.Def, r.Reading, r.Level, r.Takeover.Raised, r.UpdatedAt, r.Error))];
     }
 
     /// <summary>Poll an app right away (pushes, hooks, the "refresh" button).</summary>
@@ -116,10 +116,10 @@ public sealed class DanteEngine : BackgroundService
     }
 
     /// <summary>Poll every app fed by this kind of source right away (e.g. when the source's data changed).</summary>
-    public void PollSourceType(string type)
+    public void PollWidgetType(string type)
     {
         lock (_gate)
-            foreach (var r in _apps.Where(r => r.Def.SourceType.Equals(type, StringComparison.OrdinalIgnoreCase)))
+            foreach (var r in _apps.Where(r => r.Def.Type.Equals(type, StringComparison.OrdinalIgnoreCase)))
                 r.NextPoll = DateTimeOffset.MinValue;
     }
 
@@ -141,12 +141,12 @@ public sealed class DanteEngine : BackgroundService
     }
 
     /// <summary>One-off reading for the "Test" button in the app editor (doesn't touch the device).</summary>
-    public async Task<SourceReading> TestAsync(AppDefinition app, CancellationToken ct)
+    public async Task<WidgetReading> TestAsync(WidgetDefinition app, CancellationToken ct)
     {
-        var source = _sources.Find(app.SourceType);
-        if (source is null) return SourceReading.Fail($"Unknown source '{app.SourceType}'.");
+        var source = _sources.Find(app.Type);
+        if (source is null) return WidgetReading.Fail($"Unknown source '{app.Type}'.");
         try { return await source.ReadAsync(app, ct); }
-        catch (Exception ex) { return SourceReading.Fail(ex.Message); }
+        catch (Exception ex) { return WidgetReading.Fail(ex.Message); }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -182,19 +182,19 @@ public sealed class DanteEngine : BackgroundService
 
     private async Task PollAsync(Runtime runtime, CancellationToken ct)
     {
-        SourceReading reading;
-        var source = _sources.Find(runtime.Def.SourceType);
+        WidgetReading reading;
+        var source = _sources.Find(runtime.Def.Type);
         try
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(60));
             reading = source is null
-                ? SourceReading.Fail($"Unknown source '{runtime.Def.SourceType}'.")
+                ? WidgetReading.Fail($"Unknown source '{runtime.Def.Type}'.")
                 : await source.ReadAsync(runtime.Def, timeout.Token);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            reading = SourceReading.Fail(ex.Message);
+            reading = WidgetReading.Fail(ex.Message);
         }
 
         lock (_gate)
@@ -207,7 +207,7 @@ public sealed class DanteEngine : BackgroundService
     }
 
     /// <summary>Folds a new reading into the app's state and tells DANTE (with a quip if it's worth one).</summary>
-    private void Apply(Runtime r, SourceReading reading, DateTimeOffset now)
+    private void Apply(Runtime r, WidgetReading reading, DateTimeOffset now)
     {
         if (reading.Error is not null)
         {
@@ -347,10 +347,10 @@ public sealed class DanteEngine : BackgroundService
     {
         var old = _apps.ToDictionary(r => r.Def.Id, StringComparer.OrdinalIgnoreCase);
         var next = new List<Runtime>();
-        foreach (var def in cfg.Apps.Where(a => a.Enabled))
+        foreach (var def in cfg.Widgets.Where(a => a.Active))
         {
-            if (old.Remove(def.Id, out var existing) && existing.Def.SourceType == def.SourceType
-                && existing.Def.SourceSettings.OrderBy(k => k.Key).SequenceEqual(def.SourceSettings.OrderBy(k => k.Key)))
+            if (old.Remove(def.Id, out var existing) && existing.Def.Type == def.Type
+                && existing.Def.Settings.OrderBy(k => k.Key).SequenceEqual(def.Settings.OrderBy(k => k.Key)))
             {
                 existing.Def = def;
                 existing.Level = LevelEvaluator.Evaluate(def.Levels, existing.Reading?.Value);
@@ -371,7 +371,7 @@ public sealed class DanteEngine : BackgroundService
     private void SendEverything(bool greeting)
     {
         _link.Send(DeviceProtocol.Cfg(_cfg.Device));
-        _link.Send(DeviceProtocol.Apps(_apps.Where(r => r.Def.ShowInCarousel).Select(r => r.Def)));
+        _link.Send(DeviceProtocol.Widgets(_apps.Where(r => r.Def.ShowInCarousel).Select(r => r.Def)));
         foreach (var r in _apps.Where(r => r.Def.ShowInCarousel && r.Reading is not null))
             _link.Send(DeviceProtocol.Value(r.Def.Id, r.Reading!.Value, r.Reading.Text, r.Level, null, r.Reading.Timer));
         foreach (var r in _apps.Where(r => r.Takeover.Raised))
@@ -388,7 +388,7 @@ public sealed class DanteEngine : BackgroundService
         // Feature nudges answered on the device belong to the feature that raised them.
         if (_alerts.TryAnswer(evt)) return;
 
-        AppDefinition? screen;
+        WidgetDefinition? screen;
         lock (_gate)
         {
             var id = evt.Id ?? evt.Screen;

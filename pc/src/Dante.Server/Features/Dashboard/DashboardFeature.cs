@@ -20,7 +20,7 @@ public sealed class DashboardFeature : IFeature
         {
             device = new { status = link.Status.ToString(), online = link.Online, port = link.PortName, firmware = link.Firmware, display = link.DeviceDisplay },
             mood = new { mood = engine.CurrentMood.Mood.ToString(), pending = engine.CurrentMood.PendingCount, oldestMinutes = (int)engine.CurrentMood.OldestWait.TotalMinutes },
-            apps = engine.Snapshot().Select(a => new { a.Definition.Id, a.Definition.Name, a.Reading?.Value, a.Reading?.Text, a.Level, a.AlertRaised, a.Error }),
+            widgets = engine.Snapshot().Select(a => new { a.Definition.Id, a.Definition.Name, a.Definition.Type, a.Reading?.Value, a.Reading?.Text, a.Level, a.AlertRaised, a.Error }),
             nudges = alerts.Active.Select(a => new { a.Id, a.Title, a.Text, a.Level }),
         });
     }

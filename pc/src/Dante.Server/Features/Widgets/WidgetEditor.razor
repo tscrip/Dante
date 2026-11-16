@@ -1,0 +1,245 @@
+@page "/widgets/new/{TypeName}"
+@page "/widgets/{Id}"
+@page "/apps/{Id}"
+@inject ConfigStore Store
+@inject WidgetTypeRegistry Types
+@inject PluginRegistry Plugins
+@inject DanteEngine Engine
+@inject NavigationManager Nav
+
+<PageTitle>@(_w is null ? "Widget not found" : _isNew ? "New widget" : _w.Name) · DANTE</PageTitle>
+
+@if (_w is null)
+{
+    <p>@(_isNew ? $"There is no widget type called \"{TypeName}\"." : "Widget not found.") <a href="widgets">All widgets</a></p>
+    return;
+}
+
+<div class="row spread">
+    <div>
+        <h1 style="margin-bottom:.25rem">@(_isNew ? $"New {_type?.DisplayName} widget" : _w.Name)</h1>
+        <p class="muted small" style="margin-top:0">
+            @if (_plugin is not null) { <span>From the <a href="plugins/@_plugin.Id">@_plugin.Name</a> plugin</span> }
+            @if (_type is not null) { <span> · @_type.DisplayName</span> }
+        </p>
+    </div>
+    <WidgetPreview Page="PreviewPage" Pages="PreviewPages" Visual="_w.Visual" Name="@_w.Name" Value="_test?.Value" Min="_w.Min" Max="_w.Max" Unit="@_w.Unit" Text="@_test?.Text"
+                   Level="LevelEvaluator.Evaluate(_w.Levels, _test?.Value)" />
+</div>
+
+@if (_message is not null) { <div class="notice @(_messageIsError ? "error" : "")">@_message</div> }
+
+<div class="panel">
+    <h2>1 · Name &amp; look</h2>
+    <label class="check"><input type="checkbox" @bind="_w.Active" /> <strong>Active</strong> <span class="muted small">— runs and shows up on DANTE</span></label>
+    <div class="fields">
+        <label class="field"><span>Name</span><input type="text" @bind="_w.Name" @bind:event="oninput" maxlength="19" /></label>
+        <label class="field"><span>Visual</span>
+            <select @bind="_w.Visual">
+                @foreach (var v in Enum.GetValues<VisualKind>()) { <option value="@v">@v</option> }
+            </select>
+            <span class="help">@VisualHelp(_w.Visual)</span>
+        </label>
+        <label class="field"><span>Min</span><input type="number" step="any" @bind="_w.Min" /></label>
+        <label class="field"><span>Max</span><input type="number" step="any" @bind="_w.Max" /></label>
+        <label class="field"><span>Unit</span><input type="text" @bind="_w.Unit" maxlength="5" placeholder="%, PRs, °C" /></label>
+    </div>
+</div>
+
+<div class="panel">
+    <h2>2 · Data <span class="muted small">(worked out on this PC)</span></h2>
+    @if (_type is null)
+    {
+        <div class="notice error small">This widget's type "@_w.Type" isn't available (was its plugin removed?).</div>
+    }
+    else
+    {
+        <p class="muted small">@_type.Description
+            @if (_plugin is { Fields.Count: > 0 }) { <span>Shared settings (accounts, tokens) are on the <a href="plugins/@_plugin.Id">@_plugin.Name</a> page.</span> }</p>
+        @if (_type.Example(_w) is { } example) { <pre>@example</pre> }
+        @if (_type.Fields.Count > 0) { <SettingsForm Fields="_type.Fields" Values="_w.Settings" /> }
+        <div class="fields">
+            <label class="field"><span>Check every (seconds)</span><input type="number" min="2" @bind="_w.PollSeconds" />
+                @if (_type.IsPushBased) { <span class="help">Updates arrive instantly; this is just a safety net.</span> }
+            </label>
+        </div>
+    }
+    <div class="row">
+        <button class="btn" @onclick="Test" disabled="@(_testing || _type is null)">@(_testing ? "Testing..." : "Test")</button>
+        @if (_test is not null)
+        {
+            if (_test.Error is not null) { <span class="crit small">@_test.Error</span> }
+            else
+            {
+                <span class="small">value <strong>@Format.Number(_test.Value)</strong> · @_test.Text
+                    @if (_test.Pending is { Count: > 0 } p) { <span> · @p.Count pending (oldest: @p.OrderBy(x => x.Since).First().Title)</span> }
+                </span>
+            }
+        }
+    </div>
+</div>
+
+<div class="panel">
+    <h2>3 · What happens</h2>
+    <label class="check"><input type="checkbox" @bind="_w.ShowInCarousel" /> Has its own screen on DANTE <span class="muted small">(off = it only nudges and affects the mood)</span></label>
+    <label class="check"><input type="checkbox" @bind="_w.CountsTowardMood" /> Waiting items affect DANTE's mood</label>
+
+    <h3 class="small muted">Levels (ok → warn → crit)</h3>
+    <div class="fields">
+        <label class="field"><span>Warn at</span><input type="number" step="any" @bind="_w.Levels.WarnAt" placeholder="none" /></label>
+        <label class="field"><span>Critical at</span><input type="number" step="any" @bind="_w.Levels.CritAt" placeholder="none" /></label>
+        <label class="check" style="align-self:end"><input type="checkbox" @bind="_w.Levels.HigherIsWorse" /> Higher is worse</label>
+    </div>
+
+    <h3 class="small muted">Take over the face &amp; nudge me</h3>
+    <div class="fields">
+        <label class="field"><span>When</span>
+            <select @bind="_w.Takeover.Mode">
+                <option value="@TakeoverMode.Never">Never</option>
+                <option value="@TakeoverMode.WhenPending">Something is waiting</option>
+                <option value="@TakeoverMode.WhenAbove">Value ≥ threshold</option>
+                <option value="@TakeoverMode.WhenBelow">Value ≤ threshold</option>
+            </select>
+        </label>
+        @if (_w.Takeover.Mode != TakeoverMode.Never)
+        {
+            @if (_w.Takeover.Mode is TakeoverMode.WhenAbove or TakeoverMode.WhenBelow)
+            {
+                <label class="field"><span>Threshold</span><input type="number" step="any" @bind="_w.Takeover.Threshold" /></label>
+            }
+            <label class="field"><span>After (seconds)</span><input type="number" min="0" @bind="_w.Takeover.DelaySeconds" /><span class="help">Grace period before nudging.</span></label>
+            <label class="field"><span>Re-nudge after ack (min)</span><input type="number" min="0" @bind="_w.Takeover.RenudgeMinutes" /><span class="help">0 = only when it happens again.</span></label>
+            <label class="field"><span>Snooze (min)</span><input type="number" min="1" @bind="_w.Takeover.SnoozeMinutes" /></label>
+            <label class="field"><span>Intensity</span>
+                <select @bind="_w.Takeover.Level"><option value="1">Nudge</option><option value="2">Urgent (flashing)</option></select>
+            </label>
+            <label class="field" style="grid-column:1/-1"><span>Message</span><input type="text" @bind="_w.Takeover.Message" maxlength="63" placeholder="{item} is waiting on you!" />
+                <span class="help">Tokens: {name} {value} {unit} {text} {count} {item} {oldest}</span></label>
+        }
+    </div>
+
+    <h3 class="small muted">SELECT button on this screen</h3>
+    <label class="field"><span>Open URL</span><input type="text" @bind="_w.OnSelectUrl" placeholder="https://... or {url} = first waiting item's link" /></label>
+
+    <h3 class="small muted">Personality</h3>
+    <label class="check"><input type="checkbox" @bind="_w.QuipsEnabled" /> Deliver changes with a quip</label>
+    @if (_w.QuipsEnabled)
+    {
+        <div class="fields">
+            <label class="field"><span>Only when it moves by at least</span><input type="number" step="any" min="0" @bind="_w.QuipMinDelta" /></label>
+        </div>
+        <div class="fields">
+            <label class="field"><span>Custom "went up" lines</span><textarea @bind="IncreaseText" placeholder="One per line. Blank = personality defaults."></textarea></label>
+            <label class="field"><span>Custom "went down" lines</span><textarea @bind="DecreaseText" placeholder="Tokens: {name} {value} {delta} {unit}"></textarea></label>
+        </div>
+    }
+</div>
+
+
+<div class="row">
+    <button class="btn primary" @onclick="Save" disabled="@(_type is null && _isNew)">@(_isNew ? "Add to DANTE" : "Save")</button>
+    <a class="btn" href="@Back">Cancel</a>
+    @if (!_isNew) { <button class="btn danger" @onclick="Delete" style="margin-left:auto">Delete</button> }
+</div>
+
+@code {
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string? TypeName { get; set; }
+    /// <summary>Where Save / Cancel go: the plugin page or the widget list.</summary>
+    [SupplyParameterFromQuery(Name = "back")] public string? BackUrl { get; set; }
+
+    private DanteConfig _cfg = new();
+    private WidgetDefinition? _w;
+    private IWidgetType? _type;
+    private IPlugin? _plugin;
+    private bool _isNew;
+    private WidgetReading? _test;
+    private bool _testing;
+    private string? _message;
+    private bool _messageIsError;
+
+    // Only local paths, so a link can't send you somewhere else.
+    private string Back => BackUrl is { Length: > 0 } b && !b.Contains("//") && !b.Contains(':') ? b.TrimStart('/') : "widgets";
+    private List<WidgetDefinition> OnScreen => [.. _cfg.Widgets.Where(a => a.Active && a.ShowInCarousel)];
+    private int PreviewPages => OnScreen.Count + (_w is not null && OnScreen.Contains(_w) ? 0 : 1);
+    private int PreviewPage => _w is not null && OnScreen.Contains(_w) ? OnScreen.IndexOf(_w) + 1 : PreviewPages;
+
+    protected override void OnParametersSet()
+    {
+        _cfg = Store.Snapshot();
+        _isNew = Id is null;
+        if (_isNew)
+        {
+            _type = Types.Find(TypeName ?? "");
+            _w = _type?.CreateDefault();
+            if (_w is not null) { _w.Type = _type!.Type; _w.Active = true; }
+        }
+        else
+        {
+            _w = _cfg.Widgets.FirstOrDefault(a => a.Id.Equals(Id, StringComparison.OrdinalIgnoreCase));
+            _type = _w is null ? null : Types.Find(_w.Type);
+        }
+        _plugin = _type is null ? null : Plugins.Find(_type.PluginId);
+    }
+
+    private string IncreaseText
+    {
+        get => string.Join('\n', _w!.IncreaseQuips);
+        set => _w!.IncreaseQuips = Lines(value);
+    }
+
+    private string DecreaseText
+    {
+        get => string.Join('\n', _w!.DecreaseQuips);
+        set => _w!.DecreaseQuips = Lines(value);
+    }
+
+    private static List<string> Lines(string? s) =>
+        [.. (s ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
+    private async Task Test()
+    {
+        _testing = true;
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            _test = await Engine.TestAsync(_w!, cts.Token);
+        }
+        finally { _testing = false; }
+    }
+
+    private void Save()
+    {
+        try
+        {
+            if (_isNew) _cfg.Widgets.Add(_w!);
+            Store.Save(_cfg);
+            Nav.NavigateTo(Back);
+        }
+        catch (Exception ex)
+        {
+            if (_isNew) _cfg.Widgets.Remove(_w!);
+            _message = ex.Message;
+            _messageIsError = true;
+        }
+    }
+
+    private void Delete()
+    {
+        _cfg.Widgets.Remove(_w!);
+        Store.Save(_cfg);
+        Nav.NavigateTo(Back);
+    }
+
+    private static string VisualHelp(VisualKind v) => v switch
+    {
+        VisualKind.Gauge => "Semicircle gauge with a sweeping needle. Great for percentages.",
+        VisualKind.Bar => "Horizontal progress bar.",
+        VisualKind.Counter => "Big number that drops in with a bounce when it changes.",
+        VisualKind.Text => "A line of scrolling text.",
+        VisualKind.Sparkline => "Mini history graph (DANTE remembers the last 32 values).",
+        VisualKind.Status => "OK / ! / ✕ icon by level, plus text.",
+        VisualKind.Timer => "A countdown (m:ss) with a progress bar. The value is the seconds left and Max the full length; DANTE ticks it down by itself. Used by the Pomodoro timer.",
+        _ => "",
+    };
+}

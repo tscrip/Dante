@@ -1,7 +1,7 @@
 using System.Text.Json.Nodes;
 using Dante.Core.Config;
 using Dante.Core.Device;
-using Dante.Core.Sources;
+using Dante.Core.Widgets;
 
 namespace Dante.Tests;
 
@@ -16,7 +16,7 @@ public class ProtocolTests
     [Fact]
     public void Apps_message_truncates_and_maps_visuals()
     {
-        var msg = DeviceProtocol.Apps([new AppDefinition { Id = "id", Name = "A really long application name", Visual = VisualKind.Sparkline, Unit = "units!" }]);
+        var msg = DeviceProtocol.Widgets([new WidgetDefinition { Id = "id", Name = "A really long application name", Visual = VisualKind.Sparkline, Unit = "units!" }]);
         var app = msg["apps"]![0]!;
         Assert.Equal("apps", msg["t"]!.GetValue<string>());
         Assert.Equal("spark", app["vis"]!.GetValue<string>());
@@ -149,10 +149,10 @@ public class ClaudeCodeTrackerTests
         tracker.Handle(Hook("Notification", "b", "/x/other"));
         var source = new ClaudeCodeWaitingSource(tracker, time);
 
-        var all = await source.ReadAsync(new AppDefinition(), default);
+        var all = await source.ReadAsync(new WidgetDefinition(), default);
         Assert.Equal(2, all.Value);
 
-        var strict = await source.ReadAsync(new AppDefinition { SourceSettings = new() { ["includeFinished"] = "false" } }, default);
+        var strict = await source.ReadAsync(new WidgetDefinition { Settings = new() { ["includeFinished"] = "false" } }, default);
         Assert.Equal(1, strict.Value);
         Assert.Equal("other", strict.Pending![0].Title);
     }
@@ -238,8 +238,8 @@ public class GenericSourceTests
     public void Env_secrets_resolve()
     {
         Environment.SetEnvironmentVariable("DANTE_TEST_SECRET", "s3cret");
-        Assert.Equal("s3cret", SourceSettingsExtensions.ResolveSecret("env:DANTE_TEST_SECRET"));
-        Assert.Equal("plain", SourceSettingsExtensions.ResolveSecret("plain"));
+        Assert.Equal("s3cret", WidgetSettingsExtensions.ResolveSecret("env:DANTE_TEST_SECRET"));
+        Assert.Equal("plain", WidgetSettingsExtensions.ResolveSecret("plain"));
     }
 }
 
@@ -248,11 +248,11 @@ public class ConfigTests
     [Fact]
     public void Validate_makes_unique_slugs()
     {
-        var cfg = new DanteConfig { Apps = [new() { Name = "My PRs!" }, new() { Name = "my prs" }, new() { Id = "x", Name = "X", Max = 0, Min = 5 }] };
+        var cfg = new DanteConfig { Widgets = [new() { Name = "My PRs!" }, new() { Name = "my prs" }, new() { Id = "x", Name = "X", Max = 0, Min = 5 }] };
         ConfigStore.Validate(cfg);
-        Assert.Equal("my_prs", cfg.Apps[0].Id);
-        Assert.Equal("my_prs_2", cfg.Apps[1].Id);
-        Assert.True(cfg.Apps[2].Max > cfg.Apps[2].Min);
+        Assert.Equal("my_prs", cfg.Widgets[0].Id);
+        Assert.Equal("my_prs_2", cfg.Widgets[1].Id);
+        Assert.True(cfg.Widgets[2].Max > cfg.Widgets[2].Min);
     }
 
     [Fact]
@@ -262,7 +262,7 @@ public class ConfigTests
         var store = new ConfigStore(path);
         var cfg = store.Snapshot();
         cfg.Personality = Personality.Dramatic;
-        cfg.Apps[0].Takeover.Mode = TakeoverMode.WhenAbove;
+        cfg.Widgets[0].Takeover.Mode = TakeoverMode.WhenAbove;
         cfg.Device.Flip = true;
         cfg.Device.Display = DisplayType.Lcd1602;
         cfg.Device.LcdAddress = 0x3F;
@@ -272,7 +272,7 @@ public class ConfigTests
 
         var reloaded = new ConfigStore(path).Snapshot();
         Assert.Equal(Personality.Dramatic, reloaded.Personality);
-        Assert.Equal(TakeoverMode.WhenAbove, reloaded.Apps[0].Takeover.Mode);
+        Assert.Equal(TakeoverMode.WhenAbove, reloaded.Widgets[0].Takeover.Mode);
         Assert.True(reloaded.Device.Flip);
         Assert.Equal(DisplayType.Lcd1602, reloaded.Device.Display);
         Assert.Equal(0x3F, reloaded.Device.LcdAddress);

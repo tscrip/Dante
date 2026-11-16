@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace Dante.Core.Config;
@@ -79,9 +80,9 @@ public sealed class ConfigStore
     public static void Validate(DanteConfig config)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var app in config.Apps)
+        foreach (var app in config.Widgets)
         {
-            if (string.IsNullOrWhiteSpace(app.Name)) app.Name = "App";
+            if (string.IsNullOrWhiteSpace(app.Name)) app.Name = "Widget";
             var id = Slug(string.IsNullOrWhiteSpace(app.Id) ? app.Name : app.Id);
             var unique = id;
             for (var n = 2; !seen.Add(unique); n++)
@@ -132,10 +133,35 @@ public sealed class ConfigStore
     {
         if (File.Exists(path))
         {
-            var cfg = JsonSerializer.Deserialize<DanteConfig>(File.ReadAllText(path), JsonOptions) ?? new();
+            var json = JsonNode.Parse(File.ReadAllText(path), documentOptions: new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+            if (json is JsonObject root) MigrateJson(root);
+            var cfg = json.Deserialize<DanteConfig>(JsonOptions) ?? new();
             Validate(cfg);
             return cfg;
         }
         return DefaultConfig.Create();
+    }
+
+    /// <summary>
+    /// Renames from before plugins and widgets: "apps" became "widgets", and in each widget "enabled"
+    /// became "active", "sourceType" "type" and "sourceSettings" "settings". Idempotent.
+    /// </summary>
+    public static void MigrateJson(JsonObject root)
+    {
+        Rename(root, "apps", "widgets");
+        if (root["widgets"] is not JsonArray widgets) return;
+        foreach (var w in widgets.OfType<JsonObject>())
+        {
+            Rename(w, "enabled", "active");
+            Rename(w, "sourceType", "type");
+            Rename(w, "sourceSettings", "settings");
+        }
+    }
+
+    private static void Rename(JsonObject o, string from, string to)
+    {
+        if (!o.TryGetPropertyValue(from, out var value) || o.ContainsKey(to)) return;
+        o.Remove(from);
+        o[to] = value;
     }
 }

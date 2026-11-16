@@ -2,7 +2,7 @@ using Dante.Core.Config;
 
 namespace Dante.Core.Behavior;
 
-public sealed record QuipContext(AppDefinition App, double? OldValue, double? NewValue, int OldLevel, int NewLevel, string? Text);
+public sealed record QuipContext(WidgetDefinition App, double? OldValue, double? NewValue, int OldLevel, int NewLevel, string? Text);
 
 /// <summary>
 /// The "funny way" values get delivered: when something changes the PC picks a line that matches the

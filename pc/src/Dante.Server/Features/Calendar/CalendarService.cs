@@ -125,7 +125,7 @@ public sealed class CalendarService(ConfigStore config, IEnumerable<ICalendarPro
                 log.LogWarning(ex, "Calendar sync failed");
                 _nextSync = now + TimeSpan.FromMinutes(1);   // try again soon
             }
-            _engine?.PollSourceType(NextMeetingSource.TypeName);
+            _engine?.PollWidgetType(NextMeetingSource.TypeName);
             Changed?.Invoke();
         }
 
@@ -143,7 +143,7 @@ public sealed class CalendarService(ConfigStore config, IEnumerable<ICalendarPro
             var level = settings.LastReminderUrgent && first.IsLast ? 2 : settings.NudgeLevel;
             var title = due.Count > 1 ? $"{due.Count} meetings" : "Meeting";
             alerts.Raise(AlertId, title, ReminderPlanner.Text(first, settings, LocalZone), level);
-            _engine?.PollSourceType(NextMeetingSource.TypeName);
+            _engine?.PollWidgetType(NextMeetingSource.TypeName);
             Changed?.Invoke();
         }
         else if (alerts.IsActive(AlertId) && _showing is null)
