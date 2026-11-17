@@ -57,11 +57,30 @@ class Panel : public lgfx::LGFX_Device {
 };
 
 Panel lcd;
-LGFX_Sprite strip(&lcd);
+
+// Two ways to draw a frame:
+//  * With PSRAM (e.g. N16R8 / N8R8 modules): the whole frame is drawn once into PSRAM, compared with
+//    the previous one, and only the changed part of each 16-row band is sent, by DMA from a small
+//    internal buffer while the next band is prepared. A blink or a glance sends a fraction of the screen.
+//  * Without: the frame is drawn in strips of TFT_STRIP_H rows (the scene is drawn once per strip),
+//    and strips that come out unchanged are skipped.
+LGFX_Sprite full(&lcd);          // PSRAM mode: the frame being drawn
+TftGfx fullCanvas(full);
+uint16_t* previous = nullptr;    // PSRAM mode: what the screen shows now
+uint16_t* dmaBuf[2] = {};        // PSRAM mode: internal, DMA-capable band buffers
+const int BAND = 16;
+bool psramMode = false;
+bool forceAll = true;            // send everything next frame (after begin / flip)
+
+LGFX_Sprite strip(&lcd);         // strip mode
 TftGfx canvas(strip);
 const int STRIPS = (TFT_H + TFT_STRIP_H - 1) / TFT_STRIP_H;
-uint32_t sent[STRIPS];          // hash of what each strip shows now
+uint32_t sent[STRIPS];           // strip mode: hash of what each strip shows now
 bool started = false, awake = false;
+
+// Frame-rate statistics over the last couple of seconds.
+uint32_t statFrom = 0, statFrames = 0, statBytes = 0;
+float fps = 0, kbPerFrame = 0;
 uint8_t brightness = 200;
 bool flipped = false;
 
@@ -169,6 +188,46 @@ void TftGfx::setClipWindow(int x0, int y0, int x1, int y1) {
 
 void TftGfx::setMaxClipWindow() { s.clearClipRect(); }
 
+// ---- fractional, anti-aliased shapes (the face's eyes) ------------------------------------
+void TftGfx::fillRectF(float x, float y, float w, float h) {
+  int px = (int)lroundf(Xf(x)), py = (int)lroundf(Yf(y));
+  s.fillRect(px, py, (int)lroundf(Xf(x + w)) - px, (int)lroundf(Yf(y + h)) - py, color());
+}
+
+void TftGfx::fillRoundRectF(float x, float y, float w, float h, float r) {
+  int px = (int)lroundf(Xf(x)), py = (int)lroundf(Yf(y));
+  int pw = (int)lroundf(Xf(x + w)) - px, ph = (int)lroundf(Yf(y + h)) - py;
+  int pr = (int)lroundf(r * unit());
+  if (pr > pw / 2) pr = pw / 2;
+  if (pr > ph / 2) pr = ph / 2;
+  if (pw <= 0 || ph <= 0) return;
+  s.fillSmoothRoundRect(px, py, pw, ph, pr, color());
+}
+
+void TftGfx::fillTriangleF(float x0, float y0, float x1, float y1, float x2, float y2) {
+  float ax = Xf(x0), ay = Yf(y0), bx = Xf(x1), by = Yf(y1), cx = Xf(x2), cy = Yf(y2);
+  uint32_t c = color();
+  s.fillTriangle(lroundf(ax), lroundf(ay), lroundf(bx), lroundf(by), lroundf(cx), lroundf(cy), c);
+  // Anti-alias the slanted edges (the eyelid cuts) with thin smooth lines in the same colour.
+  s.drawWideLine(lroundf(ax), lroundf(ay), lroundf(cx), lroundf(cy), 0.6f, c);
+  s.drawWideLine(lroundf(bx), lroundf(by), lroundf(cx), lroundf(cy), 0.6f, c);
+}
+
+void TftGfx::fillEllipseF(float cx, float cy, float rx, float ry) {
+  float pcx = Xf(cx), pcy = Yf(cy), prx = rx * sx, pry = ry * sy;
+  uint32_t c = color();
+  s.fillEllipse(lroundf(pcx), lroundf(pcy), lroundf(prx), lroundf(pry), c);
+  // Smooth the upper arc (the edge that cuts into the eye for "happy" cheeks).
+  const int SEG = 24;
+  float px = pcx - prx, py = pcy;
+  for (int i = 1; i <= SEG; i++) {
+    float a = (float)M_PI + (float)M_PI * i / SEG;   // 180 -> 360 degrees: the top half
+    float nx = pcx + cosf(a) * prx, ny = pcy + sinf(a) * pry;
+    s.drawWideLine(lroundf(px), lroundf(py), lroundf(nx), lroundf(ny), 0.6f, c);
+    px = nx; py = ny;
+  }
+}
+
 // XOR on a monochrome screen = inverted colours here (16-bit pixels: flip every bit).
 void TftGfx::invert(int x, int y, int w, int h) {
   int x1 = x + w, y1 = y + h;
@@ -183,14 +242,100 @@ void TftGfx::invert(int x, int y, int w, int h) {
 }
 
 // ---- Tft -----------------------------------------------------------------------------------
+namespace {
+
+// PSRAM: a full-screen sprite, the previous frame and two internal DMA band buffers.
+bool allocPsram() {
+  if (!psramFound()) return false;
+  full.setColorDepth(16);
+  full.setPsram(true);
+  if (!full.createSprite(TFT_W, TFT_H)) return false;
+  previous = (uint16_t*)heap_caps_malloc(TFT_W * TFT_H * 2, MALLOC_CAP_SPIRAM);
+  for (auto& b : dmaBuf) b = (uint16_t*)heap_caps_malloc(TFT_W * BAND * 2, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+  if (previous && dmaBuf[0] && dmaBuf[1]) return true;
+  full.deleteSprite();
+  heap_caps_free(previous); previous = nullptr;
+  for (auto& b : dmaBuf) { heap_caps_free(b); b = nullptr; }
+  return false;
+}
+
+// Sends what changed between `full` and `previous`, band by band, and updates `previous`.
+uint32_t pushChanged() {
+  const uint16_t* cur = (const uint16_t*)full.getBuffer();
+  uint32_t bytes = 0;
+  int which = 0;
+  lcd.startWrite();
+  for (int y0 = 0; y0 < TFT_H; y0 += BAND) {
+    int rows = TFT_H - y0 < BAND ? TFT_H - y0 : BAND;
+    int x0 = TFT_W, x1 = -1;
+    if (forceAll) { x0 = 0; x1 = TFT_W - 1; }
+    else {
+      // Compare two pixels at a time; find the leftmost and rightmost change in the band.
+      const int words = TFT_W / 2;
+      for (int r = 0; r < rows; r++) {
+        const uint32_t* a = (const uint32_t*)(cur + (y0 + r) * TFT_W);
+        const uint32_t* b = (const uint32_t*)(previous + (y0 + r) * TFT_W);
+        int i = 0;
+        while (i < words && a[i] == b[i]) i++;
+        if (i == words) continue;
+        int j = words - 1;
+        while (a[j] == b[j]) j--;
+        if (i * 2 < x0) x0 = i * 2;
+        if (j * 2 + 1 > x1) x1 = j * 2 + 1;
+      }
+    }
+    if (x1 < 0) continue;   // nothing changed in this band
+
+    int w = x1 - x0 + 1;
+    uint16_t* buf = dmaBuf[which];
+    which ^= 1;
+    // The other buffer may still be on its way out; this one finished before that one started.
+    for (int r = 0; r < rows; r++) {
+      const uint16_t* src = cur + (y0 + r) * TFT_W + x0;
+      memcpy(buf + r * w, src, w * 2);
+      memcpy(previous + (y0 + r) * TFT_W + x0, src, w * 2);
+    }
+    lcd.pushImageDMA(x0, y0, w, rows, (const lgfx::swap565_t*)buf);
+    bytes += w * rows * 2;
+  }
+  lcd.waitDMA();
+  lcd.endWrite();
+  forceAll = false;
+  return bytes;
+}
+
+uint32_t pushStrips(const std::function<void(TftGfx& g)>& draw) {
+  uint32_t bytes = 0;
+  for (int i = 0; i < STRIPS; i++) {
+    int top = i * TFT_STRIP_H;
+    strip.clearClipRect();
+    strip.fillScreen(TFT_BLACK);
+    canvas.setStripTop(top);
+    canvas.setDrawColor(1);
+    draw(canvas);
+    strip.clearClipRect();
+    uint32_t h = hashBuffer((const uint32_t*)strip.getBuffer(), strip.bufferLength() / 4);
+    if (h == sent[i] && !forceAll) continue;   // nothing changed in this strip
+    strip.pushSprite(0, top);
+    sent[i] = h;
+    bytes += strip.bufferLength();
+  }
+  forceAll = false;
+  return bytes;
+}
+} // namespace
+
 namespace Tft {
 
 bool begin() {
   if (!started) {
     lcd.init();
-    strip.setColorDepth(16);
-    strip.setPsram(false);
-    if (!strip.createSprite(TFT_W, TFT_STRIP_H)) return false;
+    psramMode = allocPsram();
+    if (!psramMode) {
+      strip.setColorDepth(16);
+      strip.setPsram(false);
+      if (!strip.createSprite(TFT_W, TFT_STRIP_H)) return false;
+    }
     started = true;
   } else {
     lcd.wakeup();
@@ -198,7 +343,7 @@ bool begin() {
   lcd.setRotation(flipped ? 3 : 1);
   lcd.fillScreen(TFT_BLACK);
   lcd.setBrightness(brightness);
-  memset(sent, 0, sizeof(sent));
+  forceAll = true;
   awake = true;
   return true;
 }
@@ -222,24 +367,39 @@ void setFlip(bool upsideDown) {
   flipped = upsideDown;
   if (!active()) return;
   lcd.setRotation(flipped ? 3 : 1);
-  memset(sent, 0, sizeof(sent));   // everything has to be sent again
+  forceAll = true;   // everything has to be sent again
 }
 
 void frame(const std::function<void(TftGfx& g)>& draw) {
   if (!active()) return;
-  for (int i = 0; i < STRIPS; i++) {
-    int top = i * TFT_STRIP_H;
-    strip.clearClipRect();
-    strip.fillScreen(TFT_BLACK);
-    canvas.setStripTop(top);
-    canvas.setDrawColor(1);
-    draw(canvas);
-    strip.clearClipRect();
-    uint32_t h = hashBuffer((const uint32_t*)strip.getBuffer(), strip.bufferLength() / 4);
-    if (h == sent[i]) continue;   // nothing changed in this strip
-    strip.pushSprite(0, top);
-    sent[i] = h;
+  uint32_t bytes;
+  if (psramMode) {
+    full.clearClipRect();
+    full.fillScreen(TFT_BLACK);
+    fullCanvas.setStripTop(0);
+    fullCanvas.setDrawColor(1);
+    draw(fullCanvas);
+    full.clearClipRect();
+    bytes = pushChanged();
+  } else {
+    bytes = pushStrips(draw);
   }
+
+  uint32_t now = millis();
+  if (!statFrom) statFrom = now;
+  statFrames++;
+  statBytes += bytes;
+  if (now - statFrom >= 2000) {
+    fps = statFrames * 1000.0f / (now - statFrom);
+    kbPerFrame = statBytes / 1024.0f / statFrames;
+    statFrom = now; statFrames = 0; statBytes = 0;
+  }
+}
+
+void describe(char* out, size_t n) {
+  if (!started) { snprintf(out, n, "TFT not started"); return; }
+  snprintf(out, n, "TFT: %s, %.0f fps, %.0f KB per frame sent, SPI %d MHz",
+           psramMode ? "PSRAM frame buffer" : "strips (no PSRAM)", fps, kbPerFrame, TFT_SPI_HZ / 1000000);
 }
 
 } // namespace Tft

@@ -179,6 +179,10 @@ void describe(char* out, size_t n) {
            PIN_SDA, PIN_SCL, oled, lcd,
            TFT_PIN_SCK, TFT_PIN_MOSI, TFT_PIN_CS, TFT_PIN_DC, TFT_PIN_RST, TFT_PIN_BL, tftFailed ? ": NO MEMORY FOR THE FRAME BUFFER" : "",
            kindName(), cfg.kind == KIND_AUTO ? " (auto)" : " (set by PC app)", resetReason());
+  if (current == KIND_TFT) {   // how smoothly it runs
+    size_t used = strlen(out);
+    if (used + 3 < n) { strcat(out, " | "); Tft::describe(out + used + 3, n - used - 3); }
+  }
 }
 
 void scanNow(char* out, size_t n) {

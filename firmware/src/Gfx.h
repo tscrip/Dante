@@ -32,6 +32,17 @@ class Gfx {
   // Clip to [x0, x1) x [y0, y1) in logical pixels, like u8g2.
   virtual void setClipWindow(int x0, int y0, int x1, int y1) = 0;
   virtual void setMaxClipWindow() = 0;
+
+  // Fractional coordinates (still logical 128x32 units) for screens with far more pixels than that
+  // layout: there, shapes move one screen pixel at a time instead of in 4-8 pixel jumps, and edges are
+  // anti-aliased. Screens that can't use them say fine() == false and get the rounded integer calls.
+  virtual bool fine() const { return false; }
+  virtual void fillRectF(float x, float y, float w, float h) { drawBox(lroundf(x), lroundf(y), lroundf(w), lroundf(h)); }
+  virtual void fillRoundRectF(float x, float y, float w, float h, float r) { drawRBox(lroundf(x), lroundf(y), lroundf(w), lroundf(h), lroundf(r)); }
+  virtual void fillTriangleF(float x0, float y0, float x1, float y1, float x2, float y2) {
+    drawTriangle(lroundf(x0), lroundf(y0), lroundf(x1), lroundf(y1), lroundf(x2), lroundf(y2));
+  }
+  virtual void fillEllipseF(float cx, float cy, float rx, float ry) { drawFilledEllipse(lroundf(cx), lroundf(cy), lroundf(rx), lroundf(ry)); }
 };
 
 // Pass-through to a u8g2 display or off-screen buffer.

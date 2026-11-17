@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 // ---- Identity ---------------------------------------------------------------
-#define FW_VERSION      "3.0.0"
+#define FW_VERSION      "3.1.0"
 #define DEVICE_NAME     "DANTE"
 
 // ---- Board: ESP32-S3 (e.g. ESP32-S3-DevKitC-1) --------------------------------
@@ -47,8 +47,8 @@
 #define TFT_BGR         false
 #define TFT_W           480
 #define TFT_H           320
-#define TFT_STRIP_H     64        // drawn in strips of this many rows: needs no PSRAM (61 KB)
-#define TFT_FRAME_MS    40        // the bus needs ~60 ms for a full screen; unchanged strips are skipped
+#define TFT_STRIP_H     64        // without PSRAM: drawn in strips of this many rows (61 KB of RAM)
+#define TFT_FRAME_MS    33        // ~30 fps; with PSRAM only the changed parts of the screen are sent
 
 // ---- Buttons (wired to GND, internal pull-ups) -----------------------------
 #define PIN_BTN_LEFT    4

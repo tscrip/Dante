@@ -291,6 +291,30 @@ void drawEye(Gfx& g, int cx, int cy, const EyeStyle& e, float blink, bool left, 
   g.setDrawColor(1);
 }
 
+// The normal eye with fractional position and size, for screens that can draw them (the TFT): the eye
+// glides one screen pixel at a time and its edges are anti-aliased. Same geometry as drawEye().
+void drawEyeFine(Gfx& g, float cx, float cy, const EyeStyle& e, float blink, bool left) {
+  float w = fmaxf(4.0f, e.w);
+  float hh = fmaxf(2.0f, e.h * e.open * blink);
+  float x0 = cx - w / 2, y0 = cy - hh / 2;
+  if (hh <= 4) { g.fillRoundRectF(x0, cy - 1.5f, w, 3, 1.5f); return; }   // closed: a little line
+  float r = fminf((float)radiusCap, fminf(w, hh) / 2 - 1);
+  g.fillRoundRectF(x0, y0, w, hh, r > 0 ? r : 0);
+
+  g.setDrawColor(0);
+  if (e.lid > 0.02f) g.fillRectF(x0 - 1, y0 - 1, w + 2, hh * e.lid + 1);
+  if (e.angry > 0.02f) {
+    float innerX = left ? x0 + w + 1 : x0 - 1;
+    g.fillTriangleF(x0 - 1, y0 - 1, x0 + w + 1, y0 - 1, innerX, y0 + hh * e.angry);
+  }
+  if (e.worried > 0.02f) {
+    float outerX = left ? x0 - 1 : x0 + w + 1;
+    g.fillTriangleF(x0 - 1, y0 - 1, x0 + w + 1, y0 - 1, outerX, y0 + hh * e.worried);
+  }
+  if (e.happy > 0.05f) g.fillEllipseF(cx, y0 + hh + hh / 6, w / 2 + 2, fmaxf(1.0f, hh * e.happy));
+  g.setDrawColor(1);
+}
+
 void drawSmallHeart(Gfx& g, int x, int y) {
   g.drawDisc(x - 1, y, 1);
   g.drawDisc(x + 2, y, 1);
@@ -441,8 +465,18 @@ void draw(Gfx& g, int ox, bool chrome) {
   int cxR = 64 + (int)lroundf(EYE_GAP / 2.0f + cur[1].w / 2.0f) + (int)lroundf(lx);
 
   g.setDrawColor(1);
-  drawEye(g, ox + cxL, cy, cur[0], blink, true, shape[0], now);
-  drawEye(g, ox + cxR, cy, cur[1], blink, false, shape[1], now);
+  if (g.fine()) {
+    // Big screen: no rounding to the 128x32 grid, so the eyes glide and resize smoothly.
+    float fcy = 16 + ly;
+    float fxL = 64 - (EYE_GAP / 2.0f + cur[0].w / 2.0f) + lx, fxR = 64 + (EYE_GAP / 2.0f + cur[1].w / 2.0f) + lx;
+    if (shape[0] == SH_NORMAL) drawEyeFine(g, ox + fxL, fcy, cur[0], blink, true);
+    else drawEye(g, ox + (int)lroundf(fxL), (int)lroundf(fcy), cur[0], blink, true, shape[0], now);
+    if (shape[1] == SH_NORMAL) drawEyeFine(g, ox + fxR, fcy, cur[1], blink, false);
+    else drawEye(g, ox + (int)lroundf(fxR), (int)lroundf(fcy), cur[1], blink, false, shape[1], now);
+  } else {
+    drawEye(g, ox + cxL, cy, cur[0], blink, true, shape[0], now);
+    drawEye(g, ox + cxR, cy, cur[1], blink, false, shape[1], now);
+  }
   drawDecor(g, ox, now);
 
   if (!chrome) return;   // the TFT shows these in its status bar

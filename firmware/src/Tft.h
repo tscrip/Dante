@@ -46,6 +46,12 @@ class TftGfx : public Gfx {
   void setClipWindow(int x0, int y0, int x1, int y1) override;
   void setMaxClipWindow() override;
 
+  bool fine() const override { return true; }
+  void fillRectF(float x, float y, float w, float h) override;
+  void fillRoundRectF(float x, float y, float w, float h, float r) override;
+  void fillTriangleF(float x0, float y0, float x1, float y1, float x2, float y2) override;
+  void fillEllipseF(float cx, float cy, float rx, float ry) override;
+
  private:
   LGFX_Sprite& s;
   float sx = 1, sy = 1, ox = 0, oy = 0;
@@ -60,6 +66,8 @@ class TftGfx : public Gfx {
   int Xc(float x) const { return (int)lroundf(ox + (x + 0.5f) * sx); }
   int Yc(float y) const { return (int)lroundf(oy + (y + 0.5f) * sy) - stripTop; }
   float unit() const { return sx < sy ? sx : sy; }
+  float Xf(float x) const { return ox + x * sx; }
+  float Yf(float y) const { return oy + y * sy - stripTop; }
   uint32_t color() const { return drawColor == 0 ? bg : (drawColor == 2 ? accent : fg); }
   void invert(int x, int y, int w, int h);
 };
@@ -74,4 +82,6 @@ namespace Tft {
   // Draws one frame. `draw` runs once per strip and must draw the whole screen each time
   // (anything outside the strip is clipped); strips that come out unchanged aren't sent.
   void frame(const std::function<void(TftGfx& g)>& draw);
+  // "PSRAM frame buffer, 30 fps, 41 KB per frame" (or the strip mode), for the USB log and Check wiring.
+  void describe(char* out, size_t n);
 }

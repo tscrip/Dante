@@ -78,8 +78,18 @@ PC app rotates it 180°. The backlight draws roughly 60–100 mA from 3V3, which
 
 Panels vary a little: if black shows as white, flip `TFT_INVERT` in [`src/config.h`](src/config.h);
 if red and blue are swapped, flip `TFT_BGR`. With short wires you can raise `TFT_SPI_HZ` to 80 MHz for
-smoother animation. DANTE draws in strips of 64 rows (61 KB of RAM), so no PSRAM is needed, and it
-only sends the strips that changed.
+smoother animation.
+
+**PSRAM makes it smooth.** On modules with octal PSRAM (`R8`, e.g. N8R8 or N16R8, which `platformio.ini`
+is set up for) DANTE draws each whole frame in PSRAM, compares it with the previous one and sends only the
+part of the screen that changed, by DMA, at about 30 fps. On the TFT the eyes also move one screen pixel at
+a time with anti-aliased edges, instead of jumping in OLED-sized steps. Without PSRAM it still works: it
+draws in strips of 64 rows (61 KB of RAM) and skips strips that didn't change. For a quad-PSRAM `R2`
+module, change `board_build.arduino.memory_type` in `platformio.ini` to `qio_qspi`.
+
+To see how it runs, type `?` in `pio device monitor` (or use *Check wiring* in the PC app). The first
+line ends with e.g. `TFT: PSRAM frame buffer, 30 fps, 38 KB per frame sent, SPI 40 MHz`. If it says
+`strips (no PSRAM)` on an R8 module, the PSRAM setting doesn't match the module.
 
 ## Build and flash
 
