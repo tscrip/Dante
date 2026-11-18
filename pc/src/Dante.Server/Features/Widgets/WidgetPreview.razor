@@ -4,17 +4,20 @@
 
 @if (ShowsLcd)
 {
-    <LcdPreview Size="LcdSizeShown" Page="Page" Pages="Pages" Visual="Visual" Name="@Name" Value="Value" Min="Min" Max="Max" Unit="@Unit" Text="@Text" Level="Level" Sample="Sample" />
+    <LcdPreview Size="LcdSizeShown" Page="Page" Pages="Pages" Visual="Visual" Name="@Name" Value="Value" Value2="Value2" Label1="@Label1" Label2="@Label2" Min="Min" Max="Max" Unit="@Unit" Text="@Text" Level="Level" Sample="Sample" />
 }
 else
 {
-    <OledPreview Visual="Visual" Name="@Name" Value="Value" Min="Min" Max="Max" Unit="@Unit" Text="@Text" Level="Level" Scale="Scale" Sample="Sample" />
+    <OledPreview Visual="Visual" Name="@Name" Value="Value" Value2="Value2" Label1="@Label1" Label2="@Label2" Min="Min" Max="Max" Unit="@Unit" Text="@Text" Level="Level" Scale="Scale" Sample="Sample" />
 }
 
 @code {
     [Parameter] public VisualKind Visual { get; set; }
     [Parameter] public string Name { get; set; } = "";
     [Parameter] public double? Value { get; set; }
+    [Parameter] public double? Value2 { get; set; }
+    [Parameter] public string Label1 { get; set; } = "";
+    [Parameter] public string Label2 { get; set; } = "";
     [Parameter] public double Min { get; set; }
     [Parameter] public double Max { get; set; } = 100;
     [Parameter] public string Unit { get; set; } = "";

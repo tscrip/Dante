@@ -19,6 +19,7 @@ namespace {
     if (!strcmp(s, "spark"))   return VIS_SPARK;
     if (!strcmp(s, "status"))  return VIS_STATUS;
     if (!strcmp(s, "timer"))   return VIS_TIMER;
+    if (!strcmp(s, "spark2"))  return VIS_SPARK2;
     return VIS_TEXT;
   }
 
@@ -206,6 +207,50 @@ namespace {
     if ((now / 300) % 2) g.drawDisc(px, py, 2); else g.drawCircle(px, py, 2);
   }
 
+  // Dual sparkline: two 12-pixel rows under the name. Each: "CPU 23%" then its history graph.
+  void drawSparkRow(Gfx& g, const App& a, int ox, int row, uint32_t now) {
+    const int top = 8 + row * 12;
+    const float* hist = row ? a.hist2 : a.hist;
+    bool has = row ? a.hasValue2 : a.hasValue;
+    float value = row ? a.value2 : a.value;
+    char v[16] = "-", buf[32];
+    if (has) fmtValue(roundf(value), v, sizeof(v));
+    snprintf(buf, sizeof(buf), "%s %s%s", row ? a.lbl2 : a.lbl1, v, has ? a.unit : "");
+    g.setFont(u8g2_font_4x6_tr);
+    if (!blinkHidden(a, now)) g.drawStr(ox, top + 8, buf);
+
+    if (a.histN < 2 || !has) return;
+    float lo = a.min, hi = a.max;
+    if (hi <= lo) {   // no range set: fit both lines, so they stay comparable
+      lo = 1e9f; hi = -1e9f;
+      for (int i = 0; i < a.histN; i++) {
+        lo = fminf(lo, fminf(a.hist[i], a.hist2[i])); hi = fmaxf(hi, fmaxf(a.hist[i], a.hist2[i]));
+      }
+      if (hi - lo < 1e-3f) hi = lo + 1;
+    }
+    const int x0 = 34, x1 = 127, yTop = top + 1, yBottom = top + 10, n = a.histN;
+    int start = (a.histHead - n + HIST_LEN) % HIST_LEN;
+    float step = (float)(x1 - x0) / (HIST_LEN - 1);
+    int px = -1, py = -1;
+    // On the colour TFT the top line is drawn in the accent colour (draw colour 2), so the two stand apart.
+    // (On the OLED, colour 2 means XOR: keep it plain there.)
+    if (row == 0 && g.fine()) g.setDrawColor(2);
+    for (int i = 0; i < n; i++) {
+      float f = (hist[(start + i) % HIST_LEN] - lo) / (hi - lo); f = f < 0 ? 0 : (f > 1 ? 1 : f);
+      int x = ox + x0 + (int)((HIST_LEN - n + i) * step);
+      int y = yBottom - (int)lroundf(f * (yBottom - yTop));
+      if (i > 0) g.drawLine(px, py, x, y);
+      px = x; py = y;
+    }
+    if ((now / 300) % 2) g.drawDisc(px, py, 1); else g.drawPixel(px, py);
+    g.setDrawColor(1);
+  }
+
+  void drawSpark2(Gfx& g, const App& a, int ox, uint32_t now) {
+    drawSparkRow(g, a, ox, 0, now);
+    drawSparkRow(g, a, ox, 1, now);
+  }
+
   // Countdown: big m:ss, the text beside it, a progress bar along the bottom.
   void drawTimer(Gfx& g, const App& a, int ox, uint32_t now) {
     float left = Apps::secondsLeft(a, now);
@@ -310,6 +355,8 @@ void setList(JsonArrayConst arr) {
     a.vis = visFromString(o["vis"] | "text");
     a.min = o["min"] | 0.0f;
     a.max = o["max"] | 100.0f;
+    copyStr(a.lbl1, sizeof(a.lbl1), o["l1"] | "A");
+    copyStr(a.lbl2, sizeof(a.lbl2), o["l2"] | "B");
     // Keep the last known value/history if this app already existed.
     for (int i = 0; i < oldCount; i++) {
       if (!strcmp(old[i].id, a.id)) {
@@ -318,6 +365,8 @@ void setList(JsonArrayConst arr) {
         memcpy(a.txt, old[i].txt, sizeof(a.txt));
         memcpy(a.hist, old[i].hist, sizeof(a.hist));
         a.histN = old[i].histN; a.histHead = old[i].histHead;
+        a.hasValue2 = old[i].hasValue2; a.value2 = old[i].value2;
+        memcpy(a.hist2, old[i].hist2, sizeof(a.hist2));
         a.hasTimer = old[i].hasTimer; a.timerRun = old[i].timerRun;
         a.timerTotal = old[i].timerTotal; a.timerAt = old[i].timerAt;
         break;
@@ -362,6 +411,14 @@ App* applyValue(JsonDocument& msg) {
     a->value = v;
     a->hasValue = true;
     a->hist[a->histHead] = v;
+    // The second line moves in step with the first: a sample without `v2` repeats its last value.
+    if (msg["v2"].is<float>()) {
+      float v2 = msg["v2"].as<float>();
+      if (v2 != a->value2 || !a->hasValue2) changed = true;
+      a->value2 = v2;
+      a->hasValue2 = true;
+    }
+    a->hist2[a->histHead] = a->value2;
     a->histHead = (a->histHead + 1) % HIST_LEN;
     if (a->histN < HIST_LEN) a->histN++;
   }
@@ -407,6 +464,7 @@ void draw(Gfx& g, int index, int ox, int page, int pages, uint32_t now) {
     case VIS_SPARK:   drawSpark(g, *a, ox, now); break;
     case VIS_STATUS:  drawStatus(g, *a, ox, now); break;
     case VIS_TIMER:   drawTimer(g, *a, ox, now); break;
+    case VIS_SPARK2:  drawSpark2(g, *a, ox, now); break;
     default:          drawText(g, *a, ox, now); break;
   }
 }

@@ -197,7 +197,39 @@ void face(uint32_t now) {
         Lcd::put(cols[e] + c, top + r, (uint8_t)(e * 4 + r * 2 + c));
 }
 
+// Dual sparkline row: "CPU 23%" (8 columns, 9 on a 20x4) then that line's history.
+static void sparkRow(const App& a, int row, int line, uint32_t now) {
+  bool has = line ? a.hasValue2 : a.hasValue;
+  char v[16] = "-", text[32];
+  if (has) fmtValue(roundf(line ? a.value2 : a.value), v, sizeof(v));
+  snprintf(text, sizeof(text), "%s %s%s", line ? a.lbl2 : a.lbl1, v, has ? a.unit : "");
+  const int textW = W() >= 20 ? 9 : 8;
+  bool blinkOff = a.lvl >= 2 && (now / 500) % 2;
+  if (!blinkOff) Lcd::print(0, row, text, textW);
+  const float* hist = line ? a.hist2 : a.hist;
+  float lo = a.min, hi = a.max;
+  if (hi <= lo) hi = lo + 1;
+  int room = W() - textW;
+  int n = a.histN < room ? a.histN : room;
+  if (!has) n = 0;
+  for (int i = 0; i < n; i++) {
+    int idx = (a.histHead - n + i + HIST_LEN) % HIST_LEN;
+    float f = (hist[idx] - lo) / (hi - lo);
+    Lcd::put(W() - n + i, row, (uint8_t)lroundf((f < 0 ? 0 : (f > 1 ? 1 : f)) * 7));
+  }
+}
+
 void app(const App& a, int page, int pages, uint32_t now) {
+  if (a.vis == VIS_SPARK2) {
+    loadSparkGlyphs();
+    // 16x2: the two lines fill the screen. 20x4: name on top, page indicator at the bottom.
+    int first = tall() ? 1 : 0;
+    if (tall()) Lcd::print(0, 0, a.name, W());
+    sparkRow(a, first, 0, now);
+    sparkRow(a, first + 1, 1, now);
+    if (tall()) pageLine(3, page, pages);
+    return;
+  }
   char v[16] = "--";
   bool blinkOff = a.lvl >= 2 && (now / 500) % 2;
   bool fresh = now - a.changedAt < 1500;

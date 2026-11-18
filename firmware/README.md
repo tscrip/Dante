@@ -228,6 +228,7 @@ The PC defines the app screens; each one picks a visual:
 | `counter` | big number that drops in with a bounce and a floating `+1!`           |
 | `text`    | scrolling text                                                        |
 | `spark`   | sparkline of the last 32 values                                       |
+| `spark2`  | two sparklines, one per line, each with its label and value (e.g. CPU and memory); on the TFT the top line is in the accent colour |
 | `status`  | OK / warning / error icon plus scrolling text                         |
 | `timer`   | countdown (m:ss, or 2h05) with a progress bar; DANTE ticks it down itself |
 

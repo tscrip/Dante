@@ -62,7 +62,7 @@ will walk you through yours: the PR queue, the blocked agent, the 90% usage gaug
 * **Plugins and widgets** — a **plugin** adds something to DANTE (Claude Code, Azure DevOps, a calendar, a
   Pomodoro timer...) and has one page in the PC app (*Plugins* in the sidebar) with its settings. A
   **widget** is a screen on DANTE made by a plugin; one plugin can offer several (Claude Code: *5-hour usage*
-  and *Sessions waiting on me*). Each widget has a visual (gauge, bar, counter, text, sparkline, status,
+  and *Sessions waiting on me*). Each widget has a visual (gauge, bar, counter, text, sparkline, dual sparkline, status,
   timer) and an **Active** switch: only active widgets run and show up, so you see just the ones you want.
   **LEFT/RIGHT** browse the active widgets; **SELECT** on one opens its link on the PC (e.g. the oldest PR);
   long-press **SELECT** refreshes everything.
@@ -90,6 +90,7 @@ will walk you through yours: the PR queue, the blocked agent, the 90% usage gaug
 | Azure DevOps | *Pull requests* (to review, yours waiting on you, or both; one widget per filter or project) | organisation URL, PAT |
 | Calendar | *Next meeting* (countdown) | Outlook sign-in, reminder minutes and filters, coming-up list |
 | Pomodoro | *Timer* | lengths, long break, auto-start, end-of-session nudge; live timer with start / skip / reset |
+| System performance | *CPU & memory* (two live graphs on one screen; or just one of them) | live CPU and memory of this PC. Works on Windows, macOS and Linux with nothing to install |
 | Web API (JSON) | *JSON value* (one per URL) | – |
 | Command | *Command output* (one per command) | – |
 | REST push | *Pushed value* (one per thing you push) | – |

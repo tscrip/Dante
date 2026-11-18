@@ -9,6 +9,9 @@
     [Parameter] public VisualKind Visual { get; set; }
     [Parameter] public string Name { get; set; } = "";
     [Parameter] public double? Value { get; set; }
+    [Parameter] public double? Value2 { get; set; }
+    [Parameter] public string Label1 { get; set; } = "";
+    [Parameter] public string Label2 { get; set; } = "";
     [Parameter] public double Min { get; set; }
     [Parameter] public double Max { get; set; } = 100;
     [Parameter] public string Unit { get; set; } = "";
@@ -50,6 +53,7 @@
                 T(1, 7, 7, Name) +
                 $"""<polyline points="{Spark()}" fill="none" stroke-width="1"/>""" +
                 T(126, 7, 7, ValueText + Unit, "text-anchor=\"end\""),
+            VisualKind.DualSparkline => T(1, 6, 6, Name) + DualRow(0) + DualRow(1),
             VisualKind.Status =>
                 $"""<circle cx="14" cy="16" r="11" fill="{(Level == 0 ? "none" : Px)}"/>""" +
                 T(14, 21, 14, Level switch { 0 => "✓", 1 => "!", _ => "×" },
@@ -77,6 +81,26 @@
         var a = Math.PI * (1 - Math.Max(f, 0.001));
         return $"M {N(cx - r)} {N(cy)} A {N(r)} {N(r)} 0 0 1 {N(cx + r * Math.Cos(a))} {N(cy - r * Math.Sin(a))}";
     }
+
+    // Same layout as the firmware: two 12-pixel rows under the name, "CPU 23%" then the graph.
+    private string DualRow(int row)
+    {
+        var top = 8 + row * 12;
+        var label = DualLabel(row);
+        double? v = row == 0 ? Value : Value2;
+        var shown = v ?? (Sample ? (row == 0 ? 0.35 : 0.62) * (Max - Min) + Min : null);
+        var f = shown is { } s && Max > Min ? Math.Clamp((s - Min) / (Max - Min), 0, 1) : 0.5;
+        var points = string.Join(' ', Enumerable.Range(0, 32).Select(i =>
+        {
+            var wave = row == 0 ? 0.25 * Math.Sin(i / 2.3) + 0.12 * Math.Sin(i * 1.9) : 0.08 * Math.Sin(i / 5.0);
+            var y = Math.Clamp(f + wave * (i == 31 ? 0 : 1), 0, 1);
+            return $"{N(34 + i * 3)},{N(top + 10 - 9 * y)}";
+        }));
+        var text = $"{label} {(shown is null ? "-" : Format.Number(Math.Round(shown.Value)))}{Unit}";
+        return T(1, top + 8, 6, text) + $"""<polyline points="{points}" fill="none" stroke-width=".8"/>""";
+    }
+
+    private string DualLabel(int row) => (row == 0 ? Label1 : Label2) is { Length: > 0 } l ? l[..Math.Min(4, l.Length)] : row == 0 ? "A" : "B";
 
     private string Spark() => string.Join(' ', Enumerable.Range(0, 32).Select(i =>
         $"{N(2 + i * 4)},{N(30 - 18 * (0.5 + 0.35 * Math.Sin(i / 3.0) + 0.15 * Math.Sin(i * 1.7)) * (0.4 + 0.6 * Fraction))}"));

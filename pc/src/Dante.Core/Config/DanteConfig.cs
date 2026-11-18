@@ -239,6 +239,11 @@ public enum VisualKind
     Gauge, Bar, Counter, Text, Sparkline, Status,
     /// <summary>A countdown (mm:ss and a progress bar). The value is the seconds left; DANTE counts down by itself while it runs.</summary>
     Timer,
+    /// <summary>
+    /// Two mini history graphs, one above the other, each with its label and current value (e.g. CPU and
+    /// memory). The reading's <c>Value</c> is the top line and <c>Value2</c> the bottom; both use Min..Max.
+    /// </summary>
+    DualSparkline,
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<TakeoverMode>))]
@@ -267,6 +272,9 @@ public sealed class WidgetDefinition
     public double Min { get; set; }
     public double Max { get; set; } = 100;
     public string Unit { get; set; } = "";
+    /// <summary>Dual sparkline: the short labels of the two lines (up to 4 characters, e.g. "CPU" and "MEM").</summary>
+    public string Label1 { get; set; } = "";
+    public string Label2 { get; set; } = "";
 
     // ---- Where the data comes from (runs on the PC)
     /// <summary>The widget type (<see cref="Widgets.IWidgetType.Type"/>), e.g. "claude-code-usage".</summary>

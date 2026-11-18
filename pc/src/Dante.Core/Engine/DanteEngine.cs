@@ -217,13 +217,13 @@ public sealed class DanteEngine : BackgroundService
         }
 
         var old = r.Reading;
-        var level = LevelEvaluator.Evaluate(r.Def.Levels, reading.Value);
+        var level = LevelEvaluator.Evaluate(r.Def.Levels, reading.LevelValue);
         r.Error = null;
         r.Reading = reading;
         r.UpdatedAt = now;
         r.NonZeroSince = reading.Value > 0 ? r.NonZeroSince ?? now : null;
 
-        var changed = old is null || old.Value != reading.Value || old.Text != reading.Text || r.Level != level || old.Timer != reading.Timer;
+        var changed = old is null || old.Value != reading.Value || old.Value2 != reading.Value2 || old.Text != reading.Text || r.Level != level || old.Timer != reading.Timer;
         // A running countdown changes every poll, but that's not news worth a quip.
         var quip = old is null || reading.Timer is not null ? null
             : QuipBank.Pick(_cfg.Personality, new QuipContext(r.Def, old.Value, reading.Value, r.Level, level, reading.Text), _rng);
@@ -237,7 +237,7 @@ public sealed class DanteEngine : BackgroundService
     {
         if (!r.Def.ShowInCarousel && quip is null) return;
         if (r.Def.ShowInCarousel)
-            _link.Send(DeviceProtocol.Value(r.Def.Id, r.Reading?.Value, r.Reading?.Text, r.Level, quip, r.Reading?.Timer));
+            _link.Send(DeviceProtocol.Value(r.Def.Id, r.Reading?.Value, r.Reading?.Text, r.Level, quip, r.Reading?.Timer, r.Reading?.Value2));
         else
             _link.Send(DeviceProtocol.Say(quip!));
     }
@@ -353,7 +353,7 @@ public sealed class DanteEngine : BackgroundService
                 && existing.Def.Settings.OrderBy(k => k.Key).SequenceEqual(def.Settings.OrderBy(k => k.Key)))
             {
                 existing.Def = def;
-                existing.Level = LevelEvaluator.Evaluate(def.Levels, existing.Reading?.Value);
+                existing.Level = LevelEvaluator.Evaluate(def.Levels, existing.Reading?.LevelValue);
                 next.Add(existing);
             }
             else
@@ -373,7 +373,7 @@ public sealed class DanteEngine : BackgroundService
         _link.Send(DeviceProtocol.Cfg(_cfg.Device));
         _link.Send(DeviceProtocol.Widgets(_apps.Where(r => r.Def.ShowInCarousel).Select(r => r.Def)));
         foreach (var r in _apps.Where(r => r.Def.ShowInCarousel && r.Reading is not null))
-            _link.Send(DeviceProtocol.Value(r.Def.Id, r.Reading!.Value, r.Reading.Text, r.Level, null, r.Reading.Timer));
+            _link.Send(DeviceProtocol.Value(r.Def.Id, r.Reading!.Value, r.Reading.Text, r.Level, null, r.Reading.Timer, r.Reading.Value2));
         foreach (var r in _apps.Where(r => r.Takeover.Raised))
             _link.Send(DeviceProtocol.Alert(r.Def.Id, r.Def.Name, r.AlertText ?? r.Def.Name, r.Def.Takeover.Level));
         _alerts.ResendAll();

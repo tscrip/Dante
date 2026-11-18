@@ -18,6 +18,9 @@
     [Parameter] public VisualKind Visual { get; set; }
     [Parameter] public string Name { get; set; } = "";
     [Parameter] public double? Value { get; set; }
+    [Parameter] public double? Value2 { get; set; }
+    [Parameter] public string Label1 { get; set; } = "";
+    [Parameter] public string Label2 { get; set; } = "";
     [Parameter] public double Min { get; set; }
     [Parameter] public double Max { get; set; } = 100;
     [Parameter] public string Unit { get; set; } = "";
@@ -55,6 +58,16 @@
             yield break;
         }
 
+        if (Visual == VisualKind.DualSparkline)
+        {
+            // Firmware layout: one row per line, "CPU 23%" then its history; a 20x4 adds the name and page line.
+            if (RowCount == 4) yield return Fit(Name);
+            yield return DualRow(0);
+            yield return DualRow(1);
+            if (RowCount == 4) yield return Center($"<  {Page}/{Math.Max(Page, Pages)}  >");
+            yield break;
+        }
+
         var right = Visual is VisualKind.Text or VisualKind.Status ? "" : Format.Number(Shown) + Unit;
         if (Visual == VisualKind.Counter && Shown is { } c) right = Format.Number(Math.Round(c));
         if (Visual == VisualKind.Timer) right = Shown is { } secs ? $"{(int)(secs / 60)}:{(int)(secs % 60):00}" : "--:--";
@@ -78,6 +91,18 @@
             yield return Fit(Visual is VisualKind.Text or VisualKind.Status ? "" : Text ?? (Sample ? "resets 2h10m" : ""));
             yield return Center($"<  {Page}/{Math.Max(Page, Pages)}  >");
         }
+    }
+
+    private string DualRow(int row)
+    {
+        var label = (row == 0 ? Label1 : Label2) is { Length: > 0 } l ? l[..Math.Min(4, l.Length)] : row == 0 ? "A" : "B";
+        double? v = row == 0 ? Value : Value2;
+        v ??= Sample ? (row == 0 ? 0.35 : 0.62) * (Max - Min) + Min : null;
+        var textWidth = Cols >= 20 ? 9 : 8;
+        var text = $"{label} {(v is null ? "-" : Format.Number(Math.Round(v.Value)))}{Unit}";
+        text = (text.Length > textWidth ? text[..textWidth] : text).PadRight(textWidth);
+        var spark = (row == 0 ? "▂▃▅▄▆▅▃▄▆▇▅▆" : "▅▅▆▅▅▆▆▅▆▆▆▆")[..(Cols - textWidth)];
+        return text + spark;
     }
 
     private string Bar()

@@ -4,7 +4,7 @@
 #include "Gfx.h"
 #include "config.h"
 
-enum Visual : uint8_t { VIS_GAUGE = 0, VIS_BAR, VIS_COUNTER, VIS_TEXT, VIS_SPARK, VIS_STATUS, VIS_TIMER };
+enum Visual : uint8_t { VIS_GAUGE = 0, VIS_BAR, VIS_COUNTER, VIS_TEXT, VIS_SPARK, VIS_STATUS, VIS_TIMER, VIS_SPARK2 };
 
 struct App {
   char id[ID_LEN];
@@ -24,6 +24,12 @@ struct App {
   float hist[HIST_LEN];
   uint8_t histN;     // number of samples stored
   uint8_t histHead;  // next write position
+
+  // Dual sparkline (`spark2`): a second line, `v2` in `val`. Its history shares histN / histHead.
+  char lbl1[5], lbl2[5];
+  bool hasValue2;
+  float value2;
+  float hist2[HIST_LEN];
 
   // Countdowns (`val` with `tot`): `value` = seconds left when it arrived, ticking down locally while `timerRun`.
   bool hasTimer;
