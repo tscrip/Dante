@@ -110,6 +110,13 @@ class Stream : public Print {
   virtual int available() = 0;
   virtual int read() = 0;
   using Print::write;
+  // Reads what's there, up to n bytes (no waiting: nothing in the simulator streams in slowly).
+  size_t readBytes(uint8_t* buf, size_t n) {
+    size_t got = 0;
+    for (int c; got < n && (c = read()) >= 0;) buf[got++] = (uint8_t)c;
+    return got;
+  }
+  size_t readBytes(char* buf, size_t n) { return readBytes((uint8_t*)buf, n); }
 };
 
 // `Serial` = the simulator's stdin/stdout (what the PC app talks to). `Serial0` = unused.
