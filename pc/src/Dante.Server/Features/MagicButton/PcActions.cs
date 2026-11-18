@@ -52,11 +52,12 @@ public sealed class PcActions(IMediaBackend media, ICommandRunner runner, IUrlOp
                 return $"Opening {Describe(action.Target)}";
             case MagicActionKind.RunCommand:
                 if (string.IsNullOrWhiteSpace(action.Target)) throw new ActionFailedException("No program set for the magic button");
-                var args = (action.Arguments ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                var result = await runner.RunAsync(action.Target.Trim(), args, ct);
-                if (result.NotFound) throw new ActionFailedException($"Can't find {Path.GetFileName(action.Target.Trim())}");
-                if (result.ExitCode != 0) throw new ActionFailedException($"{Path.GetFileName(action.Target.Trim())} failed ({result.ExitCode})");
-                return string.IsNullOrWhiteSpace(result.Output) ? $"Ran {Path.GetFileName(action.Target.Trim())}" : FirstLine(result.Output);
+                var (file, args) = Command.CommandLine.Resolve(action.Target, action.Arguments);
+                var name = Path.GetFileName(file);
+                var result = await runner.RunAsync(file, args, ct);
+                if (result.NotFound) throw new ActionFailedException($"Can't find {name}");
+                if (result.ExitCode != 0) throw new ActionFailedException($"{name} failed ({result.ExitCode})");
+                return string.IsNullOrWhiteSpace(result.Output) ? $"Ran {name}" : FirstLine(result.Output);
             default:
                 return "";
         }

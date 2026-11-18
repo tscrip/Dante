@@ -36,11 +36,12 @@
             @if (action.Kind == MagicActionKind.RunCommand)
             {
                 <label class="field"><span>Program</span>
-                    <input type="text" @bind="action.Target" placeholder="pwsh · /usr/bin/xdotool · /usr/local/bin/myscript" />
+                    <input type="text" @bind="action.Target" placeholder="pwsh · /usr/bin/xdotool · sh -c" />
                 </label>
                 <label class="field"><span>Arguments (one per line)</span>
                     <textarea @bind="action.Arguments" placeholder="key&#10;ctrl+shift+m"></textarea>
-                    <span class="help">Its first line of output is shown on DANTE. Handy for app shortcuts, e.g. xdotool / AutoHotkey to press Ctrl+Shift+M in Teams.</span>
+                    <span class="help">Its first line of output is shown on DANTE. Handy for app shortcuts, e.g. xdotool / AutoHotkey to press Ctrl+Shift+M in Teams.
+                        For a shell one-liner use Program <code>sh -c</code> and put the whole command on one line here.</span>
                 </label>
             }
             @if (action.Kind != MagicActionKind.Nothing)
