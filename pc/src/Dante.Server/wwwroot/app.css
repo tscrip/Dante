@@ -89,6 +89,11 @@ input[type=text], input[type=number], input[type=password], select, textarea {
 }
 textarea { min-height: 5rem; }
 .fields { display: grid; gap: 0 1rem; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+/* Plugin / widget settings: short fields stacked in one column, text areas across the full width. */
+.fields.settings-form { grid-template-columns: minmax(0, 24rem) minmax(0, 1fr); }
+.fields.settings-form > .field { grid-column: 1; min-width: 0; }
+.fields.settings-form > .field.wide { grid-column: 1 / -1; }
+.fields.settings-form textarea { resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; }
 .help { color: var(--muted); font-size: .8rem; font-weight: 400; }
 
 table { width: 100%; border-collapse: collapse; }

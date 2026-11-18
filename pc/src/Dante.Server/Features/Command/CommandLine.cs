@@ -12,7 +12,8 @@ public static class CommandLine
     public static (string File, IReadOnlyList<string> Args) Resolve(string program, string? argumentLines)
     {
         program = program.Trim();
-        var lines = (argumentLines ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var lines = (argumentLines ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(Unwrap).ToArray();
 
         // A real path with spaces in it ("C:\Program Files\Tool\tool.exe") is a program, not a command line.
         if (File.Exists(program)) return (program, lines);
@@ -21,6 +22,15 @@ public static class CommandLine
         if (words.Count == 0) return (program, lines);
         return (words[0], [.. words.Skip(1), .. lines]);
     }
+
+    /// <summary>
+    /// Each line already is one argument, so quotes around a whole line ("top -bn1 | grep x") are
+    /// what people type for a shell, not part of the argument: drop them. Quotes inside stay.
+    /// </summary>
+    public static string Unwrap(string line) =>
+        line.Length >= 2 && (line[0] is '"' or '\'') && line[^1] == line[0] && line.IndexOf(line[0], 1) == line.Length - 1
+            ? line[1..^1]
+            : line;
 
     /// <summary>Splits on spaces, keeping "double" or 'single' quoted parts together.</summary>
     public static List<string> Split(string commandLine)

@@ -20,8 +20,8 @@ public sealed class CommandSource : IWidgetType
     public IReadOnlyList<SettingField> Fields { get; } =
     [
         new("fileName", "Program", Help: "e.g. dotnet, pwsh, /usr/local/bin/mytool, or sh -c"),
-        new("arguments", "Arguments", SettingKind.Multiline, Help: "One argument per line (a line can contain spaces). E.g. Program sh -c, Arguments: ls ~/inbox | wc -l"),
         new("timeoutSeconds", "Timeout (s)", SettingKind.Number, "20"),
+        new("arguments", "Arguments", SettingKind.Multiline, Help: "One argument per line; a line can contain spaces and pipes, no extra quotes needed. E.g. Program sh -c, Arguments: ls ~/inbox | wc -l"),
     ];
 
     public async Task<WidgetReading> ReadAsync(WidgetDefinition app, CancellationToken ct)

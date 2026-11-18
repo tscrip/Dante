@@ -156,6 +156,9 @@ public class CommandLineTests
     [InlineData("pwsh -NoProfile -File \"my script.ps1\"", "", new[] { "pwsh", "-NoProfile", "-File", "my script.ps1" })]
     [InlineData("xdotool", "key\nctrl+shift+m\n", new[] { "xdotool", "key", "ctrl+shift+m" })]
     [InlineData("'/opt/My Tools/run'", null, new[] { "/opt/My Tools/run" })]
+    [InlineData("sh -c", "\"top -bn1 | grep 'Cpu(s)' | awk '{print $2}'\"", new[] { "sh", "-c", "top -bn1 | grep 'Cpu(s)' | awk '{print $2}'" })]
+    [InlineData("sh -c", "'echo \"hi\"'", new[] { "sh", "-c", "echo \"hi\"" })]
+    [InlineData("echo", "\"a\" \"b\"", new[] { "echo", "\"a\" \"b\"" })]   // not one wrapped string: kept
     public void Resolves_program_and_arguments(string program, string? args, string[] expected)
     {
         var (file, rest) = Dante.Server.Features.Command.CommandLine.Resolve(program, args);
