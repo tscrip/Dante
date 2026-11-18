@@ -11,6 +11,16 @@ enum Mood : uint8_t {
   MOOD_SLEEPY,      // device-local: used when no PC is around
 };
 
+// DANTE's look: eye style, habits and accessories, chosen in the PC app ("personality 1-5").
+enum Look : uint8_t {
+  LOOK_CLASSIC = 0,   // the original
+  LOOK_GENTLEMAN,     // curly mustache, relaxed half-lidded eyes, slow blinks, unhurried glances
+  LOOK_NERD,          // round eyes behind glasses, often looks up while "thinking"
+  LOOK_UNCLE,         // grumpy uncle: heavy eyebrows (a built-in frown) and a bristly mustache
+  LOOK_PARTY,         // big sparkly eyes, a party hat, happy hops and confetti
+  LOOK_COUNT
+};
+
 enum Gag : uint8_t {
   GAG_NONE = 0,
   GAG_LOVE,
@@ -55,6 +65,7 @@ namespace Face {
   Mood mood();
   Mood moodFromString(const char* s);
   void setPending(int n);
+  void setLook(uint8_t look);       // a Look; out-of-range values mean LOOK_CLASSIC
   void setAlone(bool alone);
 
   void playGag(Gag g, uint16_t durationMs = 2400);

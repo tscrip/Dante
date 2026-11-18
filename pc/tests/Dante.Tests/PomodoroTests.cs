@@ -171,7 +171,7 @@ public class PomodoroOnDanteTests : IAsyncLifetime
     private static bool Is(JsonObject m, string type) => m["t"]!.GetValue<string>() == type;
 
     [Fact]
-    public async Task The_timer_screen_is_a_countdown_and_MAGIC_on_it_starts_and_pauses()
+    public async Task The_timer_screen_is_a_countdown_and_SELECT_on_it_starts_and_pauses()
     {
         var apps = await WaitFor(m => Is(m, "apps"));
         Assert.Equal("timer", apps["apps"]![0]!["vis"]!.GetValue<string>());
@@ -179,31 +179,39 @@ public class PomodoroOnDanteTests : IAsyncLifetime
         Assert.Equal(1200, ready["v"]!.GetValue<int>());
         Assert.Equal(1200, ready["tot"]!.GetValue<int>());
         Assert.False(ready["run"]!.GetValue<bool>());
-        Assert.Equal("Focus 1/3 - MAGIC: start", ready["txt"]!.GetValue<string>());
+        Assert.Equal("Focus 1/3 - SEL: start", ready["txt"]!.GetValue<string>());
 
-        _buddy.Press("""{"t":"btn","b":"magic","long":false,"scr":"pomodoro"}""");
+        _buddy.Press("""{"t":"btn","b":"sel","long":false,"scr":"pomodoro"}""");
         await WaitFor(m => Is(m, "say") && m["txt"]!.GetValue<string>().StartsWith("Focus 1/3: 20:00", StringComparison.Ordinal));
         await WaitFor(m => Is(m, "val") && m["run"]?.GetValue<bool>() == true);
         Assert.True(_pomodoro.State.Running);
-        Assert.Empty(_magic.Screens);   // the PC action didn't run as well
 
-        _buddy.Press("""{"t":"btn","b":"magic","long":false,"scr":"pomodoro"}""");
+        _buddy.Press("""{"t":"btn","b":"sel","long":false,"scr":"pomodoro"}""");
         await WaitFor(m => Is(m, "say") && m["txt"]!.GetValue<string>().StartsWith("Paused", StringComparison.Ordinal));
         Assert.False(_pomodoro.State.Running);
     }
 
     [Fact]
-    public async Task MAGIC_elsewhere_still_runs_the_PC_action_and_a_long_press_resets()
+    public async Task Long_SELECT_on_the_timer_resets_it_instead_of_refreshing_everything()
     {
-        _buddy.Press("""{"t":"btn","b":"magic","long":false,"scr":"face"}""");
-        for (var i = 0; i < 40 && _magic.Screens.IsEmpty; i++) await Task.Delay(50);
-        Assert.Equal("face", Assert.Single(_magic.Screens));
-        Assert.False(_pomodoro.State.Started);
-
         _pomodoro.StartOrPause();
-        _buddy.Press("""{"t":"btn","b":"magic","long":true,"scr":"pomodoro"}""");
+        _buddy.Press("""{"t":"btn","b":"sel","long":true,"scr":"pomodoro"}""");
         await WaitFor(m => Is(m, "say") && m["txt"]!.GetValue<string>() == "Pomodoro reset.");
         Assert.False(_pomodoro.State.Started);
+        Assert.DoesNotContain(_buddy.Received, m => Is(m, "say") && m["txt"]!.GetValue<string>() == "Refreshing everything!");
+    }
+
+    [Theory]
+    [InlineData("pomodoro", false)]
+    [InlineData("pomodoro", true)]
+    [InlineData("face", false)]
+    public async Task MAGIC_always_runs_the_PC_action_even_on_the_timer(string screen, bool longPress)
+    {
+        var json = $$"""{"t":"btn","b":"magic","long":{{(longPress ? "true" : "false")}},"scr":"{{screen}}"}""";
+        _buddy.Press(json);
+        for (var i = 0; i < 40 && _magic.Screens.IsEmpty; i++) await Task.Delay(50);
+        Assert.Equal(screen, Assert.Single(_magic.Screens));
+        Assert.False(_pomodoro.State.Started);   // the timer was not touched
     }
 
     [Fact]

@@ -89,6 +89,11 @@ input[type=text], input[type=number], input[type=password], select, textarea {
 }
 textarea { min-height: 5rem; }
 .fields { display: grid; gap: 0 1rem; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+/* Plugin / widget settings: short fields stacked in one column, text areas across the full width. */
+.fields.settings-form { grid-template-columns: minmax(0, 24rem) minmax(0, 1fr); }
+.fields.settings-form > .field { grid-column: 1; min-width: 0; }
+.fields.settings-form > .field.wide { grid-column: 1 / -1; }
+.fields.settings-form textarea { resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; }
 .help { color: var(--muted); font-size: .8rem; font-weight: 400; }
 
 table { width: 100%; border-collapse: collapse; }
@@ -133,3 +138,36 @@ a.plugin-card:hover { border-color: var(--accent); }
 label.switch { display: inline-flex; align-items: center; gap: .35rem; font-size: .85rem; min-width: 5.5rem; cursor: pointer; }
 .type-picker { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
 .type-picker .btn { text-align: left; white-space: normal; }
+/* ---- Simulator ---- */
+.sim-device { display: inline-flex; flex-direction: column; align-items: center; gap: .9rem; padding: 1.25rem 1.5rem 1.5rem;
+    background: linear-gradient(160deg, #2a3242, #161b25); border-radius: 22px; box-shadow: 0 10px 30px #0006, inset 0 1px 0 #ffffff14;
+    max-width: 100%; outline: none; }
+.sim-device:focus-visible { box-shadow: 0 0 0 3px var(--accent), 0 10px 30px #0006; }
+.sim-top, .sim-bottom { display: flex; gap: .75rem; justify-content: center; }
+.sim-screens { display: flex; gap: .9rem; flex-wrap: wrap; justify-content: center; }
+.sim-screen { display: flex; flex-direction: column; align-items: center; gap: .3rem; }
+.sim-screen canvas { display: block; image-rendering: pixelated; border-radius: 4px; max-width: 100%; height: auto; }
+.sim-screen.oled canvas { width: 384px; border: 6px solid #05070c; background: #05070c; }
+.sim-screen.tft canvas { width: 480px; border: 10px solid #05070c; border-radius: 8px; background: #000; image-rendering: auto; }
+.sim-screen small { color: #8b95a7; font-size: .7rem; }
+.sim-btn { min-width: 4.6rem; padding: .55rem .9rem; border-radius: 999px; border: 1px solid #00000080; cursor: pointer; font: 600 .78rem/1 system-ui, sans-serif;
+    color: #e5e9f0; background: linear-gradient(#4a5568, #2d3748); box-shadow: 0 3px 0 #0b0e14, inset 0 1px 0 #ffffff26; user-select: none; touch-action: none; }
+.sim-btn:active, .sim-btn.down { transform: translateY(2px); box-shadow: 0 1px 0 #0b0e14; }
+.sim-btn.magic { background: linear-gradient(#9f7aea, #6b46c1); }
+.sim-btn.select { background: linear-gradient(#2dd4bf, #0f9d8a); color: #05221e; }
+.sim-keys { color: var(--muted); font-size: .8rem; }
+
+/* ---- Accent colour picker (Device page) ---- */
+.swatch { width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; padding: 0; }
+.swatch.on { outline: 2px solid var(--text); outline-offset: 2px; }
+input[type=color] { width: 2.2rem; height: 1.8rem; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: none; cursor: pointer; }
+.accent-preview { display: flex; width: fit-content; align-items: center; gap: .6rem; background: #000; border-radius: 8px; padding: .5rem .9rem; margin-bottom: .75rem; }
+.accent-preview span:first-child { font-weight: 700; font-size: 1.05rem; }
+.accent-preview i { display: inline-block; width: .9rem; height: 1.6rem; border-radius: 5px; }
+
+/* Look picker (Mood & personality page) */
+.look-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: .75rem; }
+.look-card { display: flex; flex-direction: column; gap: .35rem; padding: .6rem; border: 2px solid var(--border, #8884); border-radius: .6rem; cursor: pointer; }
+.look-card.on { border-color: var(--accent); }
+.look-card input { position: absolute; opacity: 0; pointer-events: none; }
+.look-preview { width: 100%; height: auto; border-radius: .35rem; display: block; }

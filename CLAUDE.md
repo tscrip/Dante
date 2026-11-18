@@ -14,7 +14,7 @@ before you start.
 | Folder | What | Language | Build / test |
 |---|---|---|---|
 | `pc/` | The PC app: web UI at http://127.0.0.1:5280, the engine, every plugin | C# / .NET 10, ASP.NET Core + Blazor Server | `cd pc && dotnet test` |
-| `firmware/` | The device: face, widget screens, buttons, the screen driver | C++ (Arduino on ESP32-S3), PlatformIO | `cd firmware && pio run` |
+| `firmware/` | The device: face, widget screens, buttons, the screen driver; also builds as a simulator for the PC | C++ (Arduino on ESP32-S3), PlatformIO | `cd firmware && pio run -e esp32-s3` (device), `pio run -e simulator` (PC) |
 | `docs/protocol.md` | The JSON-lines protocol between them | — | — |
 | `case/` | 3D-printable case (OpenSCAD) | OpenSCAD | `openscad -o case/case.stl case/dante_case.scad` |
 
@@ -96,9 +96,11 @@ How a plugin page is laid out (`Features/Plugins/PluginPage.razor`): the plugin'
 then a form for its `Fields` (if any), then its `ConfigComponent` (if any), then its widgets with
 *+ Add* buttons. A panel adds to the form; it doesn't replace it.
 
-Button handler order: use **100** for handlers that act on their own widget's screen (they check the
-`screen` argument and return false otherwise). The MAGIC button's PC action is the catch-all at 1000.
-MAGIC presses arrive even while a nudge is showing.
+Buttons: **SELECT acts on what's on screen**, so a plugin that reacts to a button on its own widget
+handles `sel` (short and long). **MAGIC is reserved** for the PC action the user picked on the *Magic
+button* page and does the same on every screen: plugins never take it. Register handlers with order
+**100** (they check the `screen` argument and return false for anything else), which runs before the
+engine's own SELECT handling (open the link, long press = refresh everything).
 
 Sidebar order (`IPlugin.Order`) of the built-in plugins: 10 Claude Code, 20 Azure DevOps, 30 Calendar,
 40 Pomodoro, 70 Days until, 80 Web API, 85 Command, 90 REST push. Pick a free number in between.
@@ -148,7 +150,8 @@ Follow these steps in order. `Features/DaysUntil/` is the reference: it is small
 
    Open http://127.0.0.1:5280, find the plugin under *Plugins*, fill in its settings, add a widget, and
    press **Test** in the widget editor. Errors about Bluetooth or the USB port are normal when no DANTE
-   is connected.
+   is connected. To see it on a DANTE without the hardware, use the simulator: build it once with
+   `cd firmware && pio run -e simulator`, then open **Simulator** in the app and click **Start simulator**.
 8. **Document it:** add a row to the *Plugins* table in `README.md`.
 9. **Tell the user** in plain language what you built, where to find it in the app, what they need to
    provide (an API key, an account), and anything you couldn't check.
@@ -182,12 +185,12 @@ public sealed class WaterService(ConfigStore config, DeviceAlerts alerts, TimePr
         _engine = engine;
         alerts.Acknowledged += a => { if (a.Id == AlertId) { /* SELECT: "done" */ } };
         alerts.Snoozed += a => { if (a.Id == AlertId) { /* LEFT/RIGHT: "later" */ } };
-        engine.AddHandler(this, 100);        // only if it reacts to buttons on its own screen
+        engine.AddHandler(this, 100);        // only if it reacts to SELECT on its own screen
     }
 
-    // Buttons on DANTE. Return true only for presses this plugin owns.
+    // SELECT on this plugin's own widget. Return true only for presses this plugin owns; never take MAGIC.
     public bool Handle(DeviceEvent evt, WidgetDefinition? screen) =>
-        evt.Type == "btn" && evt.Button == "magic" && screen?.Type == WaterWidget.TypeName && DoSomething();
+        evt.Type == "btn" && evt.Button == "sel" && screen?.Type == WaterWidget.TypeName && DoSomething(evt.Long);
 
     internal Task StepAsync(CancellationToken ct) { /* one round: decide, then alerts.Raise(...) / Clear(...) */ }
 
@@ -265,8 +268,11 @@ Only change the firmware when the device must draw or do something new. Plugins 
 - **Style:** C++17, 2-space indent, namespaces per module (`Apps::`, `Face::`, `Displays::`), file-local
   helpers in an anonymous namespace, comments that explain the why.
 - **Version:** bump `FW_VERSION` in `src/config.h` when the firmware changes.
-- **Check:** `cd firmware && pio run` must build without new warnings from `src/`. You can't run it on
-  the hardware: say so, and tell the user exactly how to flash it and what to look for.
+- **Check:** `cd firmware && pio run -e esp32-s3` must build without new warnings from `src/`, and
+  `pio run -e simulator` must build too (the simulator compiles the same sources for the PC, with
+  stand-in headers in `simulator/host/` and `src/SimMain.cpp`). Run the simulator from the app's
+  *Simulator* page to see a change. You can't run it on the hardware: say so, and tell the user exactly how
+  to flash it and what to look for.
 
 ## Working with a non-developer
 
@@ -288,7 +294,8 @@ Only change the firmware when the device must draw or do something new. Plugins 
 ```bash
 cd pc && dotnet test                                   # all PC tests
 cd pc && dotnet run --project src/Dante.Server        # run the app: http://127.0.0.1:5280
-cd firmware && pio run                                 # build the firmware
+cd firmware && pio run -e esp32-s3                     # build the firmware
+cd firmware && pio run -e simulator                    # build the simulator (the firmware as a PC program)
 cd firmware && pio run -t upload                       # flash it (USB)
 cd firmware && pio device monitor                      # watch DANTE's messages; type ? for a status line
 ```
@@ -298,7 +305,7 @@ set `DANTE_CONFIG` (or `Dante:ConfigPath`) to use another file, e.g. a throw-awa
 
 ## Definition of done
 
-- [ ] `cd pc && dotnet test` passes (and `cd firmware && pio run` builds, if the firmware changed).
+- [ ] `cd pc && dotnet test` passes (and both firmware builds, `esp32-s3` and `simulator`, if the firmware changed).
 - [ ] New code follows the architecture rules: plugin in its own folder, no kernel/plugin cross references.
 - [ ] Tests cover the new behaviour; no network or hardware in tests.
 - [ ] User-facing text uses *plugin* / *widget* and plain language.

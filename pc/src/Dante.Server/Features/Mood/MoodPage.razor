@@ -53,6 +53,23 @@
     <p class="small"><em>@Sample</em></p>
 </div>
 
+<div class="panel">
+    <h2>Look</h2>
+    <p class="muted small">DANTE's style: eyes, little habits and accessories. Shows on the OLED and the TFT.
+        Saving sends it to DANTE straight away.</p>
+    <div class="look-grid" style="@LookColour">
+        @foreach (var l in Enum.GetValues<Look>())
+        {
+            <label class="look-card @(_cfg.Device.Look == l ? "on" : "")">
+                <input type="radio" name="look" checked="@(_cfg.Device.Look == l)" @onchange="() => _cfg.Device.Look = l" />
+                <LookPreview Look="l" />
+                <strong>@l.Title()</strong>
+                <span class="muted small">@l.Describe()</span>
+            </label>
+        }
+    </div>
+</div>
+
 <button class="btn primary" @onclick="Save">Save</button>
 
 @code {
@@ -85,6 +102,9 @@
         QuipBank.Pick(_cfg.Personality,
             new QuipContext(new WidgetDefinition { Name = "PRs", QuipMinDelta = 1 }, 2, 4, 0, 0, null),
             new Random(42)) ?? "";
+
+    // Previews wear DANTE's own accent colour (set on the Device page).
+    private string LookColour => $"--dante-accent: {_cfg.Device.AccentColor}";
 
     private void Preview(Mood mood) => Engine.PreviewMood(mood, TimeSpan.FromSeconds(15));
 

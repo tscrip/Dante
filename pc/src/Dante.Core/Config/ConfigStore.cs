@@ -93,6 +93,8 @@ public sealed class ConfigStore
             app.Takeover.Level = Math.Clamp(app.Takeover.Level, 1, 2);
         }
         config.Device.Brightness = Math.Clamp(config.Device.Brightness, 0, 255);
+        config.Device.AccentColor = $"#{config.Device.AccentRgb:X6}";   // normalised; junk becomes the default
+        if (!Enum.IsDefined(config.Device.Look)) config.Device.Look = Look.Classic;
         MigrateLegacy(config);
         // Firmware advertised "DeskBuddy", then "HANK", before the project became DANTE.
         if (LegacyNames.Contains(config.Device.BluetoothName?.Trim() ?? "", StringComparer.OrdinalIgnoreCase))
@@ -167,6 +169,9 @@ public sealed class ConfigStore
                 device["display"] = "Auto";
             device.Remove("lcdAddress");
             device.Remove("lcdSize");
+            if (device["simulatedHardware"] is JsonValue s && s.TryGetValue<string>(out var sim)
+                && sim.StartsWith("Lcd", StringComparison.OrdinalIgnoreCase))
+                device["simulatedHardware"] = "Tft";
         }
     }
 

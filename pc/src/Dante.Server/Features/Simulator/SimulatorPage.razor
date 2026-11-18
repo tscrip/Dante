@@ -1,0 +1,207 @@
+@page "/simulator"
+@inherits LiveComponent
+@inject ConfigStore Store
+@inject IJSRuntime JS
+@using System.Text.Json.Nodes
+
+<PageTitle>Simulator · DANTE</PageTitle>
+
+<h1>Simulator</h1>
+<p class="muted">The real DANTE firmware running on this PC: same face, moods, apps, countdowns and nudges as the
+    hardware, drawn by the same code (u8g2 for the OLED, LovyanGFX for the TFT). No board needed; everything else in
+    this app works with it exactly like with a real DANTE.</p>
+
+@if (_cfg.Device.Connection != ConnectionKind.Simulator)
+{
+    <div class="panel">
+        <h2>Use the simulator</h2>
+        <p class="small">DANTE is currently set to connect over @(_cfg.Device.Connection == ConnectionKind.Usb ? "USB" : "Bluetooth").
+            Switching to the simulator disconnects any real DANTE; switch back on the <a href="device">Device</a> page.</p>
+        <div class="row">
+            <label class="field" style="margin:0"><span>Pretend to be</span>@HardwareSelect()</label>
+            <button class="btn primary" @onclick="StartSimulator" style="align-self:end">Start simulator</button>
+        </div>
+    </div>
+}
+else
+{
+    <div class="row spread" style="margin-bottom:1rem">
+        <div class="row">
+            <label class="field" style="margin:0"><span>Hardware</span>@HardwareSelect()</label>
+            <button class="btn" @onclick="Link.Reconnect" style="align-self:end" title="Like unplugging and replugging DANTE">Power-cycle</button>
+        </div>
+        <span class="small">
+            @if (Link.Online) { <span class="ok"><span class="dot"></span>Running</span> <span class="muted">· firmware @Link.Firmware</span> }
+            else { <span class="warn"><span class="dot"></span>@Link.Status</span> }
+        </span>
+    </div>
+
+    @if (Link.LastError is { } error && !Link.Online)
+    {
+        <div class="notice error small">@error</div>
+    }
+
+    <div class="sim-device" tabindex="0" @onkeydown="KeyDown" @onkeyup="KeyUp" @onkeydown:preventDefault @onkeyup:preventDefault>
+        <div class="sim-top">
+            @SimButton("magic", "MAGIC", "magic")
+            @SimButton("sel", "SELECT", "select")
+        </div>
+        <div class="sim-screens">
+            @if (_shape is { } shape)
+            {
+                <div class="sim-screen @shape.Kind">
+                    <canvas id="sim-screen" width="@shape.CanvasWidth" height="@shape.CanvasHeight"></canvas>
+                </div>
+            }
+            else
+            {
+                <p class="muted small" style="color:#8b95a7">Waiting for DANTE to start...</p>
+            }
+        </div>
+        <div class="sim-bottom">
+            @SimButton("left", "◀ LEFT", "")
+            @SimButton("right", "RIGHT ▶", "")
+        </div>
+    </div>
+    <p class="sim-keys">Click the device, then use the keyboard: ← / → = LEFT / RIGHT, Enter or Space = SELECT, M = MAGIC.
+        Hold a button (or key) for a long press.</p>
+
+    <div class="panel" style="margin-top:1rem">
+        <h2>Poke it</h2>
+        <div class="row">
+            <button class="btn sm" @onclick='() => Engine.Say("Hello from the simulator!")'>Say hello</button>
+            <button class="btn sm" @onclick='() => Engine.TestAlert("Hey! Over here!", 1)'>Test nudge</button>
+            <button class="btn sm" @onclick='() => Engine.TestAlert("Something is on fire!", 2)'>Test urgent</button>
+            <span class="muted small">Preview mood:</span>
+            @foreach (var m in Enum.GetValues<Mood>())
+            {
+                <button class="btn sm" @onclick="() => Engine.PreviewMood(m, TimeSpan.FromSeconds(15))">@m</button>
+            }
+        </div>
+        <p class="muted small" style="margin-top:.75rem">Widgets, plugins, Claude Code hooks, Pomodoro and the Magic button all work against the simulator.
+            Its Bluetooth is off: the PC app talks to it directly. After changing firmware code, run <code>pio run -e simulator</code> again and press Power-cycle.</p>
+    </div>
+}
+
+@code {
+    private sealed record Shape(string Kind, int CanvasWidth, int CanvasHeight);
+
+    private DanteConfig _cfg = new();
+    private Shape? _shape;
+    private readonly HashSet<string> _down = [];
+    private bool _drawing;
+    private string? _pending;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _cfg = Store.Snapshot();
+        Link.SimFrameReceived += OnFrame;
+        if (Link.LastSimFrame is { } f) _shape = ShapeOf(f);
+    }
+
+    public override void Dispose()
+    {
+        Link.SimFrameReceived -= OnFrame;
+        base.Dispose();
+    }
+
+    private RenderFragment HardwareSelect() => __builder =>
+    {
+        <select value="@_cfg.Device.SimulatedHardware" @onchange="ChangeHardware">
+            @foreach (var hw in Enum.GetValues<SimulatedHardware>())
+            {
+                <option value="@hw">@hw.Describe()</option>
+            }
+        </select>
+    };
+
+    private RenderFragment SimButton(string id, string label, string cls) => __builder =>
+    {
+        <button class="sim-btn @cls @(_down.Contains(id) ? "down" : "")"
+                @onpointerdown="() => Press(id, true)" @onpointerup="() => Press(id, false)"
+                @onpointerleave="() => Press(id, false)" @onpointercancel="() => Press(id, false)">@label</button>
+    };
+
+
+    private void ChangeHardware(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<SimulatedHardware>(e.Value?.ToString(), out var hw)) return;
+        hw.ApplyTo(_cfg.Device);
+        if (_cfg.Device.Connection == ConnectionKind.Simulator) Store.Save(_cfg);   // restarts the simulator
+    }
+
+    private void StartSimulator()
+    {
+        _cfg.Device.Connection = ConnectionKind.Simulator;
+        _cfg.Device.AutoConnect = true;
+        _cfg.Device.SimulatedHardware.ApplyTo(_cfg.Device);
+        Store.Save(_cfg);
+        _cfg = Store.Snapshot();
+    }
+
+    private void Press(string button, bool down)
+    {
+        if (down ? !_down.Add(button) : !_down.Remove(button)) return;   // ignore repeats / stray releases
+        Link.SimButton(button, down);
+    }
+
+    private static string? KeyToButton(KeyboardEventArgs e) => e.Key switch
+    {
+        "ArrowLeft" => "left",
+        "ArrowRight" => "right",
+        "Enter" or " " => "sel",
+        "m" or "M" => "magic",
+        _ => null,
+    };
+
+    private void KeyDown(KeyboardEventArgs e)
+    {
+        if (!e.Repeat && KeyToButton(e) is { } b) Press(b, true);
+    }
+
+    private void KeyUp(KeyboardEventArgs e)
+    {
+        if (KeyToButton(e) is { } b) Press(b, false);
+    }
+
+    // ---- frames ----------------------------------------------------------------------------
+    private static Shape ShapeOf(string frame)
+    {
+        var f = JsonNode.Parse(frame);
+        var kind = f?["kind"]?.GetValue<string>() ?? "oled";
+        return new Shape(kind, f?["w"]?.GetValue<int>() ?? 128, f?["h"]?.GetValue<int>() ?? 32);
+    }
+
+    private void OnFrame(string frame) => _ = InvokeAsync(async () =>
+    {
+        var shape = ShapeOf(frame);
+        if (shape != _shape)
+        {
+            _shape = shape;          // new canvases first; OnAfterRenderAsync draws the frame
+            StateHasChanged();
+            return;
+        }
+        await Draw(frame);
+    });
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Link.LastSimFrame is { } f && _shape is not null) await Draw(f);
+    }
+
+    /// <summary>Only one draw in flight; a newer frame replaces any that is still waiting.</summary>
+    private async Task Draw(string frame)
+    {
+        if (_drawing) { _pending = frame; return; }
+        _drawing = true;
+        try
+        {
+            await JS.InvokeVoidAsync("danteSim.draw", frame);
+        }
+        catch (JSDisconnectedException) { }
+        catch (InvalidOperationException) { }   // prerendering / page going away
+        finally { _drawing = false; }
+        if (_pending is { } next) { _pending = null; await Draw(next); }
+    }
+}

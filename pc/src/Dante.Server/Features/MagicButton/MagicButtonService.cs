@@ -5,8 +5,8 @@ using Dante.Core.Engine;
 namespace Dante.Server.Features.MagicButton;
 
 /// <summary>
-/// Runs the PC action configured for the MAGIC button. It is the catch-all MAGIC handler: features that
-/// give MAGIC a meaning on their own screen (like the Pomodoro timer) get the press first.
+/// Runs the PC action configured for the MAGIC button. MAGIC is reserved for this action: it does the
+/// same thing on every screen (mute while music plays, whatever DANTE is showing).
 /// </summary>
 public sealed class MagicButtonService(ConfigStore config, IPcActions actions, DanteEngine engine, DeviceLink link,
     ILogger<MagicButtonService> log) : IDeviceEventHandler

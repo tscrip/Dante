@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json.Nodes;
@@ -18,22 +19,31 @@ public sealed class CommandSource : IWidgetType
 
     public IReadOnlyList<SettingField> Fields { get; } =
     [
-        new("fileName", "Program", Help: "e.g. dotnet, pwsh, /usr/local/bin/mytool"),
-        new("arguments", "Arguments", SettingKind.Multiline, Help: "One argument per line."),
+        new("fileName", "Program", Help: "e.g. dotnet, pwsh, /usr/local/bin/mytool, or sh -c"),
         new("timeoutSeconds", "Timeout (s)", SettingKind.Number, "20"),
+        new("arguments", "Arguments", SettingKind.Multiline, Help: "One argument per line; a line can contain spaces and pipes, no extra quotes needed. E.g. Program sh -c, Arguments: ls ~/inbox | wc -l"),
     ];
 
     public async Task<WidgetReading> ReadAsync(WidgetDefinition app, CancellationToken ct)
     {
         var file = app.Get(this, "fileName");
         if (string.IsNullOrWhiteSpace(file)) return WidgetReading.Fail("Set a program.");
-        var psi = new ProcessStartInfo(file) { RedirectStandardOutput = true, RedirectStandardError = true };
-        foreach (var arg in app.Get(this, "arguments").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            psi.ArgumentList.Add(arg);
+        var (program, args) = CommandLine.Resolve(file, app.Get(this, "arguments"));
+        var psi = new ProcessStartInfo(program) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        foreach (var arg in args) psi.ArgumentList.Add(arg);
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(int.TryParse(app.Get(this, "timeoutSeconds"), out var s) ? s : 20));
-        using var p = Process.Start(psi) ?? throw new InvalidOperationException("Could not start process.");
+        Process? started;
+        try
+        {
+            started = Process.Start(psi);
+        }
+        catch (Win32Exception)
+        {
+            return WidgetReading.Fail($"Can't find the program '{program}'. Is it installed and on the PATH?");
+        }
+        using var p = started ?? throw new InvalidOperationException("Could not start process.");
         try
         {
             var stdout = await p.StandardOutput.ReadToEndAsync(timeout.Token);

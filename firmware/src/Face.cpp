@@ -26,6 +26,7 @@ uint16_t decor = 0;
 
 Mood moodNow = MOOD_HAPPY;
 int pending = 0;
+uint8_t look = LOOK_CLASSIC;
 bool alone = true;
 
 uint32_t blinkStart = 0, blinkDur = 140, nextBlink = 1500;
@@ -55,6 +56,28 @@ void baseline(Mood m) {
     case MOOD_GRUMPY:   tgt[0] = tgt[1] = style(25, 18, 0.12f, 0.55f); break;
     case MOOD_MELTDOWN: tgt[0] = tgt[1] = style(22, 24, 0, 0.2f, 0.3f); break;
     case MOOD_SLEEPY:   tgt[0] = tgt[1] = style(25, 20, 0.55f); break;
+  }
+}
+
+// The look reshapes the mood's eyes rather than replacing them, so moods stay readable.
+void lookStyle(Mood m) {
+  for (auto& t : tgt) {
+    switch (look) {
+      case LOOK_GENTLEMAN:   // composed: a little narrower, calmly half-lidded
+        t.w *= 0.92f; t.h *= 0.85f; t.lid = fmaxf(t.lid, 0.14f);
+        break;
+      case LOOK_NERD:        // round eyes (the glasses frame them)
+        t.w = fminf(t.w, t.h + 1.0f) * 0.92f; t.h *= 0.92f;
+        break;
+      case LOOK_UNCLE:       // a built-in frown under those brows
+        t.angry = fminf(t.angry + 0.3f, 0.85f); t.h *= 0.9f;
+        break;
+      case LOOK_PARTY:       // big and bright
+        t.w *= 1.08f; t.h = fminf(t.h * 1.1f, 27.0f);
+        if (m == MOOD_HAPPY) t.happy = fmaxf(t.happy, 0.55f);
+        break;
+      default: break;
+    }
   }
 }
 
@@ -90,6 +113,13 @@ void scheduleSaccade(uint32_t now, Mood m) {
       nextSaccade = now + rndMs(1200, 3500);
       break;
   }
+  // Habits of the look.
+  if (look == LOOK_GENTLEMAN) nextSaccade += rndMs(800, 1800);                   // unhurried
+  if (look == LOOK_NERD && m != MOOD_MELTDOWN && random(0, 100) < 30) {          // "hmm, let me think"
+    tgtLookX = rnd(-6, 6); tgtLookY = -5;
+    nextSaccade += 600;
+  }
+  if (look == LOOK_PARTY) nextSaccade -= (nextSaccade - now) / 3;                // can't sit still
 }
 
 void scheduleBlink(uint32_t now, Mood m) {
@@ -99,6 +129,7 @@ void scheduleBlink(uint32_t now, Mood m) {
   uint32_t lo = 2000, hi = 5000;
   if (m == MOOD_SLEEPY) { lo = 1400; hi = 3000; }
   if (m == MOOD_MELTDOWN) { lo = 600; hi = 1600; }
+  if (look == LOOK_GENTLEMAN) { blinkDur = 260; lo += 1500; hi += 2500; doubleBlink = false; }   // slow, deliberate
   nextBlink = now + rndMs(lo, hi);
 }
 
@@ -380,6 +411,78 @@ void drawDecor(Gfx& g, int ox, uint32_t now) {
   }
 }
 
+// ---- accessories (looks) ---------------------------------------------------------
+// Drawn in the face's own coordinates (logical 128x32): crisp and scaled up on the TFT, a few
+// pixels on the OLED. They follow the eyes so the whole face moves together.
+
+// A curly handlebar mustache under the eyes.
+void drawMustache(Gfx& g, float cx, float my) {
+  g.setDrawColor(1);
+  g.fillEllipseF(cx - 6.5f, my, 7.0f, 2.3f);
+  g.fillEllipseF(cx + 6.5f, my, 7.0f, 2.3f);
+  g.fillEllipseF(cx - 13.8f, my - 1.6f, 1.9f, 1.5f);   // the curls
+  g.fillEllipseF(cx + 13.8f, my - 1.6f, 1.9f, 1.5f);
+  g.setDrawColor(0);
+  g.fillTriangleF(cx - 1.4f, my - 2.6f, cx + 1.4f, my - 2.6f, cx, my + 0.4f);   // the parting
+  g.setDrawColor(1);
+}
+
+// Round glasses: drawn before the eyes as a ring (frame), plus the bridge and the arms.
+void drawGlasses(Gfx& g, int ox, float xL, float xR, float cy) {
+  const float w = fmaxf(cur[0].w, cur[1].w) + 6.0f, h = 27.0f, t = 1.4f;
+  for (float x : { xL, xR }) {
+    g.setDrawColor(1);
+    g.fillRoundRectF(ox + x - w / 2, cy - h / 2, w, h, 7.0f);
+    g.setDrawColor(0);
+    g.fillRoundRectF(ox + x - w / 2 + t, cy - h / 2 + t, w - 2 * t, h - 2 * t, 6.0f);
+  }
+  g.setDrawColor(1);
+  g.fillRectF(ox + xL + w / 2, cy - 4.0f, (xR - xL) - w, 1.3f);                  // bridge
+  g.fillRectF(ox + xL - w / 2 - 6.0f, cy - 7.0f, 6.0f, 1.2f);                     // arms
+  g.fillRectF(ox + xR + w / 2, cy - 7.0f, 6.0f, 1.2f);
+}
+
+// Heavy eyebrows slanting down towards the nose, and a bristly mustache.
+void drawUncle(Gfx& g, int ox, float xL, float xR, float cy, float cx) {
+  g.setDrawColor(1);
+  for (int side = 0; side < 2; side++) {
+    float x = side ? xR : xL, w = cur[side].w + 3.0f;
+    float top = cy - cur[side].h / 2 - 1.5f;
+    float outer = side ? x + w / 2 : x - w / 2, inner = side ? x - w / 2 : x + w / 2;
+    // A thick bar: higher at the outer end, lower at the inner end.
+    g.fillTriangleF(ox + outer, top - 4.0f, ox + inner, top - 1.0f, ox + inner, top + 1.6f);
+    g.fillTriangleF(ox + outer, top - 4.0f, ox + outer, top - 1.4f, ox + inner, top + 1.6f);
+  }
+  float my = cy + 13.0f;
+  g.fillRoundRectF(ox + cx - 11.0f, my - 1.6f, 22.0f, 3.4f, 1.6f);
+  g.setDrawColor(0);
+  for (float x = cx - 9.0f; x < cx + 10.0f; x += 2.5f) g.fillRectF(ox + x, my + 0.6f, 0.7f, 1.4f);   // bristles
+  g.setDrawColor(1);
+}
+
+// A striped party hat with a pom-pom, perched at the right eye's top corner.
+void drawPartyHat(Gfx& g, int ox, float xR, float cy) {
+  float top = cy - cur[1].h / 2;
+  float bx = ox + xR + cur[1].w / 2 + 2.0f;
+  g.setDrawColor(1);
+  g.fillTriangleF(bx, top + 9.0f, bx + 12.0f, top + 9.0f, bx + 8.0f, top - 1.0f);
+  g.setDrawColor(0);
+  g.fillTriangleF(bx + 3.2f, top + 6.0f, bx + 9.6f, top + 6.0f, bx + 8.4f, top + 4.8f);   // stripe
+  g.fillTriangleF(bx + 5.0f, top + 2.6f, bx + 9.0f, top + 2.6f, bx + 8.6f, top + 1.4f);   // stripe
+  g.setDrawColor(1);
+  g.fillEllipseF(bx + 8.0f, top - 1.5f, 1.8f, 1.8f);                                      // pom-pom
+}
+
+void drawAccessories(Gfx& g, int ox, float xL, float xR, float cy, float lx) {
+  const float cx = ox + 64 + lx * 0.6f;   // the "nose": between the eyes, following the gaze a little
+  switch (look) {
+    case LOOK_GENTLEMAN: drawMustache(g, cx, cy + 13.2f); break;
+    case LOOK_UNCLE:     drawUncle(g, ox, xL, xR, cy, cx - ox); break;
+    case LOOK_PARTY:     drawPartyHat(g, ox, xR, cy); break;
+    default: break;   // classic: as nature intended; nerd: glasses are drawn before the eyes
+  }
+}
+
 } // namespace
 
 namespace Face {
@@ -407,6 +510,7 @@ Mood moodFromString(const char* s) {
 }
 
 void setPending(int n) { pending = n < 0 ? 0 : n; }
+void setLook(uint8_t l) { look = l < LOOK_COUNT ? l : (uint8_t)LOOK_CLASSIC; }
 void setAlone(bool a) { alone = a; }
 
 void playGag(Gag g, uint16_t durationMs) {
@@ -433,6 +537,7 @@ void update(uint32_t now) {
   decor = 0;
   shape[0] = shape[1] = SH_NORMAL;
   baseline(m);
+  lookStyle(m);
 
   if (now >= nextSaccade) scheduleSaccade(now, m);
   if (now >= nextBlink) scheduleBlink(now, m);
@@ -440,6 +545,10 @@ void update(uint32_t now) {
   if (gag != GAG_NONE && now - gagStart >= gagDur) gag = GAG_NONE;
   if (gag != GAG_NONE) gagBehaviour(now);
   else idleBehaviour(now, m);
+  if (look == LOOK_PARTY && gag == GAG_NONE && m == MOOD_HAPPY) {
+    offY -= fabsf(sinf(now * 0.006f)) * 1.5f;            // bopping to the music
+    if ((now / 2500) % 3 == 0) decor |= DEC_STARS;       // and some confetti
+  }
 
   float k = (m == MOOD_MELTDOWN || gag != GAG_NONE) ? 0.45f : 0.28f;
   for (int i = 0; i < 2; i++) {
@@ -465,6 +574,8 @@ void draw(Gfx& g, int ox, bool chrome) {
   int cxR = 64 + (int)lroundf(EYE_GAP / 2.0f + cur[1].w / 2.0f) + (int)lroundf(lx);
 
   g.setDrawColor(1);
+  float axL = 64 - (EYE_GAP / 2.0f + cur[0].w / 2.0f) + lx, axR = 64 + (EYE_GAP / 2.0f + cur[1].w / 2.0f) + lx;
+  if (look == LOOK_NERD) drawGlasses(g, ox, axL, axR, 16 + ly);
   if (g.fine()) {
     // Big screen: no rounding to the 128x32 grid, so the eyes glide and resize smoothly.
     float fcy = 16 + ly;
@@ -477,6 +588,7 @@ void draw(Gfx& g, int ox, bool chrome) {
     drawEye(g, ox + cxL, cy, cur[0], blink, true, shape[0], now);
     drawEye(g, ox + cxR, cy, cur[1], blink, false, shape[1], now);
   }
+  drawAccessories(g, ox, axL, axR, 16 + ly, lx);
   drawDecor(g, ox, now);
 
   if (!chrome) return;   // the TFT shows these in its status bar

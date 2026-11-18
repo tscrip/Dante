@@ -2,6 +2,50 @@
 
 namespace {
 
+#ifdef DANTE_SIMULATOR
+}   // namespace (the include below must not land inside it)
+#include <lgfx/v1/panel/Panel_FrameBufferBase.hpp>
+namespace {
+// Simulator: the same LovyanGFX device, but the panel is a frame buffer in memory (no SPI). Everything
+// above it (sprites, rotation, pushImageDMA) is LovyanGFX's own code; the simulator reads the result.
+class SimLight : public lgfx::ILight {
+ public:
+  uint8_t level = 0;
+  bool init(uint8_t b) override { level = b; return true; }
+  void setBrightness(uint8_t b) override { level = b; }
+};
+
+class SimPanel : public lgfx::Panel_FrameBufferBase {
+  lgfx::Bus_NULL nullBus;
+  uint8_t* pixels = nullptr;
+ public:
+  SimPanel() {
+    auto c = config();
+    c.panel_width = 320;            // the ST7796 is a portrait panel, used landscape (rotation 1)
+    c.panel_height = 480;
+    c.pin_cs = -1;
+    c.pin_rst = -1;
+    c.readable = true;
+    config(c);
+    setBus(&nullBus);
+    _write_depth = lgfx::rgb565_2Byte;
+    _read_depth = lgfx::rgb565_2Byte;
+    pixels = (uint8_t*)calloc(320 * 480, 2);
+    _lines_buffer = new uint8_t*[480];
+    for (int y = 0; y < 480; y++) _lines_buffer[y] = pixels + y * 320 * 2;
+  }
+};
+
+class Panel : public lgfx::LGFX_Device {
+  SimPanel panel;
+ public:
+  SimLight light;
+  Panel() {
+    panel.setLight(&light);
+    setPanel(&panel);
+  }
+};
+#else
 // ST7796 480x320 on SPI2 (FSPI). Panel-specific settings are in config.h.
 class Panel : public lgfx::LGFX_Device {
   lgfx::Panel_ST7796 panel;
@@ -55,6 +99,7 @@ class Panel : public lgfx::LGFX_Device {
     setPanel(&panel);
   }
 };
+#endif
 
 Panel tft;
 
@@ -395,6 +440,22 @@ void frame(const std::function<void(TftGfx& g)>& draw) {
     statFrom = now; statFrames = 0; statBytes = 0;
   }
 }
+
+#ifdef DANTE_SIMULATOR
+bool simSnapshot(uint16_t* out, uint8_t& backlight) {
+  if (!started) return false;
+  // Read the panel as it's normally mounted (rotation 1): an upside-down setting shows upside down,
+  // just like on a panel that isn't actually mounted upside down.
+  int rotation = tft.getRotation();
+  tft.setRotation(1);
+  tft.readRect(0, 0, TFT_W, TFT_H, out);
+  tft.setRotation(rotation);
+  // readRect gives the panel's wire order (big-endian RGB565); make it plain RGB565.
+  for (int i = 0; i < TFT_W * TFT_H; i++) out[i] = (uint16_t)((out[i] >> 8) | (out[i] << 8));
+  backlight = awake ? tft.light.level : 0;
+  return true;
+}
+#endif
 
 void describe(char* out, size_t n) {
   if (!started) { snprintf(out, n, "TFT not started"); return; }

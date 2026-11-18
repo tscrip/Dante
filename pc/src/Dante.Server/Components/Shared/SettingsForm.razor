@@ -1,9 +1,9 @@
 @* Renders a list of SettingFields against a dictionary of values (a plugin's shared settings or one widget's). *@
 
-<div class="fields">
+<div class="fields settings-form">
     @foreach (var f in Fields)
     {
-        <label class="field">
+        <label class="field @(f.Kind == SettingKind.Multiline ? "wide" : "")">
             @switch (f.Kind)
             {
                 case SettingKind.Bool:

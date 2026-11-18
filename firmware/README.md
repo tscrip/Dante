@@ -113,7 +113,7 @@ bus *right now* (no reset needed), and explains the result. Without the PC app, 
 the S3's native USB reconnects; `?` prints it again.) For example:
 
 ```
-DANTE 3.2.0: I2C (SDA=8 SCL=9): OLED none | TFT (SPI, SCK=12 MOSI=11 CS=10 DC=13 RST=14 BL=21) | screen: tft (set by PC app) | last reset: power on | TFT: PSRAM frame buffer, 30 fps, 38 KB per frame sent, SPI 40 MHz
+DANTE 3.4.0: I2C (SDA=8 SCL=9): OLED none | TFT (SPI, SCK=12 MOSI=11 CS=10 DC=13 RST=14 BL=21) | screen: tft (set by PC app) | last reset: power on | TFT: PSRAM frame buffer, 30 fps, 38 KB per frame sent, SPI 40 MHz
 I2C scan now: bus 1 (SDA=8 SCL=9): nothing
 ```
 
@@ -148,13 +148,13 @@ If no message arrives from the PC for 30 s DANTE decides it is alone: it gets sl
 | Any screen | LEFT / RIGHT | Previous / next screen. The face is screen 0, the active widgets follow. |
 | Any screen | long LEFT / RIGHT | Jump home to the face. |
 | Face | SELECT | Play a random gag. |
-| Widget screen | SELECT | Tells the PC "open this" (e.g. it opens the PR list). |
-| Any screen | long SELECT | Tells the PC "refresh now". |
+| Widget screen | SELECT | Acts on what's on screen: the PC opens it (e.g. the PR list). |
+| Timer screen | SELECT / long SELECT | Start or pause the countdown / reset it (the Pomodoro timer). |
+| Any other screen | long SELECT | Tells the PC "refresh now". |
 | Speech bubble | any | Dismiss it. |
 | Nudge | SELECT | "I'm on it": `ack` to the PC, DANTE winks. |
 | Nudge | LEFT / RIGHT | "Later": `snooze` to the PC. |
-| Timer screen | MAGIC / long MAGIC | Start or pause the countdown / reset it (the Pomodoro timer). |
-| Anywhere else | MAGIC / long MAGIC | Runs what the PC app's *Magic button* page says; DANTE sparkles and shows the result. |
+| Any screen | MAGIC / long MAGIC | Always runs what the PC app's *Magic button* page says, whatever is on screen; DANTE sparkles and shows the result. |
 
 Every press is reported to the PC as a `btn` event (nudge presses as `ack` / `snooze`).
 
@@ -174,6 +174,11 @@ Each mood has its own eyes and idle habits (and, on the TFT, its own colour):
 
 **Gags** (SELECT on the face): heart eyes, dizzy spirals, wink, laughing `> <` with "ha ha", surprised
 double-take and "boop!" squish.
+
+**Looks** (set on the PC app's *Mood & personality* page): Classic, Gentleman (curly mustache, calm
+half-lidded eyes), Nerd (glasses), Grumpy Uncle (heavy eyebrows, bristly mustache) and Party (big eyes,
+a party hat, confetti). They change the eyes, the habits and the accessories, on the OLED and the TFT.
+On the TFT the accent colour (title, happy eyes, highlights) is also set from the PC app.
 
 **Speech bubbles**: when the PC sends a value with a `quip` (or a `say`), a mini face pops up with a
 scrolling speech bubble for about 4.5 s, and the big face does a double-take afterwards.
@@ -212,6 +217,28 @@ Values tween smoothly, and critical values blink.
 | `src/Buttons.*` | debounced short / long presses |
 | `src/Face.*` | procedural eyes, moods, gags, mini faces |
 | `src/Apps.*` | widget store and the seven visuals, marquee helper |
+| `src/SimMain.cpp` | the simulator's `main()` (empty in the ESP32 build) |
+| `simulator/host/` | stand-ins for the Arduino / ESP32 headers, used only by the simulator build |
+
+## Simulator
+
+`pio run -e simulator` builds this firmware as a program for your PC (PlatformIO's `native` platform,
+so you need a C/C++ compiler: gcc, the Xcode command line tools, or MinGW-w64 on Windows). The DANTE PC
+app starts it from its **Simulator** page; see the
+[main README](../README.md#try-it-without-hardware-the-simulator).
+
+How it works:
+
+* `simulator/host/` stands in for the Arduino/ESP32 headers (only the simulator build sees it):
+  real-time `millis()`/`delay()`, `Serial` = stdin/stdout, buttons driven by the PC app, plenty of
+  "PSRAM", and an I2C bus where the simulated OLED answers, so the firmware's own screen detection runs
+  unchanged.
+* The OLED is drawn by u8g2 exactly as on the board. The TFT is drawn by the real LovyanGFX into a
+  memory-backed panel (`Tft.cpp`, `DANTE_SIMULATOR`), the only firmware code with a simulator branch.
+* `src/SimMain.cpp` provides `main()`: it runs `setup()`/`loop()`, passes protocol lines through,
+  handles `sim.btn`, and sends the screen as `sim.frame` whenever it changes.
+* Choose the screen with `--hw tft|oled`. You can also run it by hand and type protocol lines, e.g.
+  `{"t":"hello"}` or `?`.
 
 To change what the device draws (a new visual, a new face behaviour), see "Firmware standards" in
 [`../CLAUDE.md`](../CLAUDE.md).

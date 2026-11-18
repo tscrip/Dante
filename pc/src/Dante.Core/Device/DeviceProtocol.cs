@@ -74,6 +74,8 @@ public static class DeviceProtocol
         ["bright"] = Math.Clamp(d.Brightness, 0, 255),
         ["display"] = DisplayWireName(d.Display),
         ["flip"] = d.Flip,
+        ["accent"] = d.AccentRgb,   // 0xRRGGBB, used by the TFT
+        ["look"] = Enum.IsDefined(d.Look) ? (int)d.Look : 0,
     };
 
     public static string DisplayWireName(DisplayType d) => d switch

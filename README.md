@@ -30,6 +30,7 @@ in an app on your PC, which talks to DANTE over Bluetooth or USB. You add new th
 - [Plugins](#plugins)
 - [Make your own plugin with Claude](#make-your-own-plugin-with-claude)
 - [Feeding DANTE without writing a plugin](#feeding-dante-without-writing-a-plugin)
+- [Try it without hardware: the simulator](#try-it-without-hardware-the-simulator)
 - [Troubleshooting](#troubleshooting)
 - [For developers](#for-developers)
 - [Why "DANTE"?](#why-dante)
@@ -49,7 +50,14 @@ in an app on your PC, which talks to DANTE over Bluetooth or USB. You add new th
 * **Quips.** When a number changes, DANTE says something about it in its personality (Cheerful,
   Sarcastic or Dramatic, or your own lines).
 * **The MAGIC button.** A fourth button that does something on your PC: mute the microphone,
-  play/pause music, open a website, run a command... On a timer screen it starts and pauses the timer.
+  play/pause music, open a website, run a command... It does the same thing on every screen, so it's
+  always there when you need it (e.g. as a mute button); **SELECT** is the button that acts on what's
+  on screen.
+* **Looks.** Dress DANTE up: **Classic**, **Gentleman** (curly mustache, calm half-lidded eyes),
+  **Nerd** (glasses, glances up while "thinking"), **Grumpy Uncle** (heavy eyebrows, bristly mustache) or
+  **Party** (big eyes, a party hat, confetti). On the colour screen you can also pick its accent colour.
+* **A simulator.** The real firmware running on your PC, so you can try everything without the hardware
+  (see [Try it without hardware](#try-it-without-hardware-the-simulator)).
 
 ## What you need
 
@@ -163,9 +171,9 @@ That's it. DANTE greets you, and LEFT/RIGHT flips through your active widgets.
 | Anywhere | hold LEFT / RIGHT | Back to the face. |
 | Face | SELECT | A random gag: heart eyes, dizzy, wink, laughing, surprised, "boop!". |
 | A widget | SELECT | Opens its link on your PC (e.g. the oldest pull request). |
-| Anywhere | hold SELECT | Refresh everything now. |
-| A timer widget | MAGIC / hold MAGIC | Start or pause the timer / reset it. |
-| Anywhere else | MAGIC / hold MAGIC | Whatever you set on the *Magic button* page (mute mic, play/pause...). |
+| A timer widget | SELECT / hold SELECT | Start or pause the timer / reset it. |
+| Anywhere else | hold SELECT | Refresh everything now. |
+| Anywhere | MAGIC / hold MAGIC | Whatever you set on the *Magic button* page (mute mic, play/pause...), on every screen. |
 | A nudge | SELECT | "I'm on it." |
 | A nudge | LEFT / RIGHT | "Later." |
 | A speech bubble | any | Dismiss it. |
@@ -177,8 +185,9 @@ The pages of the PC app:
 | **Dashboard** | What DANTE shows right now, its mood, test buttons. |
 | **Widgets** | Every widget with its **Active** switch and its order on DANTE; *+ Add widget*. |
 | **Plugins** | One page per plugin: its settings, anything special it needs, and its widgets. |
-| **Mood & personality** | When DANTE gets antsy or grumpy, and how it talks. |
+| **Mood & personality** | When DANTE gets antsy or grumpy, how it talks, and its look. |
 | **Magic button** | What the MAGIC button does on your PC. |
+| **Simulator** | DANTE running on your PC, with clickable buttons (see below). |
 | **Device** | Connection, screen type, brightness, "Check wiring", message log. |
 
 ## Plugins
@@ -227,6 +236,8 @@ describe what you want in plain language and Claude builds it, tests it, and tel
 **Good to know:**
 
 - New plugins live entirely in the PC app; you don't need to reflash DANTE for them.
+- You can try a new plugin on the [simulator](#try-it-without-hardware-the-simulator) before touching the
+  real DANTE.
 - Claude writes tests and runs them. It can't see your DANTE, so it will tell you what to check on the
   device.
 - If a plugin needs an account or API key, Claude will tell you where to get it and where to paste it.
@@ -250,6 +261,32 @@ Three built-in plugins let you show your own data straight away:
 * **Command**: runs any program; it prints `3`, `3 some text`, or `{"value":3,"text":"..."}`.
 
 Also: `POST /api/say {"text":"..."}` makes DANTE say something, and `GET /api/state` returns everything.
+
+## Try it without hardware: the simulator
+
+The **DANTE simulator** is the real firmware compiled for your PC: the same face, moods, looks, widgets,
+countdowns and nudges as the board, drawn by the same code (u8g2 for the OLED, LovyanGFX for the 3.5"
+TFT). What you see is what the hardware will do. It's also the quickest way to try a new plugin.
+
+1. Build it once. This needs a C/C++ compiler: gcc on Linux, the Xcode command line tools on macOS, or
+   MinGW-w64 on Windows.
+
+   ```bash
+   cd firmware
+   ```
+
+   ```bash
+   pio run -e simulator
+   ```
+
+2. In the PC app open **Simulator**, pick the screen (3.5" TFT or 0.91" OLED) and click **Start simulator**.
+   The app runs the program itself.
+3. Click DANTE's buttons on screen (hold for a long press) or use the keyboard: ←/→ = LEFT/RIGHT,
+   Enter/Space = SELECT, M = MAGIC.
+
+Everything else (widgets, plugins, Claude Code hooks, Pomodoro, the Magic button) works with the
+simulator exactly as with a real DANTE. After changing firmware code, rebuild and press **Power-cycle**.
+Switch back to Bluetooth or USB on the *Device* page.
 
 ## Troubleshooting
 

@@ -91,7 +91,7 @@ public sealed class DanteEngine : BackgroundService
     /// Lets a feature react to DANTE's buttons before the engine does (see <see cref="IDeviceEventHandler"/>).
     /// Features register their handlers when the app starts.
     /// </summary>
-    /// <param name="order">Lower runs first. Handlers for a specific screen (e.g. a timer that MAGIC starts) should
+    /// <param name="order">Lower runs first. Handlers for a specific screen (e.g. a timer that SELECT starts) should
     /// come before catch-all ones (the MAGIC button's PC action).</param>
     public void AddHandler(IDeviceEventHandler handler, int order = 0) =>
         _handlers = [.. _handlers.Append((Handler: handler, Order: order)).OrderBy(h => h.Order)];

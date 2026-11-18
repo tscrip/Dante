@@ -27,11 +27,13 @@ void load() {
   // Settings live in the "dante" namespace; earlier firmware used "hank", and before that "deskbuddy".
   if (!prefs.begin("dante", true) && !prefs.begin("hank", true) && !prefs.begin("deskbuddy", true)) return;
   uint8_t kind = prefs.getUChar("display", Displays::KIND_AUTO);
-  // Anything else (including 1, the character LCD of firmware 3.1 and older) means automatic.
+  // Anything else (including 1, the character LCD of firmware 3.3 and older) means automatic.
   cfg.kind = kind == Displays::KIND_OLED ? Displays::KIND_OLED
            : kind == Displays::KIND_TFT ? Displays::KIND_TFT : Displays::KIND_AUTO;
   cfg.flip = prefs.isKey("flip") ? prefs.getBool("flip", false) : prefs.getBool("flip1", false);   // 2.x: one flag per screen
   cfg.bright = prefs.getUChar("bright", 200);
+  cfg.accent = prefs.getUInt("accent", 0x5EEAD4) & 0xFFFFFF;
+  cfg.look = prefs.getUChar("look", 0);
   prefs.end();
 }
 
@@ -40,7 +42,9 @@ void save() {
   prefs.putUChar("display", cfg.kind);
   prefs.putBool("flip", cfg.flip);
   prefs.putUChar("bright", cfg.bright);
-  // Settings of removed features: two screens (2.x) and the character LCD (3.1 and older).
+  prefs.putUInt("accent", cfg.accent);
+  prefs.putUChar("look", cfg.look);
+  // Settings of removed features: two screens (2.x) and the character LCD (3.3 and older).
   for (const char* old : { "screens", "layout", "content", "swap", "flip1", "flip2", "lcdAddr", "lcdSize" })
     if (prefs.isKey(old)) prefs.remove(old);
   prefs.end();
@@ -93,6 +97,8 @@ const char* kindName() { return current == KIND_TFT ? "tft" : "oled"; }
 bool applyConfig(JsonDocument& m) {
   Settings before = cfg;
   if (m["bright"].is<int>()) cfg.bright = (uint8_t)constrain(m["bright"].as<int>(), 0, 255);
+  if (m["accent"].is<long>()) cfg.accent = (uint32_t)m["accent"].as<long>() & 0xFFFFFF;   // 0xRRGGBB
+  if (m["look"].is<int>()) cfg.look = (uint8_t)constrain(m["look"].as<int>(), 0, 255);   // Face clamps unknown looks
   if (m["display"].is<const char*>()) {
     const char* d = m["display"];
     cfg.kind = !strcmp(d, "oled") ? KIND_OLED : !strcmp(d, "tft") ? KIND_TFT : KIND_AUTO;
@@ -100,7 +106,8 @@ bool applyConfig(JsonDocument& m) {
   if (m["flip"].is<bool>()) cfg.flip = m["flip"];
   else if (m["flip1"].is<bool>()) cfg.flip = m["flip1"];   // a PC app from before 3.0
 
-  bool changed = before.kind != cfg.kind || before.flip != cfg.flip || before.bright != cfg.bright;
+  bool changed = before.kind != cfg.kind || before.flip != cfg.flip || before.bright != cfg.bright ||
+                 before.accent != cfg.accent || before.look != cfg.look;
   if (changed) { apply(); save(); }
   return changed;
 }

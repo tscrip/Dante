@@ -13,6 +13,8 @@ namespace Displays {
     Kind kind = KIND_AUTO;      // what's configured; see active() for what's in use
     bool flip = false;          // mounted upside down: rotate 180 degrees
     uint8_t bright = 200;       // OLED contrast / TFT backlight
+    uint32_t accent = 0x5EEAD4; // TFT accent colour, 0xRRGGBB (title, happy eyes, highlights)
+    uint8_t look = 0;           // Face::Look: DANTE's style and accessories
   };
 
   void begin();

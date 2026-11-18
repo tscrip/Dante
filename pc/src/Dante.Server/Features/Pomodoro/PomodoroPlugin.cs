@@ -10,7 +10,7 @@ public sealed class PomodoroPlugin : IPlugin
     public string Name => "Pomodoro";
     public string Description =>
         "Focus in short sessions with breaks in between. Go to the Pomodoro widget on DANTE with LEFT/RIGHT, then press " +
-        "MAGIC to start or pause (hold MAGIC to reset). When a session ends DANTE tells you, and SELECT starts the next one.";
+        "SELECT to start or pause (hold SELECT to reset). When a session ends DANTE tells you, and SELECT starts the next one.";
     public int Order => 40;
     public Type ConfigComponent => typeof(PomodoroPanel);
 }

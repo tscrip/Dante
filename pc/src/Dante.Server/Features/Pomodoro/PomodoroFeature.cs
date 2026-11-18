@@ -4,7 +4,7 @@ using Dante.Core.Widgets;
 
 namespace Dante.Server.Features.Pomodoro;
 
-/// <summary>A Pomodoro timer on DANTE, started with the MAGIC button and configured on its plugin page.</summary>
+/// <summary>A Pomodoro timer on DANTE, started with SELECT on its screen and configured on its plugin page.</summary>
 public sealed class PomodoroFeature : IFeature
 {
     public void AddServices(IServiceCollection services)

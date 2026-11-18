@@ -58,7 +58,7 @@ public sealed class PomodoroTimer(PomodoroSettings settings)
         if (!_started) SetPhase(_phase);
     }
 
-    /// <summary>The MAGIC button: start, pause or resume.</summary>
+    /// <summary>SELECT on the timer screen: start, pause or resume.</summary>
     public void StartOrPause(DateTimeOffset now)
     {
         if (_endsAt is { } end)

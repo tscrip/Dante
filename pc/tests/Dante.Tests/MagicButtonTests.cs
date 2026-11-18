@@ -138,6 +138,66 @@ public class PcActionsTests
         var ex = await Assert.ThrowsAsync<ActionFailedException>(() => Make(run).RunAsync(new MagicAction { Kind = MagicActionKind.RunCommand, Target = "nope" }, default));
         Assert.Equal("Can't find nope", ex.Message);
     }
+
+    [Fact]
+    public async Task A_command_line_in_the_program_box_is_split_into_program_and_arguments()
+    {
+        var run = new FakeRunner();
+        await Make(run).RunAsync(new MagicAction { Kind = MagicActionKind.RunCommand, Target = "sh -c", Arguments = "playerctl play-pause && echo done" }, default);
+        Assert.Equal("sh -c playerctl play-pause && echo done", Assert.Single(run.Calls));
+    }
+}
+
+public class CommandLineTests
+{
+    [Theory]
+    [InlineData("sh -c", "echo 42", new[] { "sh", "-c", "echo 42" })]
+    [InlineData("  dotnet  ", "--version", new[] { "dotnet", "--version" })]
+    [InlineData("pwsh -NoProfile -File \"my script.ps1\"", "", new[] { "pwsh", "-NoProfile", "-File", "my script.ps1" })]
+    [InlineData("xdotool", "key\nctrl+shift+m\n", new[] { "xdotool", "key", "ctrl+shift+m" })]
+    [InlineData("'/opt/My Tools/run'", null, new[] { "/opt/My Tools/run" })]
+    [InlineData("sh -c", "\"top -bn1 | grep 'Cpu(s)' | awk '{print $2}'\"", new[] { "sh", "-c", "top -bn1 | grep 'Cpu(s)' | awk '{print $2}'" })]
+    [InlineData("sh -c", "'echo \"hi\"'", new[] { "sh", "-c", "echo \"hi\"" })]
+    [InlineData("echo", "\"a\" \"b\"", new[] { "echo", "\"a\" \"b\"" })]   // not one wrapped string: kept
+    public void Resolves_program_and_arguments(string program, string? args, string[] expected)
+    {
+        var (file, rest) = Dante.Server.Features.Command.CommandLine.Resolve(program, args);
+        Assert.Equal(expected, new[] { file }.Concat(rest).ToArray());
+    }
+
+    [Fact]
+    public void An_existing_path_with_spaces_is_kept_whole()
+    {
+        var dir = Directory.CreateTempSubdirectory("dante cmd ");
+        var tool = Path.Combine(dir.FullName, "my tool");
+        File.WriteAllText(tool, "");
+        try
+        {
+            var (file, rest) = Dante.Server.Features.Command.CommandLine.Resolve(tool, "a");
+            Assert.Equal(tool, file);
+            Assert.Equal(new[] { "a" }, rest.ToArray());
+        }
+        finally { dir.Delete(true); }
+    }
+
+    [Fact]
+    public async Task The_command_widget_runs_a_shell_one_liner()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var source = new Dante.Server.Features.Command.CommandSource();
+        var reading = await source.ReadAsync(new WidgetDefinition { Settings = new() { ["fileName"] = "sh -c", ["arguments"] = "echo $((40 + 2)) things" } }, default);
+        Assert.Null(reading.Error);
+        Assert.Equal(42, reading.Value);
+        Assert.Equal("things", reading.Text);
+    }
+
+    [Fact]
+    public async Task A_missing_program_is_a_readable_error_not_a_crash()
+    {
+        var source = new Dante.Server.Features.Command.CommandSource();
+        var reading = await source.ReadAsync(new WidgetDefinition { Settings = new() { ["fileName"] = "dante-no-such-program" } }, default);
+        Assert.Contains("Can't find the program 'dante-no-such-program'", reading.Error);
+    }
 }
 
 public class MagicButtonEngineTests : IAsyncLifetime

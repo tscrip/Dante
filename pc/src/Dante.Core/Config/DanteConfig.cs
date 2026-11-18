@@ -41,15 +41,40 @@ public sealed class DeviceSettings
     public string BluetoothName { get; set; } = "DANTE";
     /// <summary>USB: COM5, /dev/ttyACM0, /dev/cu.usbmodem1101 ...</summary>
     public string? PortName { get; set; }
+    /// <summary>Simulator: which DANTE screen to pretend to have.</summary>
+    public SimulatedHardware SimulatedHardware { get; set; } = SimulatedHardware.Tft;
+    /// <summary>Simulator: the built program (blank = find firmware/.pio/build/simulator/program automatically).</summary>
+    public string? SimulatorPath { get; set; }
     public int BaudRate { get; set; } = 115200;
     public bool AutoConnect { get; set; } = true;
     /// <summary>OLED contrast / TFT backlight, 0-255.</summary>
     public int Brightness { get; set; } = 200;
+    /// <summary>
+    /// The 3.5" TFT's accent colour as #RRGGBB: the DANTE title, the happy eyes, the current page dot and
+    /// highlights. (The OLED can't show colour.)
+    /// </summary>
+    public string AccentColor { get; set; } = DefaultAccent;
+    public const string DefaultAccent = "#5EEAD4";
+
+    /// <summary>The accent as 0xRRGGBB; anything that isn't a #RRGGBB colour falls back to the default teal.</summary>
+    [JsonIgnore]
+    public int AccentRgb => ParseColor(AccentColor) ?? ParseColor(DefaultAccent)!.Value;
+
+    /// <summary>"#5eead4", "5EEAD4" or "#5EA" (short form) → 0x5EEAD4; null if it isn't a colour.</summary>
+    public static int? ParseColor(string? s)
+    {
+        var hex = (s ?? "").Trim().TrimStart('#');
+        if (hex.Length == 3) hex = string.Concat(hex.Select(c => new string(c, 2)));
+        return hex.Length == 6 && int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var v) ? v : null;
+    }
 
     /// <summary>What kind of screen DANTE has. DANTE always drives exactly one screen.</summary>
     public DisplayType Display { get; set; } = DisplayType.Auto;
     /// <summary>The screen is mounted upside down: rotate it 180°.</summary>
     public bool Flip { get; set; }
+
+    /// <summary>DANTE's look: eye style, little habits and accessories (OLED and TFT).</summary>
+    public Look Look { get; set; } = Look.Classic;
 
     /// <summary>Older configs had one flag per screen (two-screen mode); the first screen's flag carries over.</summary>
     [JsonPropertyName("flipScreen1")]
@@ -63,6 +88,34 @@ public enum ConnectionKind
     Bluetooth,
     /// <summary>USB cable (serial port).</summary>
     Usb,
+    /// <summary>The DANTE simulator: the real firmware running on this PC, no hardware needed.</summary>
+    Simulator,
+}
+
+/// <summary>What the simulator pretends is wired up.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<SimulatedHardware>))]
+public enum SimulatedHardware { Tft, Oled }
+
+public static class SimulatedHardwareExtensions
+{
+    /// <summary>The simulator's --hw argument.</summary>
+    public static string Argument(this SimulatedHardware hw) => hw == SimulatedHardware.Oled ? "oled" : "tft";
+
+    public static string Describe(this SimulatedHardware hw) => hw switch
+    {
+        SimulatedHardware.Oled => "0.91\" OLED",
+        _ => "3.5\" TFT",
+    };
+
+    /// <summary>
+    /// Points the screen settings at the simulated hardware: automatic screen type, so DANTE's own
+    /// detection picks it, exactly as on the board.
+    /// </summary>
+    public static void ApplyTo(this SimulatedHardware hw, DeviceSettings d)
+    {
+        d.SimulatedHardware = hw;
+        d.Display = DisplayType.Auto;
+    }
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<DisplayType>))]
@@ -76,6 +129,42 @@ public enum DisplayType
     Oled128x32,
     /// <summary>3.5" 480x320 colour TFT, ST7796 driver, SPI.</summary>
     Tft35,
+}
+
+/// <summary>
+/// DANTE's look. The numeric value goes over the wire, so only append new looks at the end.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<Look>))]
+public enum Look
+{
+    /// <summary>The original DANTE.</summary>
+    Classic = 0,
+    /// <summary>Curly mustache, calmly half-lidded eyes, slow blinks and unhurried glances.</summary>
+    Gentleman = 1,
+    /// <summary>Round eyes behind glasses; often looks up while "thinking".</summary>
+    Nerd = 2,
+    /// <summary>Heavy eyebrows (a built-in frown) and a bristly mustache.</summary>
+    GrumpyUncle = 3,
+    /// <summary>Big eyes, a party hat, happy hops and confetti.</summary>
+    Party = 4,
+}
+
+public static class LookInfo
+{
+    public static string Title(this Look l) => l switch
+    {
+        Look.GrumpyUncle => "Grumpy Uncle",
+        _ => l.ToString(),
+    };
+
+    public static string Describe(this Look l) => l switch
+    {
+        Look.Gentleman => "A curly mustache, calm half-lidded eyes and slow, deliberate blinks.",
+        Look.Nerd => "Round eyes behind glasses. Often glances up while \"thinking\".",
+        Look.GrumpyUncle => "Heavy eyebrows that make every mood a bit sterner, plus a bristly mustache.",
+        Look.Party => "Big sparkly eyes, a party hat, and happy hops with confetti.",
+        _ => "The original DANTE, as nature intended.",
+    };
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<Personality>))]

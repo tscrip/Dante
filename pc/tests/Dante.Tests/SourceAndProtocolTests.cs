@@ -44,8 +44,50 @@ public class ProtocolTests
     public void Cfg_carries_the_single_screen_settings()
     {
         var msg = DeviceProtocol.Cfg(new DeviceSettings { Brightness = 300, Display = DisplayType.Tft35, Flip = true });
-        Assert.Equal("""{"t":"cfg","bright":255,"display":"tft","flip":true}""", msg.ToJsonString());
+        Assert.Equal("""{"t":"cfg","bright":255,"display":"tft","flip":true,"accent":6220500,"look":0}""", msg.ToJsonString());
         Assert.False(DeviceProtocol.Cfg(new DeviceSettings())["flip"]!.GetValue<bool>());
+    }
+
+    [Theory]
+    [InlineData(Look.Classic, 0)]
+    [InlineData(Look.Gentleman, 1)]
+    [InlineData(Look.Nerd, 2)]
+    [InlineData(Look.GrumpyUncle, 3)]
+    [InlineData(Look.Party, 4)]
+    [InlineData((Look)42, 0)]                      // unknown: DANTE gets the classic look
+    public void Look_reaches_dante_as_its_number(Look look, int wire)
+    {
+        Assert.Equal(wire, DeviceProtocol.Cfg(new DeviceSettings { Look = look })["look"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void Look_is_saved_by_name()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(new DeviceSettings { Look = Look.GrumpyUncle });
+        Assert.Contains("\"GrumpyUncle\"", json);
+        Assert.Equal(Look.GrumpyUncle, System.Text.Json.JsonSerializer.Deserialize<DeviceSettings>(json)!.Look);
+    }
+
+    [Theory]
+    [InlineData("#B87333", 0xB87333)]
+    [InlineData("a78bfa", 0xA78BFA)]
+    [InlineData("#5EA", 0x55EEAA)]                 // short form
+    [InlineData("not a colour", 0x5EEAD4)]         // falls back to the default teal
+    [InlineData("", 0x5EEAD4)]
+    public void Accent_colour_reaches_dante_as_rrggbb(string setting, int rgb)
+    {
+        Assert.Equal(rgb, DeviceProtocol.Cfg(new DeviceSettings { AccentColor = setting })["accent"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void Accent_colour_is_normalised_when_saved()
+    {
+        var cfg = new DanteConfig { Device = { AccentColor = "b87333" } };
+        ConfigStore.Validate(cfg);
+        Assert.Equal("#B87333", cfg.Device.AccentColor);
+        cfg.Device.AccentColor = "rainbow";
+        ConfigStore.Validate(cfg);
+        Assert.Equal(DeviceSettings.DefaultAccent, cfg.Device.AccentColor);
     }
 
     [Fact]
@@ -72,10 +114,11 @@ public class ProtocolTests
         var dir = Path.Combine(Path.GetTempPath(), $"dante-{Guid.NewGuid():N}");
         Directory.CreateDirectory(dir);
         var path = Path.Combine(dir, "config.json");
-        File.WriteAllText(path, """{ "device": { "display": "Lcd2004", "lcdAddress": 63, "lcdSize": "Size20x4", "flip": true } }""");
+        File.WriteAllText(path, """{ "device": { "display": "Lcd2004", "lcdAddress": 63, "lcdSize": "Size20x4", "simulatedHardware": "Lcd1602", "flip": true } }""");
         var cfg = new ConfigStore(path).Snapshot();
         Assert.Equal(DisplayType.Auto, cfg.Device.Display);
         Assert.True(cfg.Device.Flip);
+        Assert.Equal(SimulatedHardware.Tft, cfg.Device.SimulatedHardware);
         new ConfigStore(path).Save(cfg);
         Assert.DoesNotContain("lcd", File.ReadAllText(path), StringComparison.OrdinalIgnoreCase);
         Directory.Delete(dir, recursive: true);

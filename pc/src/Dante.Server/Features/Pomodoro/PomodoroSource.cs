@@ -11,7 +11,7 @@ public sealed class PomodoroSource(PomodoroService pomodoro) : IWidgetType
     public string PluginId => PomodoroPlugin.PluginId;
     public bool AllowMultiple => false;
     public string DisplayName => "Timer";
-    public string Description => "Focus and break countdown. On DANTE, press MAGIC on this screen to start or pause, hold it to reset. Set the lengths on this page.";
+    public string Description => "Focus and break countdown. On DANTE, press SELECT on this screen to start or pause, hold it to reset. Set the lengths on this page.";
     public IReadOnlyList<SettingField> Fields { get; } = [];
     public bool IsPushBased => true;
 
@@ -21,7 +21,7 @@ public sealed class PomodoroSource(PomodoroService pomodoro) : IWidgetType
         var name = PomodoroService.PhaseName(s.Phase) + (s.Phase == PomodoroPhase.Focus ? $" {s.FocusNumber}/{s.SessionsBeforeLongBreak}" : "");
         var text = s.Running ? name
             : s.Started ? $"{name} - paused"
-            : $"{name} - MAGIC: start";
+            : $"{name} - SEL: start";
         return Task.FromResult(new WidgetReading
         {
             Value = Math.Ceiling(s.Remaining.TotalSeconds),
