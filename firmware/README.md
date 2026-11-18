@@ -113,7 +113,7 @@ bus *right now* (no reset needed), and explains the result. Without the PC app, 
 the S3's native USB reconnects; `?` prints it again.) For example:
 
 ```
-DANTE 3.4.0: I2C (SDA=8 SCL=9): OLED none | TFT (SPI, SCK=12 MOSI=11 CS=10 DC=13 RST=14 BL=21) | screen: tft (set by PC app) | last reset: power on | TFT: PSRAM frame buffer, 30 fps, 38 KB per frame sent, SPI 40 MHz
+DANTE 3.5.0: I2C (SDA=8 SCL=9): OLED none | TFT (SPI, SCK=12 MOSI=11 CS=10 DC=13 RST=14 BL=21) | screen: tft (set by PC app) | last reset: power on | TFT: PSRAM frame buffer, 30 fps, 38 KB per frame sent, SPI 40 MHz
 I2C scan now: bus 1 (SDA=8 SCL=9): nothing
 ```
 
@@ -198,6 +198,7 @@ Each widget picks a visual (called `vis` in the protocol):
 | `counter` | big number that drops in with a bounce and a floating `+1!` |
 | `text` | scrolling text |
 | `spark` | sparkline of the last 32 values |
+| `spark2` | two sparklines, one per line, each with its label and value (e.g. CPU and memory); on the TFT the top line is in the accent colour |
 | `status` | OK / warning / error icon plus scrolling text |
 | `timer` | countdown (m:ss, or 2h05) with a progress bar; DANTE ticks it down itself |
 
@@ -216,7 +217,7 @@ Values tween smoothly, and critical values blink.
 | `src/Tft.*` | 3.5" ST7796 TFT (LovyanGFX): colour canvas, PSRAM frame buffer / strips, DMA |
 | `src/Buttons.*` | debounced short / long presses |
 | `src/Face.*` | procedural eyes, moods, gags, mini faces |
-| `src/Apps.*` | widget store and the seven visuals, marquee helper |
+| `src/Apps.*` | widget store and the eight visuals, marquee helper |
 | `src/SimMain.cpp` | the simulator's `main()` (empty in the ESP32 build) |
 | `simulator/host/` | stand-ins for the Arduino / ESP32 headers, used only by the simulator build |
 

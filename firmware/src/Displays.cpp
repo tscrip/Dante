@@ -27,7 +27,7 @@ void load() {
   // Settings live in the "dante" namespace; earlier firmware used "hank", and before that "deskbuddy".
   if (!prefs.begin("dante", true) && !prefs.begin("hank", true) && !prefs.begin("deskbuddy", true)) return;
   uint8_t kind = prefs.getUChar("display", Displays::KIND_AUTO);
-  // Anything else (including 1, the character LCD of firmware 3.3 and older) means automatic.
+  // Anything else (including 1, the character LCD of firmware 3.4 and older) means automatic.
   cfg.kind = kind == Displays::KIND_OLED ? Displays::KIND_OLED
            : kind == Displays::KIND_TFT ? Displays::KIND_TFT : Displays::KIND_AUTO;
   cfg.flip = prefs.isKey("flip") ? prefs.getBool("flip", false) : prefs.getBool("flip1", false);   // 2.x: one flag per screen
@@ -44,7 +44,7 @@ void save() {
   prefs.putUChar("bright", cfg.bright);
   prefs.putUInt("accent", cfg.accent);
   prefs.putUChar("look", cfg.look);
-  // Settings of removed features: two screens (2.x) and the character LCD (3.3 and older).
+  // Settings of removed features: two screens (2.x) and the character LCD (3.4 and older).
   for (const char* old : { "screens", "layout", "content", "swap", "flip1", "flip2", "lcdAddr", "lcdSize" })
     if (prefs.isKey(old)) prefs.remove(old);
   prefs.end();

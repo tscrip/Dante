@@ -47,6 +47,8 @@ public sealed record PendingItem(string Key, string Title, DateTimeOffset Since,
 public sealed record WidgetReading
 {
     public double? Value { get; init; }
+    /// <summary>A second value, for <see cref="VisualKind.DualSparkline"/> (the bottom line).</summary>
+    public double? Value2 { get; init; }
     public string? Text { get; init; }
     public IReadOnlyList<PendingItem>? Pending { get; init; }
     /// <summary>For countdowns (<see cref="VisualKind.Timer"/>): DANTE ticks the clock down by itself between readings.</summary>
@@ -54,6 +56,9 @@ public sealed record WidgetReading
     public string? Error { get; init; }
 
     public static WidgetReading Fail(string error) => new() { Error = error };
+
+    /// <summary>What the warn / critical levels look at: with two values, whichever is higher.</summary>
+    public double? LevelValue => Value is { } a && Value2 is { } b ? Math.Max(a, b) : Value ?? Value2;
 }
 
 /// <summary>A countdown: seconds left, the length of the whole countdown (for the progress bar), and whether it is ticking.</summary>

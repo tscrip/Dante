@@ -7,7 +7,7 @@
 // Settings come from the PC (`cfg` message) and are stored in flash.
 namespace Displays {
   // KIND_AUTO = the OLED if it answers on I2C, otherwise the TFT (an SPI screen can't be detected).
-  enum Kind : uint8_t { KIND_OLED = 0, KIND_TFT = 2, KIND_AUTO = 255 };   // 1 was the character LCD (removed)
+  enum Kind : uint8_t { KIND_OLED = 0, KIND_TFT = 2, KIND_AUTO = 255 };   // 1 was the character LCD (removed in 3.5)
 
   struct Settings {
     Kind kind = KIND_AUTO;      // what's configured; see active() for what's in use

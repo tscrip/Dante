@@ -18,7 +18,12 @@ public static class DeviceProtocol
     public static JsonObject Widgets(IEnumerable<WidgetDefinition> apps) => new()
     {
         ["t"] = "apps",
-        ["apps"] = new JsonArray([.. apps.Take(MaxWidgets).Select(a => (JsonNode)new JsonObject
+        ["apps"] = new JsonArray([.. apps.Take(MaxWidgets).Select(a => (JsonNode)WidgetJson(a))]),
+    };
+
+    private static JsonObject WidgetJson(WidgetDefinition a)
+    {
+        var o = new JsonObject
         {
             ["id"] = Format.ToDeviceText(a.Id, 15),
             ["name"] = Format.ToDeviceText(a.Name, 19),
@@ -26,11 +31,18 @@ public static class DeviceProtocol
             ["min"] = a.Min,
             ["max"] = a.Max,
             ["unit"] = Format.ToDeviceText(a.Unit, 5),
-        })]),
-    };
+        };
+        if (a.Visual == VisualKind.DualSparkline)
+        {
+            o["l1"] = Format.ToDeviceText(string.IsNullOrWhiteSpace(a.Label1) ? "A" : a.Label1.Trim(), 4);
+            o["l2"] = Format.ToDeviceText(string.IsNullOrWhiteSpace(a.Label2) ? "B" : a.Label2.Trim(), 4);
+        }
+        return o;
+    }
 
     /// <param name="timer">For countdowns: <c>v</c> becomes the seconds left, plus <c>tot</c> (whole length) and <c>run</c>.</param>
-    public static JsonObject Value(string appId, double? value, string? text, int level, string? quip, TimerReading? timer = null)
+    /// <param name="value2">The bottom line of a dual sparkline.</param>
+    public static JsonObject Value(string appId, double? value, string? text, int level, string? quip, TimerReading? timer = null, double? value2 = null)
     {
         var msg = new JsonObject { ["t"] = "val", ["id"] = appId, ["lvl"] = level };
         if (timer is not null)
@@ -43,6 +55,7 @@ public static class DeviceProtocol
         {
             msg["v"] = Math.Round(v, 2);
         }
+        if (value2 is { } v2 && double.IsFinite(v2)) msg["v2"] = Math.Round(v2, 2);
         if (text is not null) msg["txt"] = Format.ToDeviceText(text, 47);
         if (!string.IsNullOrWhiteSpace(quip)) msg["quip"] = Format.ToDeviceText(quip, 63);
         return msg;
@@ -88,6 +101,7 @@ public static class DeviceProtocol
     public static string VisualWireName(VisualKind v) => v switch
     {
         VisualKind.Sparkline => "spark",
+        VisualKind.DualSparkline => "spark2",
         _ => v.ToString().ToLowerInvariant(),
     };
 }

@@ -112,7 +112,7 @@ public class PluginTests : IDisposable
         Assert.All(types.All, t => Assert.NotNull(plugins.Find(t.PluginId)));
         Assert.Equal(["Sessions waiting on me", "Subscription usage"], plugins.WidgetTypes("claude-code").Select(t => t.DisplayName));
         // The built-in plugins are all there (new plugins may add more anywhere in the list).
-        string[] builtIn = ["claude-code", "azure-devops", "calendar", "pomodoro", "days-until", "web-api", "command", "push"];
+        string[] builtIn = ["claude-code", "azure-devops", "calendar", "pomodoro", "system", "days-until", "web-api", "command", "push"];
         Assert.All(builtIn, id => Assert.NotNull(plugins.Find(id)));
         Assert.Equal(plugins.All.Count, plugins.All.Select(p => p.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count());   // ids are unique
         Assert.Contains(plugins.All, p => p.ConfigComponent is not null);   // Claude, Calendar, Pomodoro bring their own panels

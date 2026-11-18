@@ -20,9 +20,9 @@ before you start.
 
 Almost everything people want (new data on DANTE, new nudges, new settings) is a **plugin in `pc/`**,
 and needs no firmware change. What a plugin can make DANTE do: show widgets (a value, text, a list of
-waiting things, a countdown, in any of the seven visuals), nudge (take over the screen until answered),
+waiting things, a countdown, in any of the eight visuals), nudge (take over the screen until answered),
 say something in a speech bubble, and react to the buttons. What it **can't** do without a firmware (and
-protocol) change: switch DANTE to a particular screen, draw something other than the seven visuals, or
+protocol) change: switch DANTE to a particular screen, draw something other than the eight visuals, or
 change the face's look. For those, see "Firmware standards", and tell the user they'll need to reflash.
 
 ## Words we use
@@ -32,7 +32,7 @@ change the face's look. For those, see "Firmware standards", and tell the user t
 | **Plugin** | Something that adds functionality to DANTE (Claude Code, Calendar, Pomodoro...). Has exactly one page in the PC app, `/plugins/<id>`. | `IPlugin` |
 | **Widget** | One screen on DANTE, made from one of a plugin's widget types. Has an **Active** switch. | `WidgetDefinition` (in `config.json` under `widgets`) |
 | **Widget type** | A kind of widget a plugin offers ("Subscription usage", "Countdown to a date"). A plugin can offer several. | `IWidgetType` |
-| **Visual** | How a widget is drawn: gauge, bar, counter, text, sparkline, status, timer. | `VisualKind` |
+| **Visual** | How a widget is drawn: gauge, bar, counter, text, sparkline, dual sparkline (two values, e.g. CPU and memory: set `Value` and `Value2`), status, timer. | `VisualKind` |
 | **Nudge** / takeover | DANTE takes over its screen until the human answers (SELECT = "I'm on it", LEFT/RIGHT = "later"). Two kinds: driven by a widget's value (`TakeoverRule`, the user sets it in the widget editor), or raised by the plugin itself for timers and reminders (`DeviceAlerts`). | `TakeoverRule`, `DeviceAlerts` |
 | **Feature** / slice | A folder under `pc/src/Dante.Server/Features/`. Every plugin is one; so are the Device and Mood pages. | `IFeature` |
 
@@ -103,7 +103,8 @@ button* page and does the same on every screen: plugins never take it. Register 
 engine's own SELECT handling (open the link, long press = refresh everything).
 
 Sidebar order (`IPlugin.Order`) of the built-in plugins: 10 Claude Code, 20 Azure DevOps, 30 Calendar,
-40 Pomodoro, 70 Days until, 80 Web API, 85 Command, 90 REST push. Pick a free number in between.
+40 Pomodoro, 50 System performance, 70 Days until, 80 Web API, 85 Command, 90 REST push. Pick a free
+number in between.
 
 ## Adding a plugin (the recipe)
 

@@ -23,8 +23,8 @@
             @if (_type is not null) { <span> · @_type.DisplayName</span> }
         </p>
     </div>
-    <WidgetPreview Page="PreviewPage" Pages="PreviewPages" Visual="_w.Visual" Name="@_w.Name" Value="_test?.Value" Min="_w.Min" Max="_w.Max" Unit="@_w.Unit" Text="@_test?.Text"
-                   Level="LevelEvaluator.Evaluate(_w.Levels, _test?.Value)" />
+    <WidgetPreview Page="PreviewPage" Pages="PreviewPages" Visual="_w.Visual" Name="@_w.Name" Value="_test?.Value" Value2="_test?.Value2" Label1="@_w.Label1" Label2="@_w.Label2" Min="_w.Min" Max="_w.Max" Unit="@_w.Unit" Text="@_test?.Text"
+                   Level="LevelEvaluator.Evaluate(_w.Levels, _test?.LevelValue)" />
 </div>
 
 @if (_message is not null) { <div class="notice @(_messageIsError ? "error" : "")">@_message</div> }
@@ -43,6 +43,11 @@
         <label class="field"><span>Min</span><input type="number" step="any" @bind="_w.Min" /></label>
         <label class="field"><span>Max</span><input type="number" step="any" @bind="_w.Max" /></label>
         <label class="field"><span>Unit</span><input type="text" @bind="_w.Unit" maxlength="5" placeholder="%, PRs, °C" /></label>
+        @if (_w.Visual == VisualKind.DualSparkline)
+        {
+            <label class="field"><span>Top line label</span><input type="text" @bind="_w.Label1" @bind:event="oninput" maxlength="4" placeholder="CPU" /></label>
+            <label class="field"><span>Bottom line label</span><input type="text" @bind="_w.Label2" @bind:event="oninput" maxlength="4" placeholder="MEM" /></label>
+        }
     </div>
 </div>
 
@@ -71,7 +76,7 @@
             if (_test.Error is not null) { <span class="crit small">@_test.Error</span> }
             else
             {
-                <span class="small">value <strong>@Format.Number(_test.Value)</strong> · @_test.Text
+                <span class="small">value <strong>@Format.Number(_test.Value)</strong>@if (_test.Value2 is { } v2) { <span> / <strong>@Format.Number(v2)</strong></span> } · @_test.Text
                     @if (_test.Pending is { Count: > 0 } p) { <span> · @p.Count pending (oldest: @p.OrderBy(x => x.Since).First().Title)</span> }
                 </span>
             }
@@ -239,6 +244,7 @@
         VisualKind.Text => "A line of scrolling text.",
         VisualKind.Sparkline => "Mini history graph (DANTE remembers the last 32 values).",
         VisualKind.Status => "OK / ! / ✕ icon by level, plus text.",
+        VisualKind.DualSparkline => "Two mini history graphs, one per line, each with its label and current value (e.g. CPU and memory). Needs a widget that gives two values.",
         VisualKind.Timer => "A countdown (m:ss) with a progress bar. The value is the seconds left and Max the full length; DANTE ticks it down by itself. Used by the Pomodoro timer.",
         _ => "",
     };

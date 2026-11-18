@@ -15,7 +15,7 @@ public sealed class CommandSource : IWidgetType
     public string Type => TypeName;
     public string PluginId => CommandPlugin.PluginId;
     public string DisplayName => "Command output";
-    public string Description => "Runs a program each poll. Output: a number, \"<number> <text>\", or JSON {\"value\":1,\"text\":\"...\"}.";
+    public string Description => "Runs a program each poll. Output: a number, \"<number> <text>\", or JSON {\"value\":1,\"text\":\"...\"} (add \"value2\" for a dual sparkline).";
 
     public IReadOnlyList<SettingField> Fields { get; } =
     [
@@ -63,7 +63,7 @@ public sealed class CommandSource : IWidgetType
         if (trimmed.StartsWith('{'))
         {
             var json = JsonNode.Parse(trimmed);
-            return new WidgetReading { Value = JsonPath.Number(json, "value"), Text = JsonPath.Text(json, "text") };
+            return new WidgetReading { Value = JsonPath.Number(json, "value"), Value2 = JsonPath.Number(json, "value2"), Text = JsonPath.Text(json, "text") };
         }
         var m = Regex.Match(trimmed, @"^(-?\d+(?:\.\d+)?)\s*(.*)$", RegexOptions.Singleline);
         return m.Success

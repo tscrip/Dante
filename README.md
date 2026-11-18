@@ -40,7 +40,7 @@ in an app on your PC, which talks to DANTE over Bluetooth or USB. You add new th
 * **A face with moods.** Robot eyes that blink, glance around and react. The mood follows how many things
   are waiting on you and for how long: `happy → curious → antsy → grumpy → meltdown`. With no PC around it
   gets sleepy. On the colour screen the eyes change colour with the mood.
-* **Widgets.** Screens you flip through with LEFT/RIGHT: gauges, bars, counters, text, sparklines, status
+* **Widgets.** Screens you flip through with LEFT/RIGHT: gauges, bars, counters, text, sparklines (one or two), status
   icons and countdowns. Each widget has an **Active** switch, so DANTE only shows what you want right now.
 * **Plugins.** Each one adds something: your Claude subscription usage, Claude Code sessions waiting on
   you, pull requests to review, meeting reminders from Outlook, a Pomodoro timer, countdowns to dates,
@@ -198,6 +198,7 @@ The pages of the PC app:
 | **Azure DevOps** | *Pull requests* (to review, yours waiting on you, or both) | organisation URL, personal access token |
 | **Calendar** | *Next meeting* (countdown) | Outlook / Microsoft 365 sign-in, reminder times (e.g. 10 and 1 minutes before), which meetings to skip |
 | **Pomodoro** | *Timer* | focus / break lengths, long breaks, auto-start; live timer with start, skip and reset |
+| **System performance** | *CPU & memory* (two live graphs on one screen, or just one) | live CPU and memory of this PC; works on Windows, macOS and Linux with nothing to install |
 | **Days until** | *Countdown to a date* (one per date) | — (each widget has its event and date) |
 | **Web API (JSON)** | *JSON value* (one per URL) | — (each widget has its URL and which field to show) |
 | **Command** | *Command output* (one per command) | — (each widget has its program) |
@@ -333,7 +334,7 @@ Your settings come along automatically:
 
 * **Apps → widgets:** `config.json` is converted on first start, and settings that several widgets
   shared (the Azure DevOps organisation and token, the Claude token) move to their plugin page.
-* **One screen (3.0) and no character LCDs (3.2):** DANTE drives one screen, the OLED or the TFT. A
+* **One screen (3.0) and no character LCDs (3.5):** DANTE drives one screen, the OLED or the TFT. A
   config set to a 1602/2004 LCD or to two screens goes back to *Automatic*, keeping "upside down".
 * **DeskBuddy / HANK:** the project had those names before. The PC app copies an old config over on first
   start, old `HANK_*` / `DESKBUDDY_*` environment variables still work, and a saved device name is renamed.
