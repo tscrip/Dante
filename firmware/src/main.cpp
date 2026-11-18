@@ -156,6 +156,7 @@ static void onMessage(JsonDocument& m) {
     showToast("", m["txt"] | "");
   } else if (!strcmp(t, "cfg")) {
     if (Displays::applyConfig(m)) sliding = false;
+    Face::setLook(Displays::settings().look);
   }
 }
 
@@ -453,6 +454,7 @@ void setup() {
   Buttons::begin();
   Displays::begin();
   Face::begin();
+  Face::setLook(Displays::settings().look);
   Link::begin(onMessage);
   Link::onText(onText);
 

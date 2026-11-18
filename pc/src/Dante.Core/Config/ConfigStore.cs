@@ -94,6 +94,7 @@ public sealed class ConfigStore
         }
         config.Device.Brightness = Math.Clamp(config.Device.Brightness, 0, 255);
         config.Device.AccentColor = $"#{config.Device.AccentRgb:X6}";   // normalised; junk becomes the default
+        if (!Enum.IsDefined(config.Device.Look)) config.Device.Look = Look.Classic;
         MigrateLegacy(config);
         config.Device.LcdAddress = Math.Clamp(config.Device.LcdAddress, 0x08, 0x77);
         config.Device.LcdSize = config.Device.EffectiveLcdSize;   // remember the size of an explicitly picked LCD

@@ -80,6 +80,9 @@ public sealed class DeviceSettings
     /// <summary>The screen is mounted upside down: rotate it 180° (OLED and TFT; character LCDs can't rotate).</summary>
     public bool Flip { get; set; }
 
+    /// <summary>DANTE's look: eye style, little habits and accessories (OLED and TFT).</summary>
+    public Look Look { get; set; } = Look.Classic;
+
     /// <summary>Older configs had one flag per screen (two-screen mode); the first screen's flag carries over.</summary>
     [JsonPropertyName("flipScreen1")]
     public bool? LegacyFlipScreen1 { get; set; }
@@ -162,6 +165,42 @@ public enum DisplayType
 
 [JsonConverter(typeof(JsonStringEnumConverter<LcdSize>))]
 public enum LcdSize { Size16x2, Size20x4 }
+
+/// <summary>
+/// DANTE's look. The numeric value goes over the wire, so only append new looks at the end.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<Look>))]
+public enum Look
+{
+    /// <summary>The original DANTE.</summary>
+    Classic = 0,
+    /// <summary>Curly mustache, calmly half-lidded eyes, slow blinks and unhurried glances.</summary>
+    Gentleman = 1,
+    /// <summary>Round eyes behind glasses; often looks up while "thinking".</summary>
+    Nerd = 2,
+    /// <summary>Heavy eyebrows (a built-in frown) and a bristly mustache.</summary>
+    GrumpyUncle = 3,
+    /// <summary>Big eyes, a party hat, happy hops and confetti.</summary>
+    Party = 4,
+}
+
+public static class LookInfo
+{
+    public static string Title(this Look l) => l switch
+    {
+        Look.GrumpyUncle => "Grumpy Uncle",
+        _ => l.ToString(),
+    };
+
+    public static string Describe(this Look l) => l switch
+    {
+        Look.Gentleman => "A curly mustache, calm half-lidded eyes and slow, deliberate blinks.",
+        Look.Nerd => "Round eyes behind glasses. Often glances up while \"thinking\".",
+        Look.GrumpyUncle => "Heavy eyebrows that make every mood a bit sterner, plus a bristly mustache.",
+        Look.Party => "Big sparkly eyes, a party hat, and happy hops with confetti.",
+        _ => "The original DANTE, as nature intended.",
+    };
+}
 
 [JsonConverter(typeof(JsonStringEnumConverter<Personality>))]
 public enum Personality { Cheerful, Sarcastic, Dramatic }

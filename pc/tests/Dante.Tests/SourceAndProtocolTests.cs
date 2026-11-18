@@ -44,8 +44,28 @@ public class ProtocolTests
     public void Cfg_carries_the_single_screen_settings()
     {
         var msg = DeviceProtocol.Cfg(new DeviceSettings { Brightness = 300, Display = DisplayType.Tft35, Flip = true });
-        Assert.Equal("""{"t":"cfg","bright":255,"display":"tft","lcdSize":"1602","lcdAddr":39,"flip":true,"accent":6220500}""", msg.ToJsonString());
+        Assert.Equal("""{"t":"cfg","bright":255,"display":"tft","lcdSize":"1602","lcdAddr":39,"flip":true,"accent":6220500,"look":0}""", msg.ToJsonString());
         Assert.False(DeviceProtocol.Cfg(new DeviceSettings())["flip"]!.GetValue<bool>());
+    }
+
+    [Theory]
+    [InlineData(Look.Classic, 0)]
+    [InlineData(Look.Gentleman, 1)]
+    [InlineData(Look.Nerd, 2)]
+    [InlineData(Look.GrumpyUncle, 3)]
+    [InlineData(Look.Party, 4)]
+    [InlineData((Look)42, 0)]                      // unknown: DANTE gets the classic look
+    public void Look_reaches_dante_as_its_number(Look look, int wire)
+    {
+        Assert.Equal(wire, DeviceProtocol.Cfg(new DeviceSettings { Look = look })["look"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void Look_is_saved_by_name()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(new DeviceSettings { Look = Look.GrumpyUncle });
+        Assert.Contains("\"GrumpyUncle\"", json);
+        Assert.Equal(Look.GrumpyUncle, System.Text.Json.JsonSerializer.Deserialize<DeviceSettings>(json)!.Look);
     }
 
     [Theory]

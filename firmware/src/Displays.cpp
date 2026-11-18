@@ -32,6 +32,7 @@ void load() {
   cfg.flip = prefs.isKey("flip") ? prefs.getBool("flip", false) : prefs.getBool("flip1", false);   // 2.x: one flag per screen
   cfg.bright = prefs.getUChar("bright", 200);
   cfg.accent = prefs.getUInt("accent", 0x5EEAD4) & 0xFFFFFF;
+  cfg.look = prefs.getUChar("look", 0);
   prefs.end();
 }
 
@@ -43,6 +44,7 @@ void save() {
   prefs.putBool("flip", cfg.flip);
   prefs.putUChar("bright", cfg.bright);
   prefs.putUInt("accent", cfg.accent);
+  prefs.putUChar("look", cfg.look);
   // Two-screen settings from 2.x firmware.
   for (const char* old : { "screens", "layout", "content", "swap", "flip1", "flip2" })
     if (prefs.isKey(old)) prefs.remove(old);
@@ -136,6 +138,7 @@ bool applyConfig(JsonDocument& m) {
   Settings before = cfg;
   if (m["bright"].is<int>()) cfg.bright = (uint8_t)constrain(m["bright"].as<int>(), 0, 255);
   if (m["accent"].is<long>()) cfg.accent = (uint32_t)m["accent"].as<long>() & 0xFFFFFF;   // 0xRRGGBB
+  if (m["look"].is<int>()) cfg.look = (uint8_t)constrain(m["look"].as<int>(), 0, 255);   // Face clamps unknown looks
   if (m["display"].is<const char*>()) {
     const char* d = m["display"];
     bool is2004 = !strcmp(d, "lcd2004");
@@ -152,7 +155,8 @@ bool applyConfig(JsonDocument& m) {
   else if (m["flip1"].is<bool>()) cfg.flip = m["flip1"];   // a PC app from before 3.0
 
   bool changed = before.kind != cfg.kind || before.lcdAddr != cfg.lcdAddr || before.lcdSize != cfg.lcdSize ||
-                 before.flip != cfg.flip || before.bright != cfg.bright || before.accent != cfg.accent;
+                 before.flip != cfg.flip || before.bright != cfg.bright || before.accent != cfg.accent ||
+                 before.look != cfg.look;
   if (changed) { apply(); save(); }
   return changed;
 }

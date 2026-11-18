@@ -52,6 +52,10 @@ will walk you through yours: the PR queue, the blocked agent, the 90% usage gaug
 
 * **Face screen** — procedural robot eyes that blink, glance around and react. Press **SELECT** (top) for a
   random gag: heart eyes, dizzy, wink, laughing `> <`, surprised, "boop!".
+* **Looks** — dress DANTE up on the *Mood & personality* page: **Classic**, **Gentleman** (curly mustache,
+  calm half-lidded eyes, slow blinks), **Nerd** (glasses, glances up while "thinking"), **Grumpy Uncle**
+  (heavy eyebrows that make every mood sterner, bristly mustache) or **Party** (big eyes, a party hat, happy
+  hops and confetti). Each changes the eyes, the little habits and the accessories, on the OLED and the TFT.
 * **Mood** — depends on how many things are waiting on you and how long the oldest has waited:
   `happy → curious → antsy → grumpy → meltdown`. Thresholds are set on the *Mood & personality* page.
   With no PC it gets sleepy ("no PC").
