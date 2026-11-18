@@ -183,7 +183,7 @@ The pages of the PC app:
 
 ## Plugins
 
-| Plugin | Widgets | Settings |
+| Plugin | Widgets | On its page |
 |---|---|---|
 | **Claude Code** | *Subscription usage* (gauge: 5-hour window, week or Opus week) · *Sessions waiting on me* (nudges you) | Claude login (found automatically), hook installer, live list of waiting sessions |
 | **Azure DevOps** | *Pull requests* (to review, yours waiting on you, or both) | organisation URL, personal access token |

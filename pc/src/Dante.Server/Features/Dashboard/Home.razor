@@ -64,7 +64,7 @@
                     else { <span class="pill @LevelClass(a.Level)">@(a.Level switch { 0 => "ok", 1 => "warn", _ => "crit" })</span> }
                 </div>
                 <div style="margin:.5rem 0">
-                    <AppPreview Page="@(Carousel.IndexOf(a.Definition.Id) + 1)" Pages="Carousel.Count" Visual="a.Definition.Visual" Name="@a.Definition.Name" Value="a.Reading?.Value" Min="a.Definition.Min" Max="a.Definition.Max"
+                    <WidgetPreview Page="@(Carousel.IndexOf(a.Definition.Id) + 1)" Pages="Carousel.Count" Visual="a.Definition.Visual" Name="@a.Definition.Name" Value="a.Reading?.Value" Min="a.Definition.Min" Max="a.Definition.Max"
                                  Unit="@a.Definition.Unit" Text="@a.Reading?.Text" Level="a.Level" Scale="2" Sample="false" />
                 </div>
                 @if (a.Error is not null) { <p class="crit small">@a.Error</p> }

@@ -18,9 +18,12 @@ before you start.
 | `docs/protocol.md` | The JSON-lines protocol between them | — | — |
 | `case/` | 3D-printable case (OpenSCAD) | OpenSCAD | `openscad -o case/case.stl case/dante_case.scad` |
 
-Almost everything people want (new data on DANTE, new nudges, new settings) is a **plugin in `pc/`**.
-Only touch `firmware/` when the device itself has to draw or do something new (a new visual, a new
-button behaviour); see "Firmware standards". New plugins never need firmware changes.
+Almost everything people want (new data on DANTE, new nudges, new settings) is a **plugin in `pc/`**,
+and needs no firmware change. What a plugin can make DANTE do: show widgets (a value, text, a list of
+waiting things, a countdown, in any of the seven visuals), nudge (take over the screen until answered),
+say something in a speech bubble, and react to the buttons. What it **can't** do without a firmware (and
+protocol) change: switch DANTE to a particular screen, draw something other than the seven visuals, or
+change the face's look. For those, see "Firmware standards", and tell the user they'll need to reflash.
 
 ## Words we use
 
@@ -30,7 +33,7 @@ button behaviour); see "Firmware standards". New plugins never need firmware cha
 | **Widget** | One screen on DANTE, made from one of a plugin's widget types. Has an **Active** switch. | `WidgetDefinition` (in `config.json` under `widgets`) |
 | **Widget type** | A kind of widget a plugin offers ("Subscription usage", "Countdown to a date"). A plugin can offer several. | `IWidgetType` |
 | **Visual** | How a widget is drawn: gauge, bar, counter, text, sparkline, status, timer. | `VisualKind` |
-| **Nudge** / takeover | DANTE takes over its screen until the human answers (SELECT = "I'm on it", LEFT/RIGHT = "later"). | `TakeoverRule`, `DeviceAlerts` |
+| **Nudge** / takeover | DANTE takes over its screen until the human answers (SELECT = "I'm on it", LEFT/RIGHT = "later"). Two kinds: driven by a widget's value (`TakeoverRule`, the user sets it in the widget editor), or raised by the plugin itself for timers and reminders (`DeviceAlerts`). | `TakeoverRule`, `DeviceAlerts` |
 | **Feature** / slice | A folder under `pc/src/Dante.Server/Features/`. Every plugin is one; so are the Device and Mood pages. | `IFeature` |
 
 Use **plugin** and **widget** in everything the user sees (UI text, docs, messages). On the wire the
@@ -65,20 +68,40 @@ Rules of the architecture:
    `PluginSettings.Get(plugin, key, widget)`); per-widget settings are `IWidgetType.Fields` (read with
    `widget.Get(this, key)`). Anything richer is a settings class stored with `config.SetFeature(key, value)`
    and read with `config.Feature<T>(key)` (see `Pomodoro/PomodoroSettings.cs`).
+   - Field values are always **strings**: a `Bool` field is `"true"` / `"false"`, a `Number` field is
+     text. Parse them, clamp them to sensible ranges, and fall back to a default on nonsense.
+   - Both getters fall back to the field's `Default` and resolve `env:VAR_NAME`.
+5. **`config.json` is for settings, not running state.** Saving it makes the engine resend everything
+   to DANTE, so never save on every tick or button press. Keep running state (a counter, "next reminder
+   at") in a singleton service. Persist it in its own file next to `config.json` only if losing it on a
+   restart would really matter, and say so to the user.
 
-Extension points a plugin can use:
+Extension points a plugin can use (kernel paths are under `pc/src/Dante.Core/`, examples under
+`pc/src/Dante.Server/Features/`):
 
-| Need | Use | Example |
-|---|---|---|
-| A screen on DANTE | `IWidgetType` | `DaysUntil/DaysUntilWidget.cs` |
-| Shared settings with a form | `IPlugin.Fields` + `PluginSettings` | `AzureDevOps/` |
-| A richer plugin page (sign-in, live status, buttons) | `IPlugin.ConfigComponent` = a Razor component | `Calendar/CalendarPanel.razor` |
-| React to DANTE's buttons | `IDeviceEventHandler`, registered in `IFeature.Start` with `DanteEngine.AddHandler(handler, order)` | `Pomodoro/PomodoroService.cs` |
-| Nudge the human yourself | `DeviceAlerts.Raise / Clear / Say`; answers arrive as `Acknowledged` / `Snoozed` | `Calendar/CalendarService.cs` |
-| Something running in the background | a `BackgroundService` registered in `AddServices` | `Pomodoro/PomodoroService.cs` |
-| A countdown on DANTE | return a `TimerReading` and use `VisualKind.Timer` | `Pomodoro/PomodoroSource.cs` |
-| Push updates straight away (not at the next poll) | `DanteEngine.PollWidgetType(type)` / `PollNow(id)` | `ClaudeCode/ClaudeCodeFeature.cs` |
-| A REST endpoint | `IFeature.MapEndpoints` | `Push/PushFeature.cs` |
+| Need | Use | Defined in | Example |
+|---|---|---|---|
+| A screen on DANTE | `IWidgetType` | `Widgets/IWidgetType.cs` | `DaysUntil/DaysUntilWidget.cs` |
+| Shared settings with a form | `IPlugin.Fields` + `PluginSettings.Get(plugin, key, widget)` | `Plugins/Plugins.cs` | `AzureDevOps/` |
+| A richer plugin page (sign-in, live status, buttons) | `IPlugin.ConfigComponent` = a Razor component | `Plugins/Plugins.cs` | `Calendar/CalendarPanel.razor` |
+| React to DANTE's buttons | `IDeviceEventHandler.Handle(evt, screen)`, registered in `IFeature.Start` with `DanteEngine.AddHandler(handler, order)` | `Device/DeviceEvents.cs` | `Pomodoro/PomodoroService.cs` |
+| Nudge the human yourself | `DeviceAlerts.Raise(id, title, text, level 1 or 2)`, `Clear(id)`, `Say(text)`, `IsActive(id)`; answers arrive as the `Acknowledged` (SELECT) / `Snoozed` (LEFT/RIGHT) events | `Device/DeviceEvents.cs` | `Calendar/CalendarService.cs` |
+| Something running in the background | a `BackgroundService` (see "Plugins that nudge or run in the background") | — | `Pomodoro/PomodoroService.cs` |
+| A countdown on DANTE | return a `TimerReading` and use `VisualKind.Timer` | `Widgets/IWidgetType.cs` | `Pomodoro/PomodoroSource.cs` |
+| Push updates straight away (not at the next poll) | `DanteEngine.PollWidgetType(type)` / `PollNow(id)` | `Engine/DanteEngine.cs` | `ClaudeCode/ClaudeCodeFeature.cs` |
+| A REST endpoint | `IFeature.MapEndpoints` | `Dante.Server/Features/IFeature.cs` | `Push/PushFeature.cs` |
+| A live-updating Razor page or panel | inherit `LiveComponent` | `Dante.Server/Components/Shared/LiveComponent.cs` | `Pomodoro/PomodoroPanel.razor` |
+
+How a plugin page is laid out (`Features/Plugins/PluginPage.razor`): the plugin's name and description,
+then a form for its `Fields` (if any), then its `ConfigComponent` (if any), then its widgets with
+*+ Add* buttons. A panel adds to the form; it doesn't replace it.
+
+Button handler order: use **100** for handlers that act on their own widget's screen (they check the
+`screen` argument and return false otherwise). The MAGIC button's PC action is the catch-all at 1000.
+MAGIC presses arrive even while a nudge is showing.
+
+Sidebar order (`IPlugin.Order`) of the built-in plugins: 10 Claude Code, 20 Azure DevOps, 30 Calendar,
+40 Pomodoro, 70 Days until, 80 Web API, 85 Command, 90 REST push. Pick a free number in between.
 
 ## Adding a plugin (the recipe)
 
@@ -108,13 +131,24 @@ Follow these steps in order. `Features/DaysUntil/` is the reference: it is small
      Weather page."). Never throw for expected problems; never put a secret in the message.
    - Use `IHttpClientFactory` for HTTP (`http.CreateClient(nameof(MyWidget))`), honour the
      `CancellationToken`, and inject `TimeProvider` instead of using `DateTime.Now`.
-5. **Write tests** in `pc/tests/Dante.Tests/<Name>Tests.cs` (copy `DaysUntilTests.cs`): the reading for
-   normal data, an empty/edge case, and a bad setting. Parse API responses in a `static` method and test
-   it with a JSON sample, so tests never call the internet (see `GraphParsingTests` in `CalendarTests.cs`).
-6. **Run** `cd pc && dotnet test` until everything passes (the `PluginTests` there also check that every
-   widget type belongs to a registered plugin, and that the app's services wire up).
-7. **Try it for real:** `cd pc && dotnet run --project src/Dante.Server`, open http://127.0.0.1:5280,
-   find the plugin under *Plugins*, fill in its settings, add a widget, press **Test** in the widget editor.
+5. **Write tests** in `pc/tests/Dante.Tests/<Name>Tests.cs`:
+   - Widget readings: copy `DaysUntilTests.cs`. Cover normal data, an empty or edge case, and a bad
+     setting.
+   - API responses: parse them in a `static` method and test it with a JSON sample, so tests never call
+     the internet (see `GraphParsingTests` in `CalendarTests.cs`).
+   - Nudges, background services and buttons: copy `CalendarServiceTests` in `CalendarTests.cs`, and see
+     "Plugins that nudge or run in the background".
+6. **Run** `cd pc && dotnet test` until everything passes. The `PluginTests` there also check that every
+   widget type belongs to a registered plugin, and that the app's services wire up.
+7. **Try it for real** with a throw-away config, so the user's real settings aren't touched:
+
+   ```bash
+   cd pc && DANTE_CONFIG=/tmp/dante-try/config.json dotnet run --project src/Dante.Server -- --no-browser
+   ```
+
+   Open http://127.0.0.1:5280, find the plugin under *Plugins*, fill in its settings, add a widget, and
+   press **Test** in the widget editor. Errors about Bluetooth or the USB port are normal when no DANTE
+   is connected.
 8. **Document it:** add a row to the *Plugins* table in `README.md`.
 9. **Tell the user** in plain language what you built, where to find it in the app, what they need to
    provide (an API key, an account), and anything you couldn't check.
@@ -127,7 +161,67 @@ Things a plugin must get right:
 - **Never block:** everything is `async`; no `.Result` / `.Wait()`.
 - **Things that exist once** (a timer, "next meeting") set `AllowMultiple => false`.
 - **Device limits:** widget names ≤ 19 characters, text ≤ 47, nudge title/text ≤ 63, at most 12 widget
-  screens. The protocol layer trims longer strings, but write for these sizes.
+  screens. The protocol layer trims longer strings, but write for these sizes. A hint like
+  "SEL: done" has to fit inside the nudge text.
+
+## Plugins that nudge or run in the background
+
+Reminders, timers and anything that acts on its own (rather than only answering "what's the value now?")
+need a service that runs all the time. `Pomodoro/` and `Calendar/` are the worked examples; this is the
+pattern:
+
+```csharp
+public sealed class WaterService(ConfigStore config, DeviceAlerts alerts, TimeProvider time, ILogger<WaterService> log)
+    : BackgroundService, IDeviceEventHandler
+{
+    public const string AlertId = "water";   // one id per nudge this plugin raises
+    private DanteEngine? _engine;            // see "Why Initialize" below
+
+    public void Initialize(DanteEngine engine)
+    {
+        _engine = engine;
+        alerts.Acknowledged += a => { if (a.Id == AlertId) { /* SELECT: "done" */ } };
+        alerts.Snoozed += a => { if (a.Id == AlertId) { /* LEFT/RIGHT: "later" */ } };
+        engine.AddHandler(this, 100);        // only if it reacts to buttons on its own screen
+    }
+
+    // Buttons on DANTE. Return true only for presses this plugin owns.
+    public bool Handle(DeviceEvent evt, WidgetDefinition? screen) =>
+        evt.Type == "btn" && evt.Button == "magic" && screen?.Type == WaterWidget.TypeName && DoSomething();
+
+    internal Task StepAsync(CancellationToken ct) { /* one round: decide, then alerts.Raise(...) / Clear(...) */ }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        using var tick = new PeriodicTimer(TimeSpan.FromSeconds(15), time);
+        while (await tick.WaitForNextTickAsync(stoppingToken))
+            try { await StepAsync(stoppingToken); } catch (Exception ex) { log.LogError(ex, "Water step failed"); }
+    }
+}
+
+// In the plugin's IFeature:
+public void AddServices(IServiceCollection services)
+{
+    services.AddSingleton<WaterService>();                                              // one shared instance...
+    services.AddHostedService(sp => sp.GetRequiredService<WaterService>());             // ...that also runs in the background
+    services.AddSingleton<IWidgetType, WaterWidget>();
+}
+public void Start(IServiceProvider services) =>
+    services.GetRequiredService<WaterService>().Initialize(services.GetRequiredService<DanteEngine>());
+```
+
+- **Why `Initialize` instead of injecting `DanteEngine`:** the engine needs all widget types, and a
+  widget type that reads from this service needs the service. Injecting the engine into the service
+  would be circular, so the engine is handed over in `IFeature.Start`.
+- **After the state changes**, call `_engine?.PollWidgetType(WaterWidget.TypeName)` so the widget
+  updates on DANTE straight away.
+- **Keep the decision logic testable:** pass the time in (`TimeProvider`, or a pure class that takes
+  `now`, like `PomodoroTimer`), and expose one `internal` step method. The test project can see
+  `internal` members.
+- **Testing:** build a `DeviceLink` on the `FakeDante` transport, `new DeviceAlerts(link)`, and your
+  service with a `ManualTime` clock. Call the step method, check `alerts.Active`, and press buttons with
+  `alerts.TryAnswer(new DeviceEvent("ack", (JsonObject)JsonNode.Parse("""{"t":"ack","id":"water"}""")!))`.
+  `CalendarServiceTests` does all of this.
 
 ## C# standards (pc/)
 
