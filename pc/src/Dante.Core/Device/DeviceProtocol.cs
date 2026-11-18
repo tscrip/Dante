@@ -76,6 +76,7 @@ public static class DeviceProtocol
         ["lcdSize"] = d.EffectiveLcdSize == LcdSize.Size20x4 ? "2004" : "1602",
         ["lcdAddr"] = Math.Clamp(d.LcdAddress, 0x08, 0x77),
         ["flip"] = d.Flip,
+        ["accent"] = d.AccentRgb,   // 0xRRGGBB, used by the TFT
     };
 
     public static string DisplayWireName(DisplayType d) => d switch

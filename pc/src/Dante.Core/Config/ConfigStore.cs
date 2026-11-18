@@ -93,6 +93,7 @@ public sealed class ConfigStore
             app.Takeover.Level = Math.Clamp(app.Takeover.Level, 1, 2);
         }
         config.Device.Brightness = Math.Clamp(config.Device.Brightness, 0, 255);
+        config.Device.AccentColor = $"#{config.Device.AccentRgb:X6}";   // normalised; junk becomes the default
         MigrateLegacy(config);
         config.Device.LcdAddress = Math.Clamp(config.Device.LcdAddress, 0x08, 0x77);
         config.Device.LcdSize = config.Device.EffectiveLcdSize;   // remember the size of an explicitly picked LCD

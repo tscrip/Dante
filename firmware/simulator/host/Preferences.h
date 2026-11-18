@@ -18,6 +18,8 @@ class Preferences {
   bool getBool(const char* k, bool d) { auto& m = all()[ns_]; auto it = m.find(k); return it == m.end() ? d : it->second != 0; }
   size_t putUChar(const char* k, uint8_t v) { all()[ns_][k] = v; return 1; }
   size_t putBool(const char* k, bool v) { all()[ns_][k] = v; return 1; }
+  uint32_t getUInt(const char* k, uint32_t d) { auto& m = all()[ns_]; auto it = m.find(k); return it == m.end() ? d : (uint32_t)it->second; }
+  size_t putUInt(const char* k, uint32_t v) { all()[ns_][k] = (int)v; return 4; }
   bool isKey(const char* k) { return all()[ns_].count(k) != 0; }
   bool remove(const char* k) { return all()[ns_].erase(k) != 0; }
 };

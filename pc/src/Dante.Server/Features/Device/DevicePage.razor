@@ -181,6 +181,26 @@
             {
                 <label class="check"><input type="checkbox" @bind="_cfg.Device.Flip" /> Screen is mounted upside down</label>
             }
+            @if (_cfg.Device.Display is DisplayType.Tft35 or DisplayType.Auto)
+            {
+                <label class="field" style="margin-top:.5rem"><span>Accent colour <span class="muted small">(3.5" TFT)</span></span>
+                    <div class="row" style="gap:.4rem">
+                        @foreach (var (name, hex) in AccentPresets)
+                        {
+                            <button type="button" class="swatch @(SameColor(hex) ? "on" : "")" title="@name" style="background:@hex"
+                                    @onclick="() => _cfg.Device.AccentColor = hex"></button>
+                        }
+                        <input type="color" value="@(_cfg.Device.AccentColor.ToLowerInvariant())" title="Any colour"
+                               @onchange="e => _cfg.Device.AccentColor = e.Value?.ToString() ?? DeviceSettings.DefaultAccent" />
+                    </div>
+                    <span class="help">The DANTE title, the happy eyes, the current page dot and highlights. Mood colours (antsy yellow, grumpy orange, ...) stay as they are.</span>
+                </label>
+                <div class="accent-preview">
+                    <span style="color:@_cfg.Device.AccentColor">DANTE</span>
+                    <span class="muted small" style="color:@_cfg.Device.AccentColor">happy</span>
+                    <i style="background:@_cfg.Device.AccentColor"></i><i style="background:@_cfg.Device.AccentColor"></i>
+                </div>
+            }
             <button class="btn primary" @onclick="Save" style="margin-top:.5rem">Save &amp; send to DANTE</button>
             @if (_savedAt is { } at && DateTimeOffset.UtcNow - at < TimeSpan.FromSeconds(4))
             {
@@ -295,6 +315,14 @@
     private string LcdFoundText => Link.LcdDetectedAddress is > 0 and var a ? $"✓ at {Hex(a)}" : "✗";
     private void SetLcdAddress(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var a)) _cfg.Device.LcdAddress = a; }
     private void SetBacklight(ChangeEventArgs e) => _cfg.Device.Brightness = e.Value is true ? 200 : 0;
+
+    private static readonly (string Name, string Hex)[] AccentPresets =
+    [
+        ("Teal (default)", "#5EEAD4"), ("Sky", "#7DD3FC"), ("Violet", "#A78BFA"), ("Pink", "#F472B6"),
+        ("Lime", "#A3E635"), ("Amber", "#FBBF24"), ("Copper", "#B87333"), ("White", "#E2E8F0"),
+    ];
+
+    private bool SameColor(string hex) => DeviceSettings.ParseColor(hex) == DeviceSettings.ParseColor(_cfg.Device.AccentColor);
 
     private IEnumerable<int> LcdAddresses =>
         new[] { 0x27, 0x3F }.Concat(Enumerable.Range(0x20, 8)).Concat(Enumerable.Range(0x38, 8))

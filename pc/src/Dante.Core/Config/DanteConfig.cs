@@ -49,6 +49,24 @@ public sealed class DeviceSettings
     public bool AutoConnect { get; set; } = true;
     /// <summary>OLED contrast / LCD and TFT backlight, 0-255.</summary>
     public int Brightness { get; set; } = 200;
+    /// <summary>
+    /// The 3.5" TFT's accent colour as #RRGGBB: the DANTE title, the happy eyes, the current page dot and
+    /// highlights. (The OLED and LCD can't show colour.)
+    /// </summary>
+    public string AccentColor { get; set; } = DefaultAccent;
+    public const string DefaultAccent = "#5EEAD4";
+
+    /// <summary>The accent as 0xRRGGBB; anything that isn't a #RRGGBB colour falls back to the default teal.</summary>
+    [JsonIgnore]
+    public int AccentRgb => ParseColor(AccentColor) ?? ParseColor(DefaultAccent)!.Value;
+
+    /// <summary>"#5eead4", "5EEAD4" or "#5EA" (short form) → 0x5EEAD4; null if it isn't a colour.</summary>
+    public static int? ParseColor(string? s)
+    {
+        var hex = (s ?? "").Trim().TrimStart('#');
+        if (hex.Length == 3) hex = string.Concat(hex.Select(c => new string(c, 2)));
+        return hex.Length == 6 && int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var v) ? v : null;
+    }
 
     /// <summary>What kind of screen DANTE has. DANTE always drives exactly one screen.</summary>
     public DisplayType Display { get; set; } = DisplayType.Auto;

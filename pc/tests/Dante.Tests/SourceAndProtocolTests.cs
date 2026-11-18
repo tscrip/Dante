@@ -44,8 +44,30 @@ public class ProtocolTests
     public void Cfg_carries_the_single_screen_settings()
     {
         var msg = DeviceProtocol.Cfg(new DeviceSettings { Brightness = 300, Display = DisplayType.Tft35, Flip = true });
-        Assert.Equal("""{"t":"cfg","bright":255,"display":"tft","lcdSize":"1602","lcdAddr":39,"flip":true}""", msg.ToJsonString());
+        Assert.Equal("""{"t":"cfg","bright":255,"display":"tft","lcdSize":"1602","lcdAddr":39,"flip":true,"accent":6220500}""", msg.ToJsonString());
         Assert.False(DeviceProtocol.Cfg(new DeviceSettings())["flip"]!.GetValue<bool>());
+    }
+
+    [Theory]
+    [InlineData("#B87333", 0xB87333)]
+    [InlineData("a78bfa", 0xA78BFA)]
+    [InlineData("#5EA", 0x55EEAA)]                 // short form
+    [InlineData("not a colour", 0x5EEAD4)]         // falls back to the default teal
+    [InlineData("", 0x5EEAD4)]
+    public void Accent_colour_reaches_dante_as_rrggbb(string setting, int rgb)
+    {
+        Assert.Equal(rgb, DeviceProtocol.Cfg(new DeviceSettings { AccentColor = setting })["accent"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void Accent_colour_is_normalised_when_saved()
+    {
+        var cfg = new DanteConfig { Device = { AccentColor = "b87333" } };
+        ConfigStore.Validate(cfg);
+        Assert.Equal("#B87333", cfg.Device.AccentColor);
+        cfg.Device.AccentColor = "rainbow";
+        ConfigStore.Validate(cfg);
+        Assert.Equal(DeviceSettings.DefaultAccent, cfg.Device.AccentColor);
     }
 
     [Fact]

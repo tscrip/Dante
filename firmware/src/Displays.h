@@ -19,6 +19,7 @@ namespace Displays {
     LcdSize lcdSize = LCD_1602;
     bool flip = false;          // mounted upside down: rotate 180 degrees (OLED, TFT)
     uint8_t bright = 200;
+    uint32_t accent = 0x5EEAD4; // TFT accent colour, 0xRRGGBB (title, happy eyes, highlights)
   };
 
   void begin();

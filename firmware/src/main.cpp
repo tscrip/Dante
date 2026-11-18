@@ -348,6 +348,9 @@ static const int TFT_BAR = 40;                         // status bar height
 static const float TFT_SX = TFT_W / 128.0f;            // 3.75
 static const float TFT_BAND_Y = TFT_BAR + (TFT_H - TFT_BAR - 32 * TFT_SX) / 2;
 
+// The accent colour chosen in the PC app (teal unless changed): title, happy eyes, page dot, highlights.
+static uint32_t accent() { return Displays::settings().accent; }
+
 static uint32_t moodColor(const FaceInfo& f) {
   if (f.gag == GAG_LOVE) return Rgb::Pink;
   switch (f.mood) {
@@ -356,7 +359,7 @@ static uint32_t moodColor(const FaceInfo& f) {
     case MOOD_GRUMPY:   return Rgb::Orange;
     case MOOD_MELTDOWN: return Rgb::Red;
     case MOOD_SLEEPY:   return Rgb::Slate;
-    default:            return Rgb::Teal;
+    default:            return accent();
   }
 }
 
@@ -382,7 +385,7 @@ static void tftStatusBar(TftGfx& g, uint32_t now) {
   s.setTextSize(1);
   s.setTextDatum(lgfx::textdatum_t::middle_left);
   s.setFont(&fonts::FreeSansBold12pt7b);
-  s.setTextColor(Rgb::Teal);
+  s.setTextColor(accent());
   s.drawString("DANTE", 12, y + TFT_BAR / 2);
   s.setFont(&fonts::FreeSans9pt7b);
   s.setTextColor(moodColor(f));
@@ -411,7 +414,7 @@ static void tftStatusBar(TftGfx& g, uint32_t now) {
   int n = screenCount();
   int x0 = TFT_W / 2 - (n - 1) * 8;
   for (int i = 0; i < n; i++) {
-    if (i == screen) s.fillCircle(x0 + i * 16, y + TFT_BAR / 2, 5, Rgb::Teal);
+    if (i == screen) s.fillCircle(x0 + i * 16, y + TFT_BAR / 2, 5, accent());
     else s.drawCircle(x0 + i * 16, y + TFT_BAR / 2, 4, Rgb::Slate);
   }
   s.drawFastHLine(0, y + TFT_BAR - 1, TFT_W, Rgb::Dim);
@@ -425,20 +428,20 @@ static void renderTft(Alert* alert, uint32_t now) {
     tftStatusBar(g, now);
     if (alert) {
       g.setTransform(TFT_SX, TFT_SX, 0, TFT_BAND_Y);
-      g.setColors(alert->lvl >= 2 ? Rgb::Red : Rgb::Amber);
+      g.setColors(alert->lvl >= 2 ? Rgb::Red : Rgb::Amber, Rgb::Black, accent());
       drawTakeover(g, *alert, now);
     } else if (toast.active) {
       g.setTransform(TFT_SX, TFT_SX, 0, TFT_BAND_Y);
-      g.setColors(Rgb::White);
+      g.setColors(Rgb::White, Rgb::Black, accent());
       drawToast(g, now);
     } else if (screen == 0) {
       // The face fills everything under the status bar: tall robot eyes.
       g.setTransform(TFT_SX, (TFT_H - TFT_BAR - 8) / 32.0f, 0, TFT_BAR + 4);
-      g.setColors(moodColor(Face::info()));
+      g.setColors(moodColor(Face::info()), Rgb::Black, accent());
       Face::draw(g, 0, false);
     } else if (App* a = Apps::get(screen - 1)) {
       g.setTransform(TFT_SX, TFT_SX, 0, TFT_BAND_Y);
-      g.setColors(levelColor(a->lvl));
+      g.setColors(levelColor(a->lvl), Rgb::Black, accent());
       Apps::draw(g, screen - 1, 0, screen, screenCount(), now);
     }
   });
