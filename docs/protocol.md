@@ -1,4 +1,4 @@
-# DANTE wire protocol (v1, firmware 3.0)
+# DANTE wire protocol (v1, firmware 3.2)
 
 Transport: **Bluetooth LE**, Nordic UART Service: service `6E400001-B5A3-F393-E0A9-E50E24DCCA9E`,
 the PC writes to RX `6E400002-…`, DANTE notifies on TX `6E400003-…` (lines may be split across
@@ -27,15 +27,15 @@ Limits on the device: max 12 apps, `id` ≤ 15 chars, `name` ≤ 19 chars, `unit
 | `alert` | `id`, `title`, `txt`, `lvl` (1 nudge, 2 urgent) | Take over the screen and nudge the human until acknowledged or cleared. Apps raise these through their take-over rules; features such as calendar reminders (`id` `calendar`) and the Pomodoro timer (`id` `pomodoro`) raise their own. |
 | `clear` | `id`   | Remove the takeover for that id. |
 | `say`   | `txt`  | Show a toast speech bubble (no value attached). |
-| `cfg`   | `bright` (0-255), `display` (`auto`\|`oled`\|`lcd1602`\|`lcd2004`\|`tft`), `lcdSize` (`1602`\|`2004`), `lcdAddr` (I2C address, e.g. 39 = 0x27), `flip` (bool) | Device settings; every field optional; stored in flash. DANTE always drives **one** screen. `display` picks it: `oled` = 0.91" SSD1306 128x32, `lcd1602` / `lcd2004` = 16x2 / 20x4 character LCD on a PCF8574 backpack, `tft` = 3.5" 480x320 ST7796 colour TFT on SPI, `auto` = whichever I2C screen answers (OLED preferred) and, if none does, the TFT (which can't be detected). Both LCD sizes look identical on the bus, so `lcdSize` tells DANTE which one to expect when `display` is `auto`. `bright` is the OLED contrast or the LCD/TFT backlight (0 = off). `flip` rotates the OLED or TFT 180°. (Firmware 2.x also took `screens`, `layout`, `content`, `swap`, `flip1` and `flip2` for two-screen mode; 3.0 ignores them, except that `flip1` is read as `flip` when `flip` is missing.) |
+| `cfg`   | `bright` (0-255), `display` (`auto`\|`oled`\|`tft`), `flip` (bool) | Device settings; every field optional; stored in flash. DANTE always drives **one** screen. `display` picks it: `oled` = 0.91" SSD1306 128x32 (I2C), `tft` = 3.5" 480x320 ST7796 colour TFT (SPI), `auto` = the OLED if it answers on I2C, otherwise the TFT (which can't be detected). `bright` is the OLED contrast or the TFT backlight (0 = off). `flip` rotates the screen 180°. (Older firmware also took `lcd1602` / `lcd2004` with `lcdSize` and `lcdAddr` for character LCDs, and `screens`, `layout`, `content`, `swap`, `flip1`, `flip2` for two-screen mode; 3.2 ignores them, treats an LCD as `auto`, and reads `flip1` as `flip` when `flip` is missing.) |
 
 ## Device → PC
 
 | `t`      | Fields | Meaning |
 |----------|--------|---------|
-| `hello`  | `fw`, `name`, `display`, `oled`, `lcd` | Firmware version, device name, screen type in use (`oled`/`lcd1602`/`lcd2004`/`tft`), and what answered on the I2C bus at boot: an OLED (`oled`) and the address of an LCD backpack (`lcd`, 0 = none). PC replies by sending `cfg`, `apps`, every `val`, `mood`, active `alert`s. |
+| `hello`  | `fw`, `name`, `display`, `oled` | Firmware version, device name, screen type in use (`oled`/`tft`), and whether an OLED answered on the I2C bus at boot (`oled`). PC replies by sending `cfg`, `apps`, every `val`, `mood`, active `alert`s. |
 | `pong`   | –      | Heartbeat reply. |
-| `diag`   | `boot`, `scan` | `boot` = the startup report line; `scan` = live I2C scan, e.g. `I2C scan now: bus 1 (SDA=8 SCL=9): 0x27 (LCD)`. The TFT is on SPI and never shows up in the scan. Typing `?` in a serial monitor prints the same two lines as plain text. |
+| `diag`   | `boot`, `scan` | `boot` = the startup report line; `scan` = live I2C scan, e.g. `I2C scan now: bus 1 (SDA=8 SCL=9): 0x3C (OLED)`. The TFT is on SPI and never shows up in the scan. Typing `?` in a serial monitor prints the same two lines as plain text. |
 | `btn`    | `b` ∈ `sel`,`left`,`right`,`magic`; `long` (bool); `scr` (app id or `face`) | Button press. Short `sel` on an app = "open it" (PC opens configured URL); long `sel` = "refresh now". `magic` = whatever the PC decides for the screen in `scr`: on a countdown screen (the Pomodoro timer) press = start / pause and long press = reset; anywhere else the action configured in the PC app (mute, play/pause, ...). The PC answers with a `say` describing the result. MAGIC presses are sent even during a takeover and never acknowledge it. |
 | `ack`    | `id`   | User pressed SELECT on a takeover ("I'm on it"). For a meeting reminder the PC opens the meeting's join link; for a finished Pomodoro session it starts the next one. |
 | `snooze` | `id`   | User pressed LEFT/RIGHT on a takeover ("later"). |
@@ -44,8 +44,8 @@ Limits on the device: max 12 apps, `id` ≤ 15 chars, `name` ≤ 19 chars, `unit
 
 ```
 PC  {"t":"hello"}
-DEV {"t":"hello","fw":"3.0.0","name":"DANTE","display":"tft","oled":false,"lcd":0}
-PC  {"t":"cfg","bright":200,"display":"tft","lcdSize":"1602","lcdAddr":39,"flip":false}
+DEV {"t":"hello","fw":"3.2.0","name":"DANTE","display":"tft","oled":false}
+PC  {"t":"cfg","bright":200,"display":"tft","flip":false}
 PC  {"t":"apps","apps":[{"id":"cc_usage","name":"Claude 5h","vis":"gauge","min":0,"max":100,"unit":"%"},{"id":"pomodoro","name":"Pomodoro","vis":"timer","min":0,"max":1500,"unit":""}]}
 PC  {"t":"val","id":"cc_usage","v":63,"txt":"resets 2h10m","lvl":0}
 PC  {"t":"val","id":"pomodoro","lvl":0,"v":1500,"tot":1500,"run":false,"txt":"Focus 1/4 - MAGIC: start"}

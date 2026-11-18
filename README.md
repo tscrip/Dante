@@ -4,26 +4,304 @@
 
 > "What's that on your desk?" "Oh, that's DANTE."
 
-A little desk companion with a personality: an ESP32-S3 with one screen (a 0.91" OLED, a character LCD or a 3.5" colour TFT) and four buttons that
-sits on your desk, pulls faces, and nudges you when things are waiting on you. All the thinking happens
-on your PC, which pushes simple values to DANTE over Bluetooth LE (or USB).
+DANTE is a little desk companion with a personality. It's an ESP32-S3 board with a screen and four
+buttons: it pulls faces, shows you the things you care about (your Claude usage, pull requests, your next
+meeting, a Pomodoro timer...), and nudges you when something is waiting on you. All the thinking happens
+in an app on your PC, which talks to DANTE over Bluetooth or USB. You add new things to it with
+**plugins**, and you don't need to be a programmer to make one: Claude can build them for you (see
+[Make your own plugin with Claude](#make-your-own-plugin-with-claude)).
 
 ```
-┌──────────────── PC (Windows / macOS / Linux) ────────────────┐   Bluetooth LE (NUS) / USB
-│  Dante.Server  (.NET 10, ASP.NET Core + Blazor)              │  ◄──── JSON lines ────►  ┌────────────┐
-│   • Config UI in your browser: http://127.0.0.1:5280         │                          │  ESP32-S3  │
-│   • Features: Claude Code, Azure DevOps PRs, Pomodoro,       │                          │  ◉ ◉  face │
-│     calendar reminders, HTTP JSON, command, REST push        │                          │  ◄ ● ►     │
-│   • Engine: levels, quips, mood, take-over nudges            │                          └────────────┘
-└──────────────────────────────────────────────────────────────┘
+┌────────────── Your PC (Windows / macOS / Linux) ──────────────┐   Bluetooth LE or USB
+│  DANTE app  (http://127.0.0.1:5280 in your browser)           │  ◄─── small JSON messages ───►  ┌───────────┐
+│   • Plugins: Claude Code, Azure DevOps, Calendar, Pomodoro... │                                 │ ESP32-S3  │
+│   • Widgets: the screens DANTE shows, switched on and off     │                                 │  ◉   ◉    │
+│   • Mood, quips and nudges                                    │                                 │ ◄  ●  ►   │
+└───────────────────────────────────────────────────────────────┘                                 └───────────┘
 ```
+
+## Contents
+
+- [What it does](#what-it-does)
+- [What you need](#what-you-need)
+- [Wiring](#wiring)
+- [Getting started](#getting-started)
+- [Using DANTE](#using-dante)
+- [Plugins](#plugins)
+- [Make your own plugin with Claude](#make-your-own-plugin-with-claude)
+- [Feeding DANTE without writing a plugin](#feeding-dante-without-writing-a-plugin)
+- [Troubleshooting](#troubleshooting)
+- [For developers](#for-developers)
+- [Why "DANTE"?](#why-dante)
+
+## What it does
+
+* **A face with moods.** Robot eyes that blink, glance around and react. The mood follows how many things
+  are waiting on you and for how long: `happy → curious → antsy → grumpy → meltdown`. With no PC around it
+  gets sleepy. On the colour screen the eyes change colour with the mood.
+* **Widgets.** Screens you flip through with LEFT/RIGHT: gauges, bars, counters, text, sparklines, status
+  icons and countdowns. Each widget has an **Active** switch, so DANTE only shows what you want right now.
+* **Plugins.** Each one adds something: your Claude subscription usage, Claude Code sessions waiting on
+  you, pull requests to review, meeting reminders from Outlook, a Pomodoro timer, countdowns to dates,
+  any web API, any script. Every plugin has one settings page in the app.
+* **Nudges.** When something needs you, DANTE takes over its screen and knocks until you answer:
+  **SELECT** = "I'm on it" (and, for a meeting, it opens the Teams/Zoom link), **LEFT/RIGHT** = "later".
+* **Quips.** When a number changes, DANTE says something about it in its personality (Cheerful,
+  Sarcastic or Dramatic, or your own lines).
+* **The MAGIC button.** A fourth button that does something on your PC: mute the microphone,
+  play/pause music, open a website, run a command... On a timer screen it starts and pauses the timer.
+
+## What you need
+
+| Part | Notes |
+|---|---|
+| **ESP32-S3 board with PSRAM** | e.g. an *ESP32-S3-DevKitC-1* with an **N16R8** or **N8R8** module (the `R8` means 8 MB PSRAM, which makes the colour screen smooth). Other S3 boards work if the pins below are free. |
+| **A screen**, one of: | |
+| • 3.5" colour TFT, ST7796, SPI, 480×320 (recommended) | the common 8-pin modules without touch, e.g. "3.5 inch SPI TFT ST7796" |
+| • 0.91" OLED, SSD1306, I2C, 128×32 | small and cheap; monochrome |
+| **4 push buttons** | LEFT, RIGHT, SELECT and MAGIC (any momentary buttons) |
+| **Jumper wires** and a **USB-C cable** | the cable must carry data, not just power |
+| **A PC** | Windows, Linux or macOS. Bluetooth works on Windows and Linux; on macOS use USB. |
+
+A 3D-printable case is in [`case/`](case) (an OpenSCAD model; it is still sized for the small OLEDs).
+
+## Wiring
+
+Everything goes to the ESP32-S3. The GPIO numbers are printed next to the pins on the board (not the pin
+positions). All pins are set in [`firmware/src/config.h`](firmware/src/config.h).
+
+**3.5" TFT** (8-pin module). On these modules `SCL` and `SDA` are the SPI clock and data, not I2C.
+
+| TFT pin | ESP32-S3 | |
+|---|---|---|
+| VCC | 3V3 | |
+| GND | GND | |
+| SCL | GPIO 12 | SPI clock |
+| SDA | GPIO 11 | SPI data |
+| RST | GPIO 14 | reset |
+| DC | GPIO 13 | data / command |
+| CS | GPIO 10 | chip select |
+| BL | GPIO 21 | backlight (brightness in the app) |
+| SDO (if there is one) | not connected | DANTE never reads from the screen |
+
+**0.91" OLED**
+
+| OLED pin | ESP32-S3 |
+|---|---|
+| VCC | 3V3 |
+| GND | GND |
+| SDA | GPIO 8 |
+| SCL | GPIO 9 |
+
+**Buttons**: each button goes between the GPIO and GND (no resistors needed).
+
+| Button | ESP32-S3 |
+|---|---|
+| LEFT | GPIO 4 |
+| RIGHT | GPIO 5 |
+| SELECT (on top) | GPIO 6 |
+| MAGIC (on top) | GPIO 7 |
+
+Soldering tips, screen colour fixes and more detail are in [`firmware/README.md`](firmware/README.md).
+
+## Getting started
+
+### 1. Install the tools (once)
+
+- **[.NET 10 SDK](https://dotnet.microsoft.com/download)**: runs the PC app.
+- **[Visual Studio Code](https://code.visualstudio.com/)** with the **PlatformIO IDE** extension: builds
+  and flashes the firmware. (If you prefer a terminal: install the PlatformIO Core CLI instead.)
+- **Git**, to download the project:
+
+  ```bash
+  git clone https://github.com/tscrip/Dante.git
+  ```
+
+### 2. Flash DANTE
+
+Plug the board into your PC (the port labelled **USB**). In VS Code open the `firmware` folder and click
+the **→ Upload** arrow in the blue status bar, or in a terminal:
+
+```bash
+cd firmware
+```
+
+```bash
+pio run -t upload
+```
+
+The first build downloads the ESP32 tools and takes a few minutes. If the upload hangs on
+"Connecting...", hold **BOOT**, tap **RST**, let go of **BOOT**, and upload again.
+
+### 3. Run the PC app
+
+```bash
+cd pc
+```
+
+```bash
+dotnet run --project src/Dante.Server
+```
+
+Your browser opens **http://127.0.0.1:5280**. Leave the app running while you use DANTE.
+
+### 4. Connect and set up
+
+1. **Device** page: choose **Bluetooth LE** (no pairing; *Scan* finds `DANTE`) or **USB cable** and its
+   port. Then pick the **Screen type** (*TFT 3.5"* or *OLED*) and click **Save & send to DANTE**.
+2. **Plugins** in the sidebar: open the ones you want and fill in their settings. For example, Claude Code
+   → **Install hooks** so DANTE knows when a session is waiting for you.
+3. **Widgets**: switch on the widgets you want to see and put them in order.
+
+That's it. DANTE greets you, and LEFT/RIGHT flips through your active widgets.
+
+## Using DANTE
+
+| Where | Button | What happens |
+|---|---|---|
+| Anywhere | LEFT / RIGHT | Previous / next screen. The face is always first. |
+| Anywhere | hold LEFT / RIGHT | Back to the face. |
+| Face | SELECT | A random gag: heart eyes, dizzy, wink, laughing, surprised, "boop!". |
+| A widget | SELECT | Opens its link on your PC (e.g. the oldest pull request). |
+| Anywhere | hold SELECT | Refresh everything now. |
+| A timer widget | MAGIC / hold MAGIC | Start or pause the timer / reset it. |
+| Anywhere else | MAGIC / hold MAGIC | Whatever you set on the *Magic button* page (mute mic, play/pause...). |
+| A nudge | SELECT | "I'm on it." |
+| A nudge | LEFT / RIGHT | "Later." |
+| A speech bubble | any | Dismiss it. |
+
+The pages of the PC app:
+
+| Page | What it's for |
+|---|---|
+| **Dashboard** | What DANTE shows right now, its mood, test buttons. |
+| **Widgets** | Every widget with its **Active** switch and its order on DANTE; *+ Add widget*. |
+| **Plugins** | One page per plugin: its settings, anything special it needs, and its widgets. |
+| **Mood & personality** | When DANTE gets antsy or grumpy, and how it talks. |
+| **Magic button** | What the MAGIC button does on your PC. |
+| **Device** | Connection, screen type, brightness, "Check wiring", message log. |
+
+## Plugins
+
+| Plugin | Widgets | Settings |
+|---|---|---|
+| **Claude Code** | *Subscription usage* (gauge: 5-hour window, week or Opus week) · *Sessions waiting on me* (nudges you) | Claude login (found automatically), hook installer, live list of waiting sessions |
+| **Azure DevOps** | *Pull requests* (to review, yours waiting on you, or both) | organisation URL, personal access token |
+| **Calendar** | *Next meeting* (countdown) | Outlook / Microsoft 365 sign-in, reminder times (e.g. 10 and 1 minutes before), which meetings to skip |
+| **Pomodoro** | *Timer* | focus / break lengths, long breaks, auto-start; live timer with start, skip and reset |
+| **Days until** | *Countdown to a date* (one per date) | — (each widget has its event and date) |
+| **Web API (JSON)** | *JSON value* (one per URL) | — (each widget has its URL and which field to show) |
+| **Command** | *Command output* (one per command) | — (each widget has its program) |
+| **REST push** | *Pushed value* (one per thing you push) | — |
+
+Tips:
+- **Secrets** (tokens, passwords) can be written as `env:VARIABLE_NAME` in any secret field, so they stay
+  in an environment variable instead of the config file.
+- **Calendar** needs a free "app registration" in Microsoft Entra; the steps are on its plugin page.
+- **Days until** is the example plugin: small, fully commented, and the template for new ones.
+
+## Make your own plugin with Claude
+
+You don't need to know C# or electronics to add things to DANTE. This repository has a
+[`CLAUDE.md`](CLAUDE.md) that tells Claude how the project works and the rules to follow, so you can
+describe what you want in plain language and Claude builds it, tests it, and tells you how to try it.
+
+**How:**
+
+1. Open the project folder in [Claude Code](https://claude.com/claude-code) (in a terminal: `cd` into
+   the `Dante` folder and run `claude`; or use the desktop or web app).
+2. Describe what you'd like DANTE to show or do. Say what you know: where the data comes from, what
+   should happen when it changes, whether it should nudge you. Claude will ask about anything unclear.
+3. When it's done, restart the PC app, open the new plugin under **Plugins**, fill in any settings, and
+   add its widget.
+
+**Ideas to try:**
+
+- "Make a plugin that shows how many unread GitHub notifications I have, and nudges me when there are more than 5."
+- "Add a weather plugin: the temperature outside in my city as a gauge, from Open-Meteo (no API key)."
+- "Show my Home Assistant front door sensor: a status widget that turns red when the door is open."
+- "A plugin that counts my open Jira tickets assigned to me, with a link to the board on SELECT."
+- "Make DANTE remind me to drink water every hour, as a nudge I can snooze."
+- "Add a widget that shows the Bitcoin price as a sparkline."
+
+**Good to know:**
+
+- New plugins live entirely in the PC app; you don't need to reflash DANTE for them.
+- Claude writes tests and runs them. It can't see your DANTE, so it will tell you what to check on the
+  device.
+- If a plugin needs an account or API key, Claude will tell you where to get it and where to paste it.
+- Want to change how DANTE itself looks or behaves (a new kind of screen, different eye colours)? Ask
+  too; that changes the firmware, so you'll reflash afterwards ([step 2](#2-flash-dante)).
+
+## Feeding DANTE without writing a plugin
+
+Three built-in plugins let you show your own data straight away:
+
+* **REST push**: any script or tool can send a value to a *Pushed value* widget:
+
+  ```bash
+  curl -X POST http://127.0.0.1:5280/api/widgets/my_widget/value -H "Content-Type: application/json" -d '{"value": 2, "text": "two builds red"}'
+  ```
+
+  Add `"pending": [{"key": "b1", "title": "Nightly", "since": "2026-11-11T08:00:00Z", "url": "https://ci/b1"}]`
+  for things that are waiting on you: they drive the mood and "something is waiting" nudges.
+* **Web API (JSON)**: polls a URL and picks a value with a path like `data.items[0].count` (or
+  `$count:items` to count a list).
+* **Command**: runs any program; it prints `3`, `3 some text`, or `{"value":3,"text":"..."}`.
+
+Also: `POST /api/say {"text":"..."}` makes DANTE say something, and `GET /api/state` returns everything.
+
+## Troubleshooting
+
+| Problem | Try |
+|---|---|
+| The app says DANTE is offline | Device page: check Bluetooth/USB and click **Reconnect**. Only one app can use the USB port: close `pio device monitor`. |
+| Bluetooth doesn't find DANTE | On macOS, use USB. Elsewhere, make sure DANTE isn't connected to another PC. |
+| TFT stays white or black | Check RST, DC and CS first, and that brightness isn't 0. **Device → Check wiring** lists the pins. |
+| TFT colours are wrong | Flip `TFT_INVERT` (black shows as white) or `TFT_BGR` (red/blue swapped) in `firmware/src/config.h`, then reflash. |
+| OLED stays dark | **Device → Check wiring** scans the I2C bus and says what it finds. |
+| A widget shows an error | Open it (Widgets → its name) and press **Test**: the message says what to fix. |
+| Is it running smoothly? | In `pio device monitor` type `?`: the line ends with the screen mode and frames per second. |
+
+More hardware troubleshooting is in [`firmware/README.md`](firmware/README.md).
+
+## For developers
 
 | Folder | What |
 |---|---|
-| [`firmware/`](firmware/README.md) | PlatformIO / Arduino firmware: animated face, moods, gags, widget screens, nudges. Wiring + flashing. |
-| [`pc/`](pc) | .NET 10 solution: `Dante.Core` (the kernel: engine, device link, protocol, config), `Dante.Server` (web UI, REST API and every feature as a vertical slice under `Features/`), tests. |
-| [`docs/research/custom-plugins.md`](docs/research/custom-plugins.md) | Research: user-defined plugins (call an API, transform the response with a script) from the UI. |
-| [`docs/protocol.md`](docs/protocol.md) | The wire protocol between the two. |
+| [`pc/`](pc) | .NET 10 solution. `Dante.Core` is the kernel (config, device link, protocol, engine, plugin and widget abstractions); `Dante.Server` is the web app, where every plugin and page is a vertical slice under `Features/<Name>/`; `tests/Dante.Tests` has the xUnit tests. |
+| [`firmware/`](firmware) | PlatformIO / Arduino firmware for the ESP32-S3: face, widget visuals, buttons, OLED and TFT drivers. |
+| [`docs/protocol.md`](docs/protocol.md) | The JSON-lines protocol between the PC app and DANTE. |
+| [`docs/research/custom-plugins.md`](docs/research/custom-plugins.md) | Research on plugins defined in the UI (call an API, transform the response with a script). |
+| [`case/`](case) | OpenSCAD case model. |
+| [`CLAUDE.md`](CLAUDE.md) | Architecture, standards and the step-by-step recipe for adding a plugin. |
+
+```bash
+cd pc && dotnet test        # all PC tests (engine, plugins, protocol, migrations, end-to-end with a fake DANTE)
+```
+
+```bash
+cd firmware && pio run      # build the firmware
+```
+
+Publish a self-contained PC app with e.g.
+`dotnet publish src/Dante.Server -c Release -r win-x64 --self-contained` (or `osx-arm64`, `linux-x64`).
+Windows builds use the `net10.0-windows10.0.19041.0` target, which Bluetooth LE needs. The config file is
+`%APPDATA%\Dante\config.json` (Windows) or `~/.config/Dante/config.json` (Linux, macOS); override it
+with `DANTE_CONFIG`. The server listens on `127.0.0.1` only.
+
+### Upgrading from older versions
+
+Your settings come along automatically:
+
+* **Apps → widgets:** `config.json` is converted on first start, and settings that several widgets
+  shared (the Azure DevOps organisation and token, the Claude token) move to their plugin page.
+* **One screen (3.0) and no character LCDs (3.2):** DANTE drives one screen, the OLED or the TFT. A
+  config set to a 1602/2004 LCD or to two screens goes back to *Automatic*, keeping "upside down".
+* **DeskBuddy / HANK:** the project had those names before. The PC app copies an old config over on first
+  start, old `HANK_*` / `DESKBUDDY_*` environment variables still work, and a saved device name is renamed.
+
+Reflash the firmware when you update the PC app: they are released together.
 
 ## Why "DANTE"?
 
@@ -43,192 +321,3 @@ bored, and keeps nudging, patiently and persistently, until the thing waiting on
 
 And yes, it's a nod to Dante Alighieri, who walked through all nine circles of the *Inferno*. DANTE
 will walk you through yours: the PR queue, the blocked agent, the 90% usage gauge.
-
-## How it behaves
-
-* **One screen** — a 0.91" 128×32 OLED, a 1602 (16×2) or 2004 (20×4) character LCD (PCF8574 I2C), or a
-  3.5" 480×320 colour TFT (ST7796, SPI); chosen on the *Device* page (or *Automatic*) and switched live.
-  On the TFT the eyes fill the screen and change colour with the mood, with a status bar on top.
-
-* **Face screen** — procedural robot eyes that blink, glance around and react. Press **SELECT** (top) for a
-  random gag: heart eyes, dizzy, wink, laughing `> <`, surprised, "boop!".
-* **Mood** — depends on how many things are waiting on you and how long the oldest has waited:
-  `happy → curious → antsy → grumpy → meltdown`. Thresholds are set on the *Mood & personality* page.
-  With no PC it gets sleepy ("no PC").
-* **Plugins and widgets** — a **plugin** adds something to DANTE (Claude Code, Azure DevOps, a calendar, a
-  Pomodoro timer...) and has one page in the PC app (*Plugins* in the sidebar) with its settings. A
-  **widget** is a screen on DANTE made by a plugin; one plugin can offer several (Claude Code: *5-hour usage*
-  and *Sessions waiting on me*). Each widget has a visual (gauge, bar, counter, text, sparkline, status,
-  timer) and an **Active** switch: only active widgets run and show up, so you see just the ones you want.
-  **LEFT/RIGHT** browse the active widgets; **SELECT** on one opens its link on the PC (e.g. the oldest PR);
-  long-press **SELECT** refreshes everything.
-* **Funny deliveries** — when a value changes the PC picks a line in DANTE's personality
-  (Cheerful, Sarcastic, Dramatic, or your own lines) and DANTE pops it up in a speech bubble.
-* **Magic button** — a fourth button on top runs something on the PC: mute/unmute the mic or
-  sound, play/pause, next/previous, volume, open a URL/app, or run any command. Press and long press
-  are set separately on the *Magic button* page; DANTE confirms ("Mic muted").
-* **Take-overs** — a widget can take over the face and nudge you ("Claude Code is waiting on you!") after a
-  grace period. **SELECT** = "I'm on it" (re-nudges later if still true), **LEFT/RIGHT** = snooze.
-* **Pomodoro** — a focus / break timer widget. Go to it and press **MAGIC** to start or pause (hold to
-  reset); DANTE counts down by itself and tells you when a session ends (**SELECT** starts the next one).
-  Lengths, sessions before a long break and auto-start are on the *Pomodoro* plugin page.
-* **Calendar reminders** — DANTE nudges you before meetings, at the minutes you choose (e.g. 10 and 1),
-  from Outlook / Microsoft 365. **SELECT** on the reminder opens the Teams / Zoom link. Optional
-  "Next meeting" countdown widget. Set up on the *Calendar* plugin page (needs a free Entra app
-  registration, steps on the page).
-
-## Plugins
-
-| Plugin | Widgets it offers | Shared settings / page |
-|---|---|---|
-| Claude Code | *Subscription usage* (gauge: 5-hour window, week, or Opus week) · *Sessions waiting on me* (status, nudges) | credentials file / token override; hook installer, sessions waiting right now |
-| Azure DevOps | *Pull requests* (to review, yours waiting on you, or both; one widget per filter or project) | organisation URL, PAT |
-| Calendar | *Next meeting* (countdown) | Outlook sign-in, reminder minutes and filters, coming-up list |
-| Pomodoro | *Timer* | lengths, long break, auto-start, end-of-session nudge; live timer with start / skip / reset |
-| Web API (JSON) | *JSON value* (one per URL) | – |
-| Command | *Command output* (one per command) | – |
-| REST push | *Pushed value* (one per thing you push) | – |
-
-## The example widgets (created on first run)
-
-| Widget | Plugin → type | Visual | Behaviour |
-|---|---|---|---|
-| Claude 5h | Claude Code → Subscription usage | Gauge | warn 70 %, crit 90 %; SELECT opens the usage page |
-| Claude Code | Claude Code → Sessions waiting on me | Status | counts toward mood; takes over after 20 s; re-nudges every 5 min |
-| PRs for me | Azure DevOps → Pull requests | Counter | counts toward mood; SELECT opens the oldest PR. Off until you set the org + PAT |
-
-## Quick start
-
-1. **Flash DANTE** — see [firmware/README.md](firmware/README.md) (`pio run -t upload`).
-2. **Run the PC app** (needs the [.NET 10 SDK](https://dotnet.microsoft.com/download)):
-   ```bash
-   cd pc
-   dotnet run --project src/Dante.Server
-   ```
-   Your browser opens <http://127.0.0.1:5280>. On **Device**, choose **Bluetooth LE** (no pairing;
-   *Scan* finds `DANTE`) or **USB cable** and its port. Bluetooth LE works on Windows and Linux
-   (BlueZ); on macOS use USB for now.
-3. **Screen** (same page): Automatic, OLED, LCD 1602, LCD 2004 or TFT 3.5". Automatic can't detect the TFT
-   (it's on SPI): it uses it only when no I2C screen answers, so pick it explicitly.
-4. **Plugins → Claude Code → Install hooks** so DANTE knows when a session is waiting for you.
-5. **Plugins → Azure DevOps**: organisation URL and a PAT (*Code: Read*; `env:DANTE_ADO_PAT` reads it from
-   an environment variable), then switch the *PRs for me* widget on.
-6. Optional: **Plugins → Pomodoro** → add the *Timer* widget; **Plugins → Calendar** → client ID, sign in,
-   enable reminders.
-7. **Widgets**: switch widgets on and off and set their order on DANTE.
-
-Publish a self-contained build for any OS with e.g.
-`dotnet publish src/Dante.Server -c Release -r win-x64 --self-contained` (or `osx-arm64`, `linux-x64`).
-Windows builds automatically use the `net10.0-windows10.0.19041.0` target, which is needed for Bluetooth LE.
-Config lives in `%APPDATA%\Dante\config.json` (Windows), `~/.config/Dante/config.json` (Linux, macOS);
-override with `DANTE_CONFIG`.
-
-## Feeding your own widgets
-
-* **REST push** — any script can update a *Pushed value* widget:
-  ```bash
-  curl -X POST http://127.0.0.1:5280/api/widgets/my_widget/value -H "Content-Type: application/json" \
-       -d '{"value": 2, "text": "two builds red", "pending": [{"key": "b1", "title": "Nightly", "since": "2026-11-11T08:00:00Z", "url": "https://ci/b1"}]}'
-  ```
-  `pending` items are what drive the mood and "waiting" take-overs. (The old `/api/apps/...` URL still works.)
-* **Web API (JSON)** — poll a URL and pick fields with a dotted path (`data.items[0].count`, `$count:items`).
-* **Command** — run any program; it prints `3`, `3 some text`, or `{"value":3,"text":"..."}`.
-* **Your own plugin** — see below; the UI renders its settings automatically.
-* `POST /api/say {"text":"..."}` makes DANTE say something; `GET /api/state` returns everything.
-
-## Adding a plugin (vertical slices)
-
-Everything a plugin needs lives in its own folder, `pc/src/Dante.Server/Features/<Name>/`: its settings,
-widget types, page panel, REST endpoints and background services. One class per folder implements
-`IFeature` and registers the rest; features are discovered by reflection, so adding one touches no shared
-file (not `Program.cs`, not the sidebar, which lists every `IPlugin` under *Plugins*):
-
-```csharp
-// The plugin: its page at /plugins/weather, with a settings form built from Fields.
-public sealed class WeatherPlugin : IPlugin
-{
-    public string Id => "weather";
-    public string Name => "Weather";
-    public string Description => "Today's forecast for your city.";
-    public IReadOnlyList<SettingField> Fields { get; } = [new("apiKey", "API key", SettingKind.Secret)];
-}
-
-// A widget type: what one screen on DANTE shows. A plugin can have several.
-public sealed class TemperatureWidget(PluginSettings settings, WeatherPlugin plugin) : IWidgetType
-{
-    public string Type => "weather-temperature";
-    public string PluginId => "weather";
-    public string DisplayName => "Temperature";
-    public string Description => "The temperature outside now.";
-    public IReadOnlyList<SettingField> Fields { get; } = [new("city", "City")];   // per widget
-
-    public WidgetDefinition CreateDefault() => new() { Name = "Outside", Type = Type, Visual = VisualKind.Counter, Unit = "°C" };
-
-    public async Task<WidgetReading> ReadAsync(WidgetDefinition widget, CancellationToken ct)
-    {
-        var key = settings.Get(plugin, "apiKey");        // shared, from the plugin page
-        var city = widget.Get(this, "city");              // this widget's own
-        return new WidgetReading { Value = 21, Text = city };
-    }
-}
-
-public sealed class WeatherFeature : IFeature
-{
-    public void AddServices(IServiceCollection services)
-    {
-        services.AddSingleton<WeatherPlugin>();
-        services.AddSingleton<IPlugin>(sp => sp.GetRequiredService<WeatherPlugin>());
-        services.AddSingleton<IWidgetType, TemperatureWidget>();
-    }
-}
-```
-
-A plugin that needs more than a form (a sign-in, live status) sets `IPlugin.ConfigComponent` to a Razor
-component, shown on its page above its widgets. The kernel (`Dante.Core`) offers the extension points:
-
-| Need | Use |
-|---|---|
-| A screen on DANTE | `IWidgetType` (value, text, pending items, or a `TimerReading` countdown) |
-| Shared plugin settings | `IPlugin.Fields`, read with `PluginSettings.Get(plugin, key)` |
-| React to DANTE's buttons | `IDeviceEventHandler`, registered with `DanteEngine.AddHandler(handler, order)` |
-| Nudge the human yourself | `DeviceAlerts.Raise/Clear/Say`; answers arrive as `Acknowledged` / `Snoozed` |
-| Anything else to store | your own class, stored with `config.SetFeature(key, value)`, read with `config.Feature<T>(key)` |
-
-The Pomodoro and Calendar plugins are worked examples of all of these.
-
-## Notes
-
-* The server listens on `127.0.0.1` only and rejects non-localhost `Host` headers.
-* Secret settings (plugin or widget) can be written as `env:VAR_NAME` so they stay out of `config.json`.
-* The Claude Code usage source uses the same (undocumented) OAuth usage endpoint Claude Code itself
-  calls; if it changes, use a *REST push* or *Command* widget instead.
-
-## Coming from DeskBuddy or HANK?
-
-This project was called DeskBuddy, then briefly HANK. Upgrading keeps everything:
-
-* **PC app:** on first start it copies your old config (`Hank/config.json`, or else `DeskBuddy/config.json`)
-  to the new `Dante` folder. The old `HANK_*` and `DESKBUDDY_*` environment variables still work
-  alongside the new `DANTE_*` names (e.g. `DESKBUDDY_ADO_PAT`).
-* **Bluetooth:** a saved device name of "DeskBuddy" or "HANK" becomes "DANTE", and scanning also finds
-  devices still running older firmware.
-* **Firmware:** after reflashing, the device advertises as `DANTE` and keeps the screen settings it had saved.
-
-## Upgrading to 3.0 (one screen)
-
-DANTE 3.0 always drives exactly one screen. The two-screen mode (one eye per OLED or LCD) is gone; a
-config with two screens keeps working with the first one, and its "upside down" setting carries over.
-The MAGIC button's settings moved inside `config.json` (from `magic` to `features.magic`); this happens
-by itself on first start. Reflash the firmware too: older firmware ignores the TFT and the timer screen.
-
-"Apps" are now **widgets**, made by **plugins**. `config.json` is converted on first start (`apps` →
-`widgets`, `enabled` → `active`, `sourceType` → `type`), and settings that several widgets shared (the Azure
-DevOps organisation and PAT, the Claude token) move to their plugin page. The old pages (`/claude-code`,
-`/calendar`, `/pomodoro`) are now under *Plugins*.
-
-## Development
-
-```bash
-cd pc && dotnet test        # engine, slices (Pomodoro, calendar, magic...), protocol, sources + end-to-end with a fake DANTE
-cd firmware && pio run      # build firmware
-```

@@ -111,7 +111,7 @@ public class PluginTests : IDisposable
         var types = _services.GetRequiredService<WidgetTypeRegistry>();
         Assert.All(types.All, t => Assert.NotNull(plugins.Find(t.PluginId)));
         Assert.Equal(["Sessions waiting on me", "Subscription usage"], plugins.WidgetTypes("claude-code").Select(t => t.DisplayName));
-        Assert.Equal(["claude-code", "azure-devops", "calendar", "pomodoro", "web-api", "command", "push"], plugins.All.Select(p => p.Id));
+        Assert.Equal(["claude-code", "azure-devops", "calendar", "pomodoro", "days-until", "web-api", "command", "push"], plugins.All.Select(p => p.Id));
         Assert.Contains(plugins.All, p => p.ConfigComponent is not null);   // Claude, Calendar, Pomodoro bring their own panels
     }
 
