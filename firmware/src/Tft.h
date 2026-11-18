@@ -84,4 +84,8 @@ namespace Tft {
   void frame(const std::function<void(TftGfx& g)>& draw);
   // "PSRAM frame buffer, 30 fps, 41 KB per frame" (or the strip mode), for the USB log and Check wiring.
   void describe(char* out, size_t n);
+#ifdef DANTE_SIMULATOR
+  // The screen as RGB565 (TFT_W x TFT_H) plus the backlight level, for the simulator's frames.
+  bool simSnapshot(uint16_t* out, uint8_t& backlight);
+#endif
 }

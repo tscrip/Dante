@@ -17,6 +17,8 @@
             <span><strong>Bluetooth LE</strong> <span class="muted small">— wireless</span></span></label>
         <label class="check"><input type="radio" name="conn" checked="@(_cfg.Device.Connection == ConnectionKind.Usb)" @onchange="() => _cfg.Device.Connection = ConnectionKind.Usb" />
             <span><strong>USB cable</strong></span></label>
+        <label class="check"><input type="radio" name="conn" checked="@(_cfg.Device.Connection == ConnectionKind.Simulator)" @onchange="() => _cfg.Device.Connection = ConnectionKind.Simulator" />
+            <span><strong>Simulator</strong> <span class="muted small">— no hardware: DANTE's firmware running on this PC</span></span></label>
 
         @if (_cfg.Device.Connection == ConnectionKind.Bluetooth)
         {
@@ -39,6 +41,19 @@
                     @foreach (var name in _scanResult) { <button class="btn sm" @onclick="() => _cfg.Device.BluetoothName = name" style="margin-right:.35rem">@name</button> }
                 </p>
             }
+        }
+        else if (_cfg.Device.Connection == ConnectionKind.Simulator)
+        {
+            <label class="field"><span>Pretend to have</span>
+                <select value="@_cfg.Device.SimulatedHardware" @onchange="SetSimulatedHardware">
+                    @foreach (var hw in Enum.GetValues<SimulatedHardware>()) { <option value="@hw">@hw.Describe()</option> }
+                </select>
+                <span class="help">See and press DANTE on the <a href="simulator">Simulator</a> page.</span>
+            </label>
+            <label class="field"><span>Simulator program</span>
+                <input type="text" @bind="_cfg.Device.SimulatorPath" placeholder="automatic: firmware/.pio/build/simulator/program" />
+                <span class="help">@SimulatorLocator.BuildHint</span>
+            </label>
         }
         else
         {
@@ -235,6 +250,11 @@
     private string? _scanError;
 
     private DateTimeOffset? _savedAt;
+
+    private void SetSimulatedHardware(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<SimulatedHardware>(e.Value?.ToString(), out var hw)) hw.ApplyTo(_cfg.Device);
+    }
 
     private DateTimeOffset? _diagAsked;
 

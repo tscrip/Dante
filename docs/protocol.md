@@ -56,3 +56,12 @@ PC  {"t":"val","id":"pomodoro","lvl":0,"v":1500,"tot":1500,"run":true,"txt":"Foc
 PC  {"t":"alert","id":"calendar","title":"Meeting","txt":"Standup in 10 min","lvl":1}
 DEV {"t":"ack","id":"calendar"}
 ```
+
+## Simulator only
+
+The [simulator](../firmware/README.md#simulator) speaks the protocol above on stdin/stdout, plus:
+
+| Direction | `t` | Fields | Meaning |
+|---|---|---|---|
+| PC → sim | `sim.btn` | `b` ∈ `left`,`right`,`sel`,`magic`; `down` (bool) | Press or release a button. Changes are applied at least debounce-time apart, so a quick click never gets lost. |
+| sim → PC | `sim.frame` | `fw`, `kind`, plus per kind: **`oled`** `w`, `h`, `pixels` (base64 SSD1306 buffer: 4 pages × 128 columns, LSB on top); **`lcd`** `cols`, `rows`, `cells` (base64 character codes), `glyphs` (base64, 8 custom glyphs × 8 rows), `light`; **`tft`** `w`, `h`, `light` (backlight 0-255), `rle` (base64 run-length RGB565: little-endian uint16 pairs of run length and colour) | What the screen shows, sent whenever it changes (at most ~25 per second, 20 for the TFT). |

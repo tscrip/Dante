@@ -136,6 +136,25 @@ I2C scan now: bus 1 (SDA=8 SCL=9): 0x27 (LCD)
   the `?` line ends in `NO MEMORY FOR THE FRAME BUFFER`, please report it.
 * **TFT colours look wrong:** see `TFT_INVERT` / `TFT_BGR` in the TFT section.
 
+## Simulator
+
+`pio run -e simulator` builds this firmware as a program for your PC (PlatformIO's `native`
+platform, so you need a C/C++ compiler: gcc, the Xcode command line tools, or MinGW-w64 on Windows).
+The DANTE PC app starts it from its **Simulator** page; see the [main README](../README.md#develop-without-hardware-the-simulator).
+
+How it works:
+
+* `simulator/host/` stands in for the Arduino/ESP32 headers (only the simulator build sees it):
+  real-time `millis()`/`delay()`, `Serial` = stdin/stdout, buttons driven by the PC app, plenty of
+  "PSRAM", and an I2C bus where the simulated screen answers, so the firmware's own screen detection
+  runs unchanged.
+* The OLED and LCD are drawn by u8g2 exactly as on the board. The TFT is drawn by the real LovyanGFX
+  into a memory-backed panel (`Tft.cpp`, `DANTE_SIMULATOR`), the only firmware code with a simulator branch.
+* `src/SimMain.cpp` (empty in the ESP32 build) provides `main()`: it runs `setup()`/`loop()`, passes
+  protocol lines through, handles `sim.btn`, and sends the screen as `sim.frame` whenever it changes.
+* Choose the screen with `--hw tft|oled|lcd`. You can also run it by hand and type protocol lines,
+  e.g. `{"t":"hello"}` or `?`.
+
 ## Connecting to the PC
 
 DANTE speaks the same JSON-lines protocol over **Bluetooth LE** and over **USB**, and always

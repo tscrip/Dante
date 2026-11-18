@@ -123,6 +123,27 @@ Windows builds automatically use the `net10.0-windows10.0.19041.0` target, which
 Config lives in `%APPDATA%\Dante\config.json` (Windows), `~/.config/Dante/config.json` (Linux, macOS);
 override with `DANTE_CONFIG`.
 
+## Develop without hardware: the simulator
+
+The **DANTE simulator** is the real firmware compiled for your PC: same face, moods, gags, widgets,
+countdowns and nudges as the board, drawn by the same code (u8g2 for the OLED and LCD, LovyanGFX for
+the 3.5" TFT), so what you see is what the hardware will do.
+
+1. Build it once (needs a C/C++ compiler: gcc on Linux, Xcode command line tools on macOS,
+   MinGW-w64 on Windows):
+   ```bash
+   cd firmware
+   pio run -e simulator
+   ```
+2. In the PC app open **Simulator**, pick the screen (3.5" TFT, 0.91" OLED, 1602 or 2004 LCD) and
+   click **Start simulator**. The app runs the program itself.
+3. Click DANTE's buttons on screen (hold for a long press) or use the keyboard:
+   ←/→ = LEFT/RIGHT, Enter/Space = SELECT, M = MAGIC.
+
+Everything else (widgets, plugins, Claude Code hooks, Pomodoro, the Magic button) works against the
+simulator exactly as with a real DANTE. After changing firmware code, rebuild and press
+**Power-cycle**. Switch back to Bluetooth or USB on the *Device* page.
+
 ## Feeding your own widgets
 
 * **REST push** — any script can update a *Pushed value* widget:

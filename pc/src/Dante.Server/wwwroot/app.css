@@ -137,3 +137,22 @@ a.plugin-card:hover { border-color: var(--accent); }
 label.switch { display: inline-flex; align-items: center; gap: .35rem; font-size: .85rem; min-width: 5.5rem; cursor: pointer; }
 .type-picker { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
 .type-picker .btn { text-align: left; white-space: normal; }
+/* ---- Simulator ---- */
+.sim-device { display: inline-flex; flex-direction: column; align-items: center; gap: .9rem; padding: 1.25rem 1.5rem 1.5rem;
+    background: linear-gradient(160deg, #2a3242, #161b25); border-radius: 22px; box-shadow: 0 10px 30px #0006, inset 0 1px 0 #ffffff14;
+    max-width: 100%; outline: none; }
+.sim-device:focus-visible { box-shadow: 0 0 0 3px var(--accent), 0 10px 30px #0006; }
+.sim-top, .sim-bottom { display: flex; gap: .75rem; justify-content: center; }
+.sim-screens { display: flex; gap: .9rem; flex-wrap: wrap; justify-content: center; }
+.sim-screen { display: flex; flex-direction: column; align-items: center; gap: .3rem; }
+.sim-screen canvas { display: block; image-rendering: pixelated; border-radius: 4px; max-width: 100%; height: auto; }
+.sim-screen.oled canvas { width: 384px; border: 6px solid #05070c; background: #05070c; }
+.sim-screen.tft canvas { width: 480px; border: 10px solid #05070c; border-radius: 8px; background: #000; image-rendering: auto; }
+.sim-screen.lcd canvas { border: 8px solid #1c2a55; }
+.sim-screen small { color: #8b95a7; font-size: .7rem; }
+.sim-btn { min-width: 4.6rem; padding: .55rem .9rem; border-radius: 999px; border: 1px solid #00000080; cursor: pointer; font: 600 .78rem/1 system-ui, sans-serif;
+    color: #e5e9f0; background: linear-gradient(#4a5568, #2d3748); box-shadow: 0 3px 0 #0b0e14, inset 0 1px 0 #ffffff26; user-select: none; touch-action: none; }
+.sim-btn:active, .sim-btn.down { transform: translateY(2px); box-shadow: 0 1px 0 #0b0e14; }
+.sim-btn.magic { background: linear-gradient(#9f7aea, #6b46c1); }
+.sim-btn.select { background: linear-gradient(#2dd4bf, #0f9d8a); color: #05221e; }
+.sim-keys { color: var(--muted); font-size: .8rem; }

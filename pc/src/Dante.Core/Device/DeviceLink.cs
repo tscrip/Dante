@@ -66,14 +66,18 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
     private static readonly TimeSpan SilenceTimeout = TimeSpan.FromSeconds(35);
 
     private readonly Func<DeviceSettings, IDeviceTransport> _factory =
-        transportFactory ?? (s => s.Connection == ConnectionKind.Usb
-            ? new SerialTransport(s.PortName!, s.BaudRate)
-            : new BleTransport(s.BluetoothName));
+        transportFactory ?? (s => s.Connection switch
+        {
+            ConnectionKind.Usb => new SerialTransport(s.PortName!, s.BaudRate),
+            ConnectionKind.Simulator => new SimulatorTransport(SimulatorLocator.Find(s.SimulatorPath), s.SimulatedHardware),
+            _ => new BleTransport(s.BluetoothName),
+        });
     private readonly Channel<string> _outbox = Channel.CreateBounded<string>(
         new BoundedChannelOptions(256) { FullMode = BoundedChannelFullMode.DropOldest });
     private readonly LinkedList<LogLine> _log = new();
     private readonly Lock _logGate = new();
     private CancellationTokenSource? _sessionCts;
+    private CancellationTokenSource? _retryCts;
     private DeviceSettings? _activeSettings;
 
     public LinkStatus Status { get; private set; } = LinkStatus.Disconnected;
@@ -102,6 +106,15 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
     public bool Online => Status == LinkStatus.Connected && LastHeard is { } h && time.GetUtcNow() - h < SilenceTimeout;
 
     public event Action<DeviceEvent>? EventReceived;
+
+    private const string SimFramePrefix = "{\"t\":\"sim.frame\"";
+    /// <summary>Latest screen contents from the simulator (raw JSON line), when connected to it.</summary>
+    public string? LastSimFrame { get; private set; }
+    public event Action<string>? SimFrameReceived;
+
+    /// <summary>Simulator only: press (down) or release one of the simulated DANTE's buttons.</summary>
+    public void SimButton(string button, bool down) =>
+        Send(new System.Text.Json.Nodes.JsonObject { ["t"] = "sim.btn", ["b"] = button, ["down"] = down });
     public event Action? StatusChanged;
 
     public IReadOnlyList<LogLine> RecentLog()
@@ -115,14 +128,25 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
     }
 
     /// <summary>Drop the current connection; the loop reconnects with the latest settings.</summary>
-    public void Reconnect() => _sessionCts?.Cancel();
+    public void Reconnect()
+    {
+        // Either ends the current connection, or cuts short the wait before the next attempt.
+        foreach (var cts in new[] { _sessionCts, _retryCts })
+        {
+            try { cts?.Cancel(); }
+            catch (ObjectDisposedException) { /* that session/wait just ended by itself */ }
+        }
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         config.Changed += c =>
         {
+            // Waiting to retry after a failed attempt: try the new settings right away.
+            if (_activeSettings is null) { Reconnect(); return; }
             // Only a change to the connection itself warrants dropping the link.
             if (_activeSettings is { } a && (a.Connection != c.Device.Connection || a.BluetoothName != c.Device.BluetoothName
+                    || a.SimulatedHardware != c.Device.SimulatedHardware || a.SimulatorPath != c.Device.SimulatorPath
                     || a.PortName != c.Device.PortName || a.BaudRate != c.Device.BaudRate || !c.Device.AutoConnect))
                 Reconnect();
         };
@@ -151,7 +175,12 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
             }
 
             SetStatus(LinkStatus.Disconnected, Target(settings));
-            try { await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken); } catch (OperationCanceledException) { }
+            using (var retry = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken))
+            {
+                _retryCts = retry;
+                try { await Task.Delay(TimeSpan.FromSeconds(3), retry.Token); } catch (OperationCanceledException) { }
+                _retryCts = null;
+            }
         }
     }
 
@@ -160,6 +189,20 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
         using var session = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         _sessionCts = session;
         _activeSettings = settings;
+        try
+        {
+            await RunConnectedAsync(settings, session);
+        }
+        finally
+        {
+            // Also when connecting fails: nothing may keep using this (soon disposed) session.
+            _sessionCts = null;
+            _activeSettings = null;
+        }
+    }
+
+    private async Task RunConnectedAsync(DeviceSettings settings, CancellationTokenSource session)
+    {
         SetStatus(LinkStatus.Connecting, Target(settings));
 
         using var transport = _factory(settings);
@@ -170,6 +213,7 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
         DeviceDisplay = null;
         OledDetected = null;
         LcdDetectedAddress = null;
+        LastSimFrame = null;
         SetStatus(LinkStatus.Connected, Target(settings));
 
         Write(transport, DeviceProtocol.Hello().ToJsonString());
@@ -201,8 +245,6 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
         {
             await session.CancelAsync();
             try { await reader; } catch { /* already reported */ }
-            _sessionCts = null;
-            _activeSettings = null;
         }
     }
 
@@ -214,6 +256,14 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
             {
                 var line = transport.ReadLine();
                 if (string.IsNullOrWhiteSpace(line)) continue;
+                if (line.StartsWith(SimFramePrefix, StringComparison.Ordinal))
+                {
+                    // Simulator screen contents: kept for the Simulator page, far too chatty for the log.
+                    LastHeard = time.GetUtcNow();
+                    LastSimFrame = line;
+                    SimFrameReceived?.Invoke(line);
+                    continue;
+                }
                 AddLog(false, line);
                 if (DeviceEvent.TryParse(line) is not { } evt) continue;
 
@@ -255,9 +305,12 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
     }
 
     /// <summary>What we connect to: a serial port, or "Bluetooth: DANTE".</summary>
-    private static string? Target(DeviceSettings s) => s.Connection == ConnectionKind.Usb
-        ? s.PortName
-        : string.IsNullOrWhiteSpace(s.BluetoothName) ? null : $"Bluetooth: {s.BluetoothName}";
+    private static string? Target(DeviceSettings s) => s.Connection switch
+    {
+        ConnectionKind.Usb => s.PortName,
+        ConnectionKind.Simulator => $"Simulator ({s.SimulatedHardware.Describe()})",
+        _ => string.IsNullOrWhiteSpace(s.BluetoothName) ? null : $"Bluetooth: {s.BluetoothName}",
+    };
 
     private void SetStatus(LinkStatus status, string? port)
     {

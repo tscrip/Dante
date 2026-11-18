@@ -41,6 +41,10 @@ public sealed class DeviceSettings
     public string BluetoothName { get; set; } = "DANTE";
     /// <summary>USB: COM5, /dev/ttyACM0, /dev/cu.usbmodem1101 ...</summary>
     public string? PortName { get; set; }
+    /// <summary>Simulator: which DANTE screen to pretend to have.</summary>
+    public SimulatedHardware SimulatedHardware { get; set; } = SimulatedHardware.Tft;
+    /// <summary>Simulator: the built program (blank = find firmware/.pio/build/simulator/program automatically).</summary>
+    public string? SimulatorPath { get; set; }
     public int BaudRate { get; set; } = 115200;
     public bool AutoConnect { get; set; } = true;
     /// <summary>OLED contrast / LCD and TFT backlight, 0-255.</summary>
@@ -81,6 +85,43 @@ public enum ConnectionKind
     Bluetooth,
     /// <summary>USB cable (serial port).</summary>
     Usb,
+    /// <summary>The DANTE simulator: the real firmware running on this PC, no hardware needed.</summary>
+    Simulator,
+}
+
+/// <summary>What the simulator pretends is wired up.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<SimulatedHardware>))]
+public enum SimulatedHardware { Tft, Oled, Lcd1602, Lcd2004 }
+
+public static class SimulatedHardwareExtensions
+{
+    /// <summary>The simulator's --hw argument (an LCD's size travels in the normal cfg message).</summary>
+    public static string Argument(this SimulatedHardware hw) => hw switch
+    {
+        SimulatedHardware.Oled => "oled",
+        SimulatedHardware.Lcd1602 or SimulatedHardware.Lcd2004 => "lcd",
+        _ => "tft",
+    };
+
+    public static string Describe(this SimulatedHardware hw) => hw switch
+    {
+        SimulatedHardware.Oled => "0.91\" OLED",
+        SimulatedHardware.Lcd1602 => "1602 LCD",
+        SimulatedHardware.Lcd2004 => "2004 LCD",
+        _ => "3.5\" TFT",
+    };
+
+    /// <summary>
+    /// Points the screen settings at the simulated hardware: automatic screen type (so DANTE's own
+    /// detection picks it, exactly as on the board) plus the LCD size, which an LCD can't report itself.
+    /// </summary>
+    public static void ApplyTo(this SimulatedHardware hw, DeviceSettings d)
+    {
+        d.SimulatedHardware = hw;
+        d.Display = DisplayType.Auto;
+        if (hw == SimulatedHardware.Lcd2004) d.LcdSize = LcdSize.Size20x4;
+        else if (hw == SimulatedHardware.Lcd1602) d.LcdSize = LcdSize.Size16x2;
+    }
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<DisplayType>))]
