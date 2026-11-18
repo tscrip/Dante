@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 // ---- Identity ---------------------------------------------------------------
-#define FW_VERSION      "3.3.0"
+#define FW_VERSION      "3.3.1"
 #define DEVICE_NAME     "DANTE"
 
 // ---- Board: ESP32-S3 (e.g. ESP32-S3-DevKitC-1) --------------------------------

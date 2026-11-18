@@ -179,13 +179,13 @@ and blinks a small Bluetooth "no PC" sign in the corner.
 | Any screen       | LEFT / RIGHT         | Previous / next screen (slides). Face is screen 0, apps follow. |
 | Any screen       | long LEFT / RIGHT    | Jump home to the face.                                          |
 | Face             | SELECT               | Play a random gag.                                              |
-| App screen       | SELECT               | Tells the PC "open this" (e.g. it opens the PR list).           |
-| Any screen       | long SELECT          | Tells the PC "refresh now".                                     |
+| App screen       | SELECT               | Acts on what's on screen: the PC opens it (e.g. the PR list).   |
+| Timer screen     | SELECT / long SELECT | Start or pause the countdown / reset it (the Pomodoro timer).   |
+| Any other screen | long SELECT          | Tells the PC "refresh now".                                     |
 | Speech bubble    | any                  | Dismiss it.                                                     |
 | Takeover (nudge) | SELECT               | "I'm on it" -> `ack` to the PC, DANTE winks.                     |
 | Takeover (nudge) | LEFT / RIGHT         | "Later" -> `snooze` to the PC.                                  |
-| Timer screen     | MAGIC / long MAGIC   | Start or pause the countdown / reset it (the Pomodoro timer).   |
-| Anywhere else    | MAGIC / long MAGIC   | Runs what the PC app's *Magic button* page says (mute mic, play/pause, ...); DANTE sparkles and shows the result. |
+| Any screen       | MAGIC / long MAGIC   | Always runs what the PC app's *Magic button* page says (mute mic, play/pause, ...), whatever is on screen; DANTE sparkles and shows the result. |
 
 Every press is reported to the PC as a `btn` event (takeover presses are reported as
 `ack` / `snooze` instead).

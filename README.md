@@ -70,10 +70,11 @@ will walk you through yours: the PR queue, the blocked agent, the 90% usage gaug
   (Cheerful, Sarcastic, Dramatic, or your own lines) and DANTE pops it up in a speech bubble.
 * **Magic button** — a fourth button on top runs something on the PC: mute/unmute the mic or
   sound, play/pause, next/previous, volume, open a URL/app, or run any command. Press and long press
-  are set separately on the *Magic button* page; DANTE confirms ("Mic muted").
+  are set separately on the *Magic button* page; DANTE confirms ("Mic muted"). MAGIC does the same thing on
+  every screen, so it's always your mute button; **SELECT** is the one that acts on what's on screen.
 * **Take-overs** — a widget can take over the face and nudge you ("Claude Code is waiting on you!") after a
   grace period. **SELECT** = "I'm on it" (re-nudges later if still true), **LEFT/RIGHT** = snooze.
-* **Pomodoro** — a focus / break timer widget. Go to it and press **MAGIC** to start or pause (hold to
+* **Pomodoro** — a focus / break timer widget. Go to it and press **SELECT** to start or pause (hold to
   reset); DANTE counts down by itself and tells you when a session ends (**SELECT** starts the next one).
   Lengths, sessions before a long break and auto-start are on the *Pomodoro* plugin page.
 * **Calendar reminders** — DANTE nudges you before meetings, at the minutes you choose (e.g. 10 and 1),

@@ -10,7 +10,7 @@ public sealed class PomodoroSettings
     public int LongBreakMinutes { get; set; } = 15;
     /// <summary>Every Nth focus session is followed by a long break.</summary>
     public int SessionsBeforeLongBreak { get; set; } = 4;
-    /// <summary>Start the break as soon as a focus session ends (otherwise press MAGIC or SELECT).</summary>
+    /// <summary>Start the break as soon as a focus session ends (otherwise press SELECT).</summary>
     public bool AutoStartBreaks { get; set; }
     /// <summary>Start the next focus session as soon as a break ends.</summary>
     public bool AutoStartFocus { get; set; }

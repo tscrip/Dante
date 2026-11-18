@@ -188,9 +188,8 @@ static void handleButton(const ButtonEvent& ev) {
   //    and answers with a `say` ("Mic muted").
   if (ev.id == BTN_MAGIC) {
     if (!Link::pcAlive()) { showToast("", "No PC, no magic :("); return; }
-    // On a countdown screen MAGIC is start / pause (the PC answers with a bubble); elsewhere, sparkles.
-    App* on = screen > 0 ? Apps::get(screen - 1) : nullptr;
-    if (!on || on->vis != VIS_TIMER) Face::playGag(GAG_MAGIC, 900);
+    // MAGIC is reserved for its PC action and does the same on every screen.
+    Face::playGag(GAG_MAGIC, 900);
     sendButton(ev.id, ev.longPress, screen);
     return;
   }

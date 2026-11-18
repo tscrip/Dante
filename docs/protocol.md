@@ -36,7 +36,7 @@ Limits on the device: max 12 apps, `id` ≤ 15 chars, `name` ≤ 19 chars, `unit
 | `hello`  | `fw`, `name`, `display`, `oled`, `lcd` | Firmware version, device name, screen type in use (`oled`/`lcd1602`/`lcd2004`/`tft`), and what answered on the I2C bus at boot: an OLED (`oled`) and the address of an LCD backpack (`lcd`, 0 = none). PC replies by sending `cfg`, `apps`, every `val`, `mood`, active `alert`s. |
 | `pong`   | –      | Heartbeat reply. |
 | `diag`   | `boot`, `scan` | `boot` = the startup report line; `scan` = live I2C scan, e.g. `I2C scan now: bus 1 (SDA=8 SCL=9): 0x27 (LCD)`. The TFT is on SPI and never shows up in the scan. Typing `?` in a serial monitor prints the same two lines as plain text. |
-| `btn`    | `b` ∈ `sel`,`left`,`right`,`magic`; `long` (bool); `scr` (app id or `face`) | Button press. Short `sel` on an app = "open it" (PC opens configured URL); long `sel` = "refresh now". `magic` = whatever the PC decides for the screen in `scr`: on a countdown screen (the Pomodoro timer) press = start / pause and long press = reset; anywhere else the action configured in the PC app (mute, play/pause, ...). The PC answers with a `say` describing the result. MAGIC presses are sent even during a takeover and never acknowledge it. |
+| `btn`    | `b` ∈ `sel`,`left`,`right`,`magic`; `long` (bool); `scr` (app id or `face`) | Button press. `sel` acts on the screen in `scr`: short on an app = "open it" (PC opens configured URL), long = "refresh now"; on a countdown screen (the Pomodoro timer) press = start / pause and long press = reset. `magic` always runs the action configured in the PC app (mute, play/pause, ...), whatever the screen. The PC answers with a `say` describing the result. MAGIC presses are sent even during a takeover and never acknowledge it. |
 | `ack`    | `id`   | User pressed SELECT on a takeover ("I'm on it"). For a meeting reminder the PC opens the meeting's join link; for a finished Pomodoro session it starts the next one. |
 | `snooze` | `id`   | User pressed LEFT/RIGHT on a takeover ("later"). |
 
@@ -48,9 +48,9 @@ DEV {"t":"hello","fw":"3.0.0","name":"DANTE","display":"tft","oled":false,"lcd":
 PC  {"t":"cfg","bright":200,"display":"tft","lcdSize":"1602","lcdAddr":39,"flip":false}
 PC  {"t":"apps","apps":[{"id":"cc_usage","name":"Claude 5h","vis":"gauge","min":0,"max":100,"unit":"%"},{"id":"pomodoro","name":"Pomodoro","vis":"timer","min":0,"max":1500,"unit":""}]}
 PC  {"t":"val","id":"cc_usage","v":63,"txt":"resets 2h10m","lvl":0}
-PC  {"t":"val","id":"pomodoro","lvl":0,"v":1500,"tot":1500,"run":false,"txt":"Focus 1/4 - MAGIC: start"}
+PC  {"t":"val","id":"pomodoro","lvl":0,"v":1500,"tot":1500,"run":false,"txt":"Focus 1/4 - SEL: start"}
 PC  {"t":"mood","m":"antsy","n":4,"age":240}
-DEV {"t":"btn","b":"magic","long":false,"scr":"pomodoro"}
+DEV {"t":"btn","b":"sel","long":false,"scr":"pomodoro"}
 PC  {"t":"say","txt":"Focus 1/4: 25:00. Go!"}
 PC  {"t":"val","id":"pomodoro","lvl":0,"v":1500,"tot":1500,"run":true,"txt":"Focus 1/4"}
 PC  {"t":"alert","id":"calendar","title":"Meeting","txt":"Standup in 10 min","lvl":1}

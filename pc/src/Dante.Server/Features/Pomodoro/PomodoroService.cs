@@ -5,14 +5,14 @@ using Dante.Core.Engine;
 namespace Dante.Server.Features.Pomodoro;
 
 /// <summary>
-/// Runs the Pomodoro timer: ticks it, tells DANTE when a session ends, and owns the MAGIC button while
-/// the Pomodoro screen is showing (press = start / pause, long press = reset). SELECT on the
-/// "session done" nudge starts the next session.
+/// Runs the Pomodoro timer: ticks it, tells DANTE when a session ends, and owns SELECT while the
+/// Pomodoro screen is showing (press = start / pause, long press = reset). SELECT on the
+/// "session done" nudge starts the next session. MAGIC is left alone: it always runs its own PC action.
 /// </summary>
 public sealed class PomodoroService(ConfigStore config, DeviceAlerts alerts, TimeProvider time, ILogger<PomodoroService> log) : BackgroundService, IDeviceEventHandler
 {
     public const string AlertId = "pomodoro";
-    /// <summary>Before catch-all handlers such as the MAGIC button's PC action.</summary>
+    /// <summary>Before the engine's own SELECT handling (open link / long press = refresh everything).</summary>
     public const int HandlerOrder = 100;
 
     private readonly Lock _gate = new();
@@ -43,7 +43,7 @@ public sealed class PomodoroService(ConfigStore config, DeviceAlerts alerts, Tim
         engine.AddHandler(this, HandlerOrder);
     }
 
-    /// <summary>MAGIC on the Pomodoro screen, or the Start/Pause button in the UI.</summary>
+    /// <summary>SELECT on the Pomodoro screen, or the Start/Pause button in the UI.</summary>
     public void StartOrPause()
     {
         PomodoroState state;
@@ -71,7 +71,7 @@ public sealed class PomodoroService(ConfigStore config, DeviceAlerts alerts, Tim
         Notify();
     }
 
-    /// <summary>Long-press MAGIC on the Pomodoro screen, or Reset in the UI.</summary>
+    /// <summary>Long-press SELECT on the Pomodoro screen, or Reset in the UI.</summary>
     public void Reset()
     {
         lock (_gate) _timer.Reset();
@@ -91,7 +91,7 @@ public sealed class PomodoroService(ConfigStore config, DeviceAlerts alerts, Tim
 
     public bool Handle(DeviceEvent evt, WidgetDefinition? screen)
     {
-        if (evt.Type != "btn" || evt.Button != "magic" || screen?.Type != PomodoroSource.TypeName) return false;
+        if (evt.Type != "btn" || evt.Button != "sel" || screen?.Type != PomodoroSource.TypeName) return false;
         if (evt.Long) Reset(); else StartOrPause();
         return true;
     }
@@ -127,7 +127,7 @@ public sealed class PomodoroService(ConfigStore config, DeviceAlerts alerts, Tim
             _ => $"Break's over. Focus: {minutes} min.",
         };
         if (done.NextStarted || !settings.NudgeWhenDone)
-            alerts.Say(done.NextStarted ? text : text + " MAGIC: start");
+            alerts.Say(done.NextStarted ? text : text + " SEL: start");
         else
             alerts.Raise(AlertId, "Pomodoro", text + " SEL: start", settings.NudgeLevel);
     }
