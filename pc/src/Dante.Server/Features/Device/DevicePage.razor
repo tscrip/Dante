@@ -105,67 +105,27 @@
         <div>
             <label class="field"><span>Screen type</span>
                 <select @bind="_cfg.Device.Display">
-                    <option value="@DisplayType.Auto">Automatic: whatever DANTE finds</option>
+                    <option value="@DisplayType.Auto">Automatic: the OLED if it answers, otherwise the TFT</option>
                     <option value="@DisplayType.Oled128x32">OLED 0.91" 128×32 (SSD1306, I2C)</option>
-                    <option value="@DisplayType.Lcd1602">LCD 1602 16×2 (PCF8574 I2C backpack)</option>
-                    <option value="@DisplayType.Lcd2004">LCD 2004 20×4 (PCF8574 I2C backpack)</option>
                     <option value="@DisplayType.Tft35">TFT 3.5" 480×320 colour (ST7796, SPI)</option>
                 </select>
                 <span class="help">DANTE drives one screen.</span>
                 @if (Link.Online && Link.OledDetected is not null)
                 {
-                    <span class="help">DANTE found at boot: OLED @(Link.OledDetected == true ? "✓" : "✗") ·
-                        LCD @LcdFoundText · using: <strong>@UsingText</strong></span>
-                    @if (_cfg.Device.Display is DisplayType.Oled128x32 or DisplayType.Lcd1602 or DisplayType.Lcd2004
-                         && Link.OledDetected == false && Link.LcdDetectedAddress is not > 0)
+                    <span class="help">DANTE found at boot: OLED @(Link.OledDetected == true ? "✓" : "✗") · using: <strong>@UsingText</strong></span>
+                    @if (_cfg.Device.Display == DisplayType.Oled128x32 && Link.OledDetected == false)
                     {
-                        <div class="notice error small">DANTE found no screen on its I2C bus. Check the wiring: SDA → GPIO 8, SCL → GPIO 9, plus power and GND.</div>
-                    }
-                    else if (_cfg.Device.Display == DisplayType.Oled128x32 && Link.OledDetected == false && Link.LcdDetectedAddress is > 0)
-                    {
-                        <div class="notice error small">OLED is selected but DANTE only found an LCD. Pick "LCD 1602" or "Automatic".</div>
-                    }
-                    else if (_cfg.Device.IsLcd && Link.LcdDetectedAddress is not > 0)
-                    {
-                        <div class="notice error small">An LCD is selected but DANTE didn't find an LCD backpack.</div>
+                        <div class="notice error small">DANTE didn't find the OLED on its I2C bus. Check the wiring: SDA → GPIO 8, SCL → GPIO 9, plus power and GND.</div>
                     }
                     else if (_cfg.Device.Display == DisplayType.Auto && Link.DeviceTft)
                     {
-                        <div class="notice small">No I2C screen answered, so DANTE assumes the 3.5" TFT (it can't detect an SPI screen).
+                        <div class="notice small">No OLED answered, so DANTE assumes the 3.5" TFT (it can't detect an SPI screen).
                             If you have one, pick it above so DANTE doesn't have to guess.</div>
                     }
                 }
             </label>
 
-            @if (_cfg.Device.Display == DisplayType.Auto)
-            {
-                <label class="field"><span>If DANTE finds an LCD, it's a</span>
-                    <select @bind="_cfg.Device.LcdSize">
-                        <option value="@LcdSize.Size16x2">1602 (16×2)</option>
-                        <option value="@LcdSize.Size20x4">2004 (20×4)</option>
-                    </select>
-                    <span class="help">Both sizes look the same on the I2C bus, so DANTE can't tell them apart by itself.</span>
-                </label>
-            }
-            @if (_cfg.Device.IsLcd)
-            {
-                <label class="field"><span>LCD I2C address</span>
-                    <select value="@_cfg.Device.LcdAddress" @onchange="SetLcdAddress">
-                        @foreach (var addr in LcdAddresses) { <option value="@addr">@AddressLabel(addr)</option> }
-                    </select>
-                    <span class="help">Same I2C pins as the OLED (SDA 8 / SCL 9). Use a level shifter: 5 V backpacks pull the bus to 5 V and the S3 is not 5 V tolerant. The face, apps and nudges are drawn as text plus custom characters.</span>
-                </label>
-                @if (Link.Online && Link.LcdDetectedAddress is > 0 and var found && found != _cfg.Device.LcdAddress)
-                {
-                    <div class="notice small">DANTE found an LCD at @Hex(found).
-                        <button class="btn sm" @onclick="() => _cfg.Device.LcdAddress = found">Use it</button></div>
-                }
-                <label class="check"><input type="checkbox" checked="@(_cfg.Device.Brightness > 0)" @onchange="SetBacklight" /> Backlight on</label>
-            }
-            else   // character LCDs can't be rotated
-            {
-                <label class="check"><input type="checkbox" @bind="_cfg.Device.Flip" /> Screen is mounted upside down</label>
-            }
+            <label class="check"><input type="checkbox" @bind="_cfg.Device.Flip" /> Screen is mounted upside down</label>
             <button class="btn primary" @onclick="Save" style="margin-top:.5rem">Save &amp; send to DANTE</button>
             @if (_savedAt is { } at && DateTimeOffset.UtcNow - at < TimeSpan.FromSeconds(4))
             {
@@ -183,7 +143,7 @@
                 </tbody>
             </table>
             <p class="muted small">DANTE remembers the screen type, so it starts up in the right mode even before the PC connects.
-                Before it has ever been configured it uses whichever I2C screen it finds, and the TFT when there is none.</p>
+                Before it has ever been configured it uses the OLED if it answers, and the TFT otherwise.</p>
         </div>
     </div>
 </div>
@@ -244,41 +204,23 @@
         Link.Send(DeviceProtocol.Diag());
     }
 
-    // 0x20-0x27 = PCF8574, 0x38-0x3F = PCF8574A (set by the A0-A2 jumpers on the backpack).
-    private static string Hex(int a) => $"0x{a:X2}";
-    private static string AddressLabel(int a) => Hex(a) + (a == 0x27 ? " (PCF8574, most common)" : a == 0x3F ? " (PCF8574A)" : "");
-    private string UsingText => Link.DeviceDisplay switch
-    {
-        "lcd2004" => "LCD 2004",
-        "lcd1602" => "LCD 1602",
-        "tft" => "TFT 3.5\"",
-        _ => "OLED",
-    };
+    private string UsingText => Link.DeviceDisplay == "tft" ? "TFT 3.5\"" : "OLED";
 
     /// <summary>Screen pin → ESP32-S3 GPIO, matching firmware/src/config.h.</summary>
     private static IEnumerable<(string ScreenPin, string Gpio)> WiringFor(DisplayType display) => display switch
     {
         DisplayType.Tft35 =>
         [
-            ("VCC", "3V3"), ("GND", "GND"), ("SCL / SCK", "GPIO 12"), ("SDA / SDI / MOSI", "GPIO 11"),
-            ("RST", "GPIO 14"), ("DC / RS", "GPIO 13"), ("CS", "GPIO 10"), ("BL / LED", "GPIO 21"),
+            ("VCC", "3V3"), ("GND", "GND"), ("SCL (SPI clock)", "GPIO 12"), ("SDA (SPI data)", "GPIO 11"),
+            ("RST", "GPIO 14"), ("DC", "GPIO 13"), ("CS", "GPIO 10"), ("BL", "GPIO 21"), ("SDO", "not connected"),
         ],
-        DisplayType.Lcd1602 or DisplayType.Lcd2004 =>
-            [("VCC", "5V"), ("GND", "GND"), ("SDA", "GPIO 8 (via level shifter)"), ("SCL", "GPIO 9 (via level shifter)")],
         DisplayType.Oled128x32 => [("VCC", "3V3"), ("GND", "GND"), ("SDA", "GPIO 8"), ("SCL", "GPIO 9")],
         _ =>
         [
-            ("OLED / LCD SDA", "GPIO 8"), ("OLED / LCD SCL", "GPIO 9"),
-            ("TFT SCK · MOSI · CS · DC · RST · BL", "GPIO 12 · 11 · 10 · 13 · 14 · 21"),
+            ("OLED SDA · SCL", "GPIO 8 · 9"),
+            ("TFT SCL · SDA · CS · DC · RST · BL", "GPIO 12 · 11 · 10 · 13 · 14 · 21"),
         ],
     };
-    private string LcdFoundText => Link.LcdDetectedAddress is > 0 and var a ? $"✓ at {Hex(a)}" : "✗";
-    private void SetLcdAddress(ChangeEventArgs e) { if (int.TryParse(e.Value?.ToString(), out var a)) _cfg.Device.LcdAddress = a; }
-    private void SetBacklight(ChangeEventArgs e) => _cfg.Device.Brightness = e.Value is true ? 200 : 0;
-
-    private IEnumerable<int> LcdAddresses =>
-        new[] { 0x27, 0x3F }.Concat(Enumerable.Range(0x20, 8)).Concat(Enumerable.Range(0x38, 8))
-            .Append(_cfg.Device.LcdAddress).Distinct();
 
     private void Save()
     {

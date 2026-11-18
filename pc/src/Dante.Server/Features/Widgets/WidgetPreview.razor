@@ -1,15 +1,6 @@
-@* Shows a widget the way the configured screen type will show it. *@
-@inject ConfigStore Store
-@inject DeviceLink Link
+@* Shows a widget the way DANTE draws it (the 128x32 layout; the 3.5" TFT shows the same, scaled up in colour). *@
 
-@if (ShowsLcd)
-{
-    <LcdPreview Size="LcdSizeShown" Page="Page" Pages="Pages" Visual="Visual" Name="@Name" Value="Value" Min="Min" Max="Max" Unit="@Unit" Text="@Text" Level="Level" Sample="Sample" />
-}
-else
-{
-    <OledPreview Visual="Visual" Name="@Name" Value="Value" Min="Min" Max="Max" Unit="@Unit" Text="@Text" Level="Level" Scale="Scale" Sample="Sample" />
-}
+<OledPreview Visual="Visual" Name="@Name" Value="Value" Min="Min" Max="Max" Unit="@Unit" Text="@Text" Level="Level" Scale="Scale" Sample="Sample" />
 
 @code {
     [Parameter] public VisualKind Visual { get; set; }
@@ -22,10 +13,7 @@ else
     [Parameter] public int Level { get; set; }
     [Parameter] public int Scale { get; set; } = 3;
     [Parameter] public bool Sample { get; set; } = true;
+    // Kept for callers that pass the carousel position; the 128x32 preview doesn't draw page dots.
     [Parameter] public int Page { get; set; } = 1;
     [Parameter] public int Pages { get; set; } = 1;
-
-    // Automatic: preview whatever DANTE says it's using.
-    private bool ShowsLcd => Store.Snapshot().Device is var d && (d.IsLcd || (d.Display == DisplayType.Auto && Link.DeviceLcd is not null));
-    private LcdSize LcdSizeShown => Store.Snapshot().Device is var d && d.IsLcd ? d.EffectiveLcdSize : Link.DeviceLcd ?? d.LcdSize;
 }

@@ -23,7 +23,7 @@ public sealed class FakeDante : IDeviceTransport
     {
         var msg = (JsonObject)JsonNode.Parse(line)!;
         Received.Enqueue(msg);
-        if (msg["t"]!.GetValue<string>() == "hello") _toPc.Add("""{"t":"hello","fw":"test","name":"DANTE","display":"oled","oled":false,"lcd":39}""");
+        if (msg["t"]!.GetValue<string>() == "hello") _toPc.Add("""{"t":"hello","fw":"test","name":"DANTE","display":"oled","oled":false}""");
     }
 
     public void Press(string json) => _toPc.Add(json);
@@ -103,7 +103,6 @@ public class EngineIntegrationTests : IAsyncLifetime
         for (var i = 0; i < 40 && _link.DeviceDisplay is null; i++) await Task.Delay(50);
         Assert.Equal("oled", _link.DeviceDisplay);
         Assert.False(_link.OledDetected);
-        Assert.Equal(0x27, _link.LcdDetectedAddress);
         Assert.False(_link.DeviceTft);
 
         var cfg = _store.Snapshot();
@@ -115,10 +114,9 @@ public class EngineIntegrationTests : IAsyncLifetime
         Assert.True(updated["flip"]!.GetValue<bool>());
         Assert.Equal(LinkStatus.Connected, _link.Status); // display changes don't drop the connection
 
-        cfg.Device.Display = DisplayType.Lcd1602;
+        cfg.Device.Display = DisplayType.Oled128x32;
         _store.Save(cfg);
-        var lcd = await WaitFor(m => Is(m, "cfg") && m["display"]!.GetValue<string>() == "lcd1602");
-        Assert.Equal(0x27, lcd["lcdAddr"]!.GetValue<int>());
+        await WaitFor(m => Is(m, "cfg") && m["display"]!.GetValue<string>() == "oled");
     }
 
     [Fact]

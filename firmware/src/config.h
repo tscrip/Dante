@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 // ---- Identity ---------------------------------------------------------------
-#define FW_VERSION      "3.1.0"
+#define FW_VERSION      "3.2.0"
 #define DEVICE_NAME     "DANTE"
 
 // ---- Board: ESP32-S3 (e.g. ESP32-S3-DevKitC-1) --------------------------------
@@ -10,9 +10,9 @@
 // pins (43, 44) and 26-37, which the flash / octal PSRAM use on most S3 modules.
 
 // ---- Screen ------------------------------------------------------------------
-// DANTE drives exactly one screen: a 0.91" OLED, a 1602/2004 character LCD (both I2C), or the
-// 3.5" colour TFT (SPI). Which one is chosen in the PC app and remembered; until then DANTE uses
-// whichever I2C screen answers, and the TFT when none does (an SPI screen can't be detected).
+// DANTE drives exactly one screen: the 0.91" OLED (I2C) or the 3.5" colour TFT (SPI). Which one is
+// chosen in the PC app and remembered; until then DANTE uses the OLED if it answers, else the TFT
+// (an SPI screen can't be detected).
 
 // ---- OLED (SSD1306 128x32, I2C) ----------------------------------------------
 #define PIN_SDA         8     // ESP32-S3 Arduino default I2C pins
@@ -21,16 +21,6 @@
 #define SCREEN_H        32
 
 #define OLED_I2C_ADDR   0x3C      // 7-bit; 0x3D (address jumper moved) is found too
-
-// ---- Alternative display: 1602 / 2004 character LCD with a PCF8574 I2C backpack
-// Shares the first I2C bus (GPIO 8/9). Choose OLED or LCD in the PC app; with nothing
-// chosen yet DANTE picks whichever it finds at boot. Backpacks are usually at 0x27
-// (PCF8574) or 0x3F (PCF8574A); the address is also set from the PC app.
-// Sizes supported: 16x2 ("1602") and 20x4 ("2004"); the size is set from the PC app.
-#define LCD_MAX_COLS    20
-#define LCD_MAX_ROWS    4
-#define LCD_DEFAULT_ADDR 0x27
-#define LCD_FRAME_MS    50        // the LCD is slow to update (and to change visibly)
 
 // ---- 3.5" TFT, 480x320, ST7796 driver, SPI ---------------------------------------
 // The 8-pin modules label the SPI pins SCL (= SCK) and SDA (= MOSI). There is no MISO: DANTE

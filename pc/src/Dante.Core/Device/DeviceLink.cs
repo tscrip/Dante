@@ -79,19 +79,10 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
     public LinkStatus Status { get; private set; } = LinkStatus.Disconnected;
     public string? PortName { get; private set; }
     public string? Firmware { get; private set; }
-    /// <summary>Display type DANTE is using ("oled" / "lcd1602" / "lcd2004" / "tft").</summary>
+    /// <summary>Display type DANTE is using ("oled" / "tft").</summary>
     public string? DeviceDisplay { get; private set; }
-    /// <summary>The LCD size DANTE is driving, or null when it is using an OLED or the TFT.</summary>
-    public LcdSize? DeviceLcd => DeviceDisplay switch
-    {
-        "lcd1602" => LcdSize.Size16x2,
-        "lcd2004" => LcdSize.Size20x4,
-        _ => null,
-    };
     /// <summary>Whether an OLED answered at boot.</summary>
     public bool? OledDetected { get; private set; }
-    /// <summary>I2C address an LCD backpack answered at during boot (0 = none found).</summary>
-    public int? LcdDetectedAddress { get; private set; }
     /// <summary>DANTE is driving the 3.5" colour TFT.</summary>
     public bool DeviceTft => DeviceDisplay == "tft";
     /// <summary>Latest reply to <see cref="DeviceProtocol.Diag"/>.</summary>
@@ -169,7 +160,6 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
         Firmware = null;
         DeviceDisplay = null;
         OledDetected = null;
-        LcdDetectedAddress = null;
         SetStatus(LinkStatus.Connected, Target(settings));
 
         Write(transport, DeviceProtocol.Hello().ToJsonString());
@@ -225,7 +215,6 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
                     Firmware = evt.Raw["fw"]?.GetValue<string>();
                     DeviceDisplay = evt.Raw["display"]?.GetValue<string>();
                     OledDetected = evt.Raw["oled"]?.GetValue<bool>();
-                    LcdDetectedAddress = evt.Raw["lcd"]?.GetValue<int>();
                 }
                 StatusChanged?.Invoke();
                 EventReceived?.Invoke(evt);

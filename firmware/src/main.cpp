@@ -1,5 +1,5 @@
 // DANTE firmware: a tiny desk companion with opinions.
-// ESP32-S3 + one screen (SSD1306 128x32 OLED, 1602/2004 LCD or 3.5" ST7796 TFT) + 4 buttons, talking JSON lines over Bluetooth LE / USB.
+// ESP32-S3 + one screen (SSD1306 128x32 OLED or 3.5" ST7796 TFT) + 4 buttons, talking JSON lines over Bluetooth LE / USB.
 // Protocol: docs/protocol.md
 #include <Arduino.h>
 #include <Wire.h>
@@ -12,8 +12,6 @@
 #include "Face.h"
 #include "Apps.h"
 #include "Displays.h"
-#include "Lcd.h"
-#include "LcdUi.h"
 #include "Tft.h"
 #include "Gfx.h"
 
@@ -73,9 +71,8 @@ static void fillHello(JsonDocument& d) {
   d["t"] = "hello";
   d["fw"] = FW_VERSION;
   d["name"] = DEVICE_NAME;
-  d["display"] = Displays::kindName();      // oled / lcd1602 / lcd2004 / tft
+  d["display"] = Displays::kindName();      // oled / tft
   d["oled"] = Displays::oledDetected();
-  d["lcd"] = Displays::lcdDetected();       // backpack address found at boot, 0 = none
 }
 
 static void sendHello() {
@@ -222,7 +219,7 @@ static void handleButton(const ButtonEvent& ev) {
 
 // ---- rendering ------------------------------------------------------------------------
 // Everything draws on a logical 128x32 canvas (Gfx.h). The OLED shows it 1:1, the TFT scaled up
-// and in colour, the character LCD has its own text layouts (LcdUi).
+// and in colour.
 
 static void renderOn(Gfx& g, int s, uint32_t now, bool chrome = true) {
   if (s == 0) Face::draw(g, 0, chrome);
@@ -323,22 +320,6 @@ static void renderOled(Alert* alert, uint32_t now) {
     if (toast.active) drawToast(g, now);
   }
   u.sendBuffer();
-}
-
-// Character LCD (16x2 / 20x4). Text-mode rendering, no slides.
-static void renderLcd(Alert* alert, uint32_t now) {
-  static uint32_t lastLcd = 0;
-  if (now - lastLcd < LCD_FRAME_MS) return;
-  lastLcd = now;
-
-  bool light = Displays::settings().bright > 0;
-  Lcd::backlight(light);
-  Lcd::clear();
-  if (alert) LcdUi::takeover(alert->title, alert->txt, alert->lvl, alert->since, now, light);
-  else if (toast.active) LcdUi::toast(toast.title, toast.text, toast.start, now);
-  else if (screen == 0) LcdUi::face(now);
-  else if (App* a = Apps::get(screen - 1)) LcdUi::app(*a, screen, Apps::count(), now);   // "app 2 of 5"
-  Lcd::flush();
 }
 
 // ---- 3.5" TFT ---------------------------------------------------------------------------
@@ -484,7 +465,6 @@ void loop() {
   Alert* alert = currentAlert();
 
   switch (Displays::active()) {
-    case Displays::KIND_LCD: renderLcd(alert, now); break;
     case Displays::KIND_TFT: renderTft(alert, now); break;
     default:                 renderOled(alert, now); break;
   }

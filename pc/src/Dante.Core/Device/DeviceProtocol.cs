@@ -73,15 +73,11 @@ public static class DeviceProtocol
         ["t"] = "cfg",
         ["bright"] = Math.Clamp(d.Brightness, 0, 255),
         ["display"] = DisplayWireName(d.Display),
-        ["lcdSize"] = d.EffectiveLcdSize == LcdSize.Size20x4 ? "2004" : "1602",
-        ["lcdAddr"] = Math.Clamp(d.LcdAddress, 0x08, 0x77),
         ["flip"] = d.Flip,
     };
 
     public static string DisplayWireName(DisplayType d) => d switch
     {
-        DisplayType.Lcd1602 => "lcd1602",
-        DisplayType.Lcd2004 => "lcd2004",
         DisplayType.Oled128x32 => "oled",
         DisplayType.Tft35 => "tft",
         _ => "auto",

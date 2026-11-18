@@ -43,35 +43,17 @@ public sealed class DeviceSettings
     public string? PortName { get; set; }
     public int BaudRate { get; set; } = 115200;
     public bool AutoConnect { get; set; } = true;
-    /// <summary>OLED contrast / LCD and TFT backlight, 0-255.</summary>
+    /// <summary>OLED contrast / TFT backlight, 0-255.</summary>
     public int Brightness { get; set; } = 200;
 
     /// <summary>What kind of screen DANTE has. DANTE always drives exactly one screen.</summary>
     public DisplayType Display { get; set; } = DisplayType.Auto;
-    /// <summary>I2C address of the LCD's PCF8574 backpack (usually 0x27, or 0x3F for the PCF8574A).</summary>
-    public int LcdAddress { get; set; } = 0x27;
-    /// <summary>
-    /// Size of the character LCD. Follows <see cref="Display"/> when an LCD type is picked; with
-    /// <see cref="DisplayType.Auto"/> it tells DANTE which LCD to expect (both look the same on the bus).
-    /// </summary>
-    public LcdSize LcdSize { get; set; } = LcdSize.Size16x2;
-    /// <summary>The screen is mounted upside down: rotate it 180° (OLED and TFT; character LCDs can't rotate).</summary>
+    /// <summary>The screen is mounted upside down: rotate it 180°.</summary>
     public bool Flip { get; set; }
 
     /// <summary>Older configs had one flag per screen (two-screen mode); the first screen's flag carries over.</summary>
     [JsonPropertyName("flipScreen1")]
     public bool? LegacyFlipScreen1 { get; set; }
-
-    [JsonIgnore]
-    public bool IsLcd => Display is DisplayType.Lcd1602 or DisplayType.Lcd2004;
-    /// <summary>The LCD size in effect.</summary>
-    [JsonIgnore]
-    public LcdSize EffectiveLcdSize => Display switch
-    {
-        DisplayType.Lcd1602 => LcdSize.Size16x2,
-        DisplayType.Lcd2004 => LcdSize.Size20x4,
-        _ => LcdSize,
-    };
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<ConnectionKind>))]
@@ -87,22 +69,14 @@ public enum ConnectionKind
 public enum DisplayType
 {
     /// <summary>
-    /// DANTE uses whichever I2C screen it finds (OLED preferred, then a character LCD); with neither it
-    /// assumes the SPI colour TFT, which it can't detect.
+    /// DANTE uses the OLED if it answers on I2C, otherwise the SPI colour TFT (which it can't detect).
     /// </summary>
     Auto,
     /// <summary>0.91" SSD1306 128x32 OLED.</summary>
     Oled128x32,
-    /// <summary>16x2 HD44780 character LCD with a PCF8574 I2C backpack ("1602 I2C").</summary>
-    Lcd1602,
-    /// <summary>20x4 HD44780 character LCD with a PCF8574 I2C backpack ("2004 I2C").</summary>
-    Lcd2004,
     /// <summary>3.5" 480x320 colour TFT, ST7796 driver, SPI.</summary>
     Tft35,
 }
-
-[JsonConverter(typeof(JsonStringEnumConverter<LcdSize>))]
-public enum LcdSize { Size16x2, Size20x4 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<Personality>))]
 public enum Personality { Cheerful, Sarcastic, Dramatic }

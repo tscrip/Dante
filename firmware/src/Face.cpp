@@ -518,20 +518,6 @@ FaceInfo info() {
   return f;
 }
 
-void drawEyeScaled(Gfx& g, int eye, int cx, int cy, float sx, float sy, int radius) {
-  uint32_t now = frameNow;
-  eye = eye ? 1 : 0;
-  float blink = (gag == GAG_NONE) ? blinkFactor(now) : 1.0f;
-  EyeStyle e = cur[eye];
-  e.w *= sx;
-  e.h *= sy;
-  int saved = radiusCap;
-  radiusCap = radius;
-  g.setDrawColor(1);
-  drawEye(g, cx, cy, e, blink, eye == 0, shape[eye], now);
-  radiusCap = saved;
-}
-
 void drawMini(Gfx& g, int cx, int cy, float scale, MiniExpr expr, uint32_t now) {
   EyeStyle e = style(24 * scale, 22 * scale);
   Shape sh = SH_NORMAL;

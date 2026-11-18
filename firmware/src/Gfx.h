@@ -7,7 +7,6 @@
 // its own pixels:
 //   * OLED: U8g2Gfx, 1:1 into the SSD1306 frame buffer.
 //   * 3.5" TFT: TftGfx (Tft.h), scaled up and in colour.
-//   * character LCD: U8g2Gfx into an off-screen buffer that is cut into custom glyphs (LcdUi).
 //
 // Draw colours follow u8g2: 0 = background, 1 = foreground, 2 = XOR (on the TFT: inverted
 // colours for boxes, the accent colour for lines).

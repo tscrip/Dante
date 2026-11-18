@@ -44,7 +44,7 @@ public class ProtocolTests
     public void Cfg_carries_the_single_screen_settings()
     {
         var msg = DeviceProtocol.Cfg(new DeviceSettings { Brightness = 300, Display = DisplayType.Tft35, Flip = true });
-        Assert.Equal("""{"t":"cfg","bright":255,"display":"tft","lcdSize":"1602","lcdAddr":39,"flip":true}""", msg.ToJsonString());
+        Assert.Equal("""{"t":"cfg","bright":255,"display":"tft","flip":true}""", msg.ToJsonString());
         Assert.False(DeviceProtocol.Cfg(new DeviceSettings())["flip"]!.GetValue<bool>());
     }
 
@@ -57,46 +57,28 @@ public class ProtocolTests
     }
 
     [Fact]
-    public void Cfg_selects_the_lcd()
+    public void Cfg_selects_the_screen()
     {
-        var msg = DeviceProtocol.Cfg(new DeviceSettings { Display = DisplayType.Lcd1602, LcdAddress = 0x3F });
-        Assert.Equal("lcd1602", msg["display"]!.GetValue<string>());
-        Assert.Equal(0x3F, msg["lcdAddr"]!.GetValue<int>());
-        Assert.Equal(0x77, DeviceProtocol.Cfg(new DeviceSettings { LcdAddress = 500 })["lcdAddr"]!.GetValue<int>());
         Assert.Equal("oled", DeviceProtocol.Cfg(new DeviceSettings { Display = DisplayType.Oled128x32 })["display"]!.GetValue<string>());
         // Default: let DANTE use whatever screen it finds, rather than forcing the OLED.
         Assert.Equal(DisplayType.Auto, new DeviceSettings().Display);
         Assert.Equal("auto", DeviceProtocol.Cfg(new DeviceSettings())["display"]!.GetValue<string>());
+        Assert.Null(DeviceProtocol.Cfg(new DeviceSettings())["lcdAddr"]);   // the character LCDs are gone
     }
 
     [Fact]
-    public void Cfg_selects_the_20x4_lcd()
+    public void A_config_set_to_a_character_LCD_goes_back_to_automatic()
     {
-        var lcd = DeviceProtocol.Cfg(new DeviceSettings { Display = DisplayType.Lcd2004 });
-        Assert.Equal("lcd2004", lcd["display"]!.GetValue<string>());
-        Assert.Equal("2004", lcd["lcdSize"]!.GetValue<string>());
-
-        // Automatic still tells DANTE which LCD to expect if it finds one.
-        var auto = DeviceProtocol.Cfg(new DeviceSettings { Display = DisplayType.Auto, LcdSize = LcdSize.Size20x4 });
-        Assert.Equal("auto", auto["display"]!.GetValue<string>());
-        Assert.Equal("2004", auto["lcdSize"]!.GetValue<string>());
-
-        // An explicitly picked type wins over the remembered size.
-        Assert.Equal("1602", DeviceProtocol.Cfg(new DeviceSettings { Display = DisplayType.Lcd1602, LcdSize = LcdSize.Size20x4 })["lcdSize"]!.GetValue<string>());
-    }
-
-    [Fact]
-    public void Picking_an_lcd_type_remembers_its_size_for_automatic()
-    {
-        var cfg = new DanteConfig { Device = { Display = DisplayType.Lcd2004 } };
-        ConfigStore.Validate(cfg);
-        Assert.Equal(LcdSize.Size20x4, cfg.Device.LcdSize);
-        cfg.Device.Display = DisplayType.Auto;
-        Assert.Equal(LcdSize.Size20x4, cfg.Device.EffectiveLcdSize);
-        var json = System.Text.Json.JsonSerializer.Serialize(cfg, ConfigStore.JsonOptions);
-        Assert.DoesNotContain("isLcd", json);
-        Assert.DoesNotContain("effectiveLcdSize", json);
-        Assert.Contains("\"Size20x4\"", json);
+        var dir = Path.Combine(Path.GetTempPath(), $"dante-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "config.json");
+        File.WriteAllText(path, """{ "device": { "display": "Lcd2004", "lcdAddress": 63, "lcdSize": "Size20x4", "flip": true } }""");
+        var cfg = new ConfigStore(path).Snapshot();
+        Assert.Equal(DisplayType.Auto, cfg.Device.Display);
+        Assert.True(cfg.Device.Flip);
+        new ConfigStore(path).Save(cfg);
+        Assert.DoesNotContain("lcd", File.ReadAllText(path), StringComparison.OrdinalIgnoreCase);
+        Directory.Delete(dir, recursive: true);
     }
 
     [Fact]
@@ -264,8 +246,7 @@ public class ConfigTests
         cfg.Personality = Personality.Dramatic;
         cfg.Widgets[0].Takeover.Mode = TakeoverMode.WhenAbove;
         cfg.Device.Flip = true;
-        cfg.Device.Display = DisplayType.Lcd1602;
-        cfg.Device.LcdAddress = 0x3F;
+        cfg.Device.Display = DisplayType.Tft35;
         cfg.Device.Connection = ConnectionKind.Usb;
         cfg.Device.BluetoothName = "Buddy2";
         store.Save(cfg);
@@ -274,11 +255,10 @@ public class ConfigTests
         Assert.Equal(Personality.Dramatic, reloaded.Personality);
         Assert.Equal(TakeoverMode.WhenAbove, reloaded.Widgets[0].Takeover.Mode);
         Assert.True(reloaded.Device.Flip);
-        Assert.Equal(DisplayType.Lcd1602, reloaded.Device.Display);
-        Assert.Equal(0x3F, reloaded.Device.LcdAddress);
+        Assert.Equal(DisplayType.Tft35, reloaded.Device.Display);
         Assert.Equal(ConnectionKind.Usb, reloaded.Device.Connection);
         Assert.Equal("Buddy2", reloaded.Device.BluetoothName);
-        Assert.Contains("\"Lcd1602\"", File.ReadAllText(path));
+        Assert.Contains("\"Tft35\"", File.ReadAllText(path));
         Assert.Contains("\"WhenAbove\"", File.ReadAllText(path));
         Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
     }

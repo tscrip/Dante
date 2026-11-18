@@ -94,8 +94,6 @@ public sealed class ConfigStore
         }
         config.Device.Brightness = Math.Clamp(config.Device.Brightness, 0, 255);
         MigrateLegacy(config);
-        config.Device.LcdAddress = Math.Clamp(config.Device.LcdAddress, 0x08, 0x77);
-        config.Device.LcdSize = config.Device.EffectiveLcdSize;   // remember the size of an explicitly picked LCD
         // Firmware advertised "DeskBuddy", then "HANK", before the project became DANTE.
         if (LegacyNames.Contains(config.Device.BluetoothName?.Trim() ?? "", StringComparer.OrdinalIgnoreCase))
             config.Device.BluetoothName = "DANTE";
@@ -143,18 +141,32 @@ public sealed class ConfigStore
     }
 
     /// <summary>
-    /// Renames from before plugins and widgets: "apps" became "widgets", and in each widget "enabled"
-    /// became "active", "sourceType" "type" and "sourceSettings" "settings". Idempotent.
+    /// Changes from older versions, done on the raw JSON before it is loaded. Idempotent.
+    /// <list type="bullet">
+    /// <item>Plugins and widgets: "apps" became "widgets", and in each widget "enabled" became "active",
+    /// "sourceType" "type" and "sourceSettings" "settings".</item>
+    /// <item>The character LCDs (1602 / 2004) were removed: a config set to one goes back to automatic.</item>
+    /// </list>
     /// </summary>
     public static void MigrateJson(JsonObject root)
     {
         Rename(root, "apps", "widgets");
-        if (root["widgets"] is not JsonArray widgets) return;
-        foreach (var w in widgets.OfType<JsonObject>())
+        if (root["widgets"] is JsonArray widgets)
         {
-            Rename(w, "enabled", "active");
-            Rename(w, "sourceType", "type");
-            Rename(w, "sourceSettings", "settings");
+            foreach (var w in widgets.OfType<JsonObject>())
+            {
+                Rename(w, "enabled", "active");
+                Rename(w, "sourceType", "type");
+                Rename(w, "sourceSettings", "settings");
+            }
+        }
+        if (root["device"] is JsonObject device)
+        {
+            if (device["display"] is JsonValue d && d.TryGetValue<string>(out var display)
+                && display.StartsWith("Lcd", StringComparison.OrdinalIgnoreCase))
+                device["display"] = "Auto";
+            device.Remove("lcdAddress");
+            device.Remove("lcdSize");
         }
     }
 

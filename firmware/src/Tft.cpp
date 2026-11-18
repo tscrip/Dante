@@ -56,7 +56,7 @@ class Panel : public lgfx::LGFX_Device {
   }
 };
 
-Panel lcd;
+Panel tft;
 
 // Two ways to draw a frame:
 //  * With PSRAM (e.g. N16R8 / N8R8 modules): the whole frame is drawn once into PSRAM, compared with
@@ -64,7 +64,7 @@ Panel lcd;
 //    internal buffer while the next band is prepared. A blink or a glance sends a fraction of the screen.
 //  * Without: the frame is drawn in strips of TFT_STRIP_H rows (the scene is drawn once per strip),
 //    and strips that come out unchanged are skipped.
-LGFX_Sprite full(&lcd);          // PSRAM mode: the frame being drawn
+LGFX_Sprite full(&tft);          // PSRAM mode: the frame being drawn
 TftGfx fullCanvas(full);
 uint16_t* previous = nullptr;    // PSRAM mode: what the screen shows now
 uint16_t* dmaBuf[2] = {};        // PSRAM mode: internal, DMA-capable band buffers
@@ -72,7 +72,7 @@ const int BAND = 16;
 bool psramMode = false;
 bool forceAll = true;            // send everything next frame (after begin / flip)
 
-LGFX_Sprite strip(&lcd);         // strip mode
+LGFX_Sprite strip(&tft);         // strip mode
 TftGfx canvas(strip);
 const int STRIPS = (TFT_H + TFT_STRIP_H - 1) / TFT_STRIP_H;
 uint32_t sent[STRIPS];           // strip mode: hash of what each strip shows now
@@ -264,7 +264,7 @@ uint32_t pushChanged() {
   const uint16_t* cur = (const uint16_t*)full.getBuffer();
   uint32_t bytes = 0;
   int which = 0;
-  lcd.startWrite();
+  tft.startWrite();
   for (int y0 = 0; y0 < TFT_H; y0 += BAND) {
     int rows = TFT_H - y0 < BAND ? TFT_H - y0 : BAND;
     int x0 = TFT_W, x1 = -1;
@@ -295,11 +295,11 @@ uint32_t pushChanged() {
       memcpy(buf + r * w, src, w * 2);
       memcpy(previous + (y0 + r) * TFT_W + x0, src, w * 2);
     }
-    lcd.pushImageDMA(x0, y0, w, rows, (const lgfx::swap565_t*)buf);
+    tft.pushImageDMA(x0, y0, w, rows, (const lgfx::swap565_t*)buf);
     bytes += w * rows * 2;
   }
-  lcd.waitDMA();
-  lcd.endWrite();
+  tft.waitDMA();
+  tft.endWrite();
   forceAll = false;
   return bytes;
 }
@@ -329,7 +329,7 @@ namespace Tft {
 
 bool begin() {
   if (!started) {
-    lcd.init();
+    tft.init();
     psramMode = allocPsram();
     if (!psramMode) {
       strip.setColorDepth(16);
@@ -338,11 +338,11 @@ bool begin() {
     }
     started = true;
   } else {
-    lcd.wakeup();
+    tft.wakeup();
   }
-  lcd.setRotation(flipped ? 3 : 1);
-  lcd.fillScreen(TFT_BLACK);
-  lcd.setBrightness(brightness);
+  tft.setRotation(flipped ? 3 : 1);
+  tft.fillScreen(TFT_BLACK);
+  tft.setBrightness(brightness);
   forceAll = true;
   awake = true;
   return true;
@@ -350,9 +350,9 @@ bool begin() {
 
 void end() {
   if (!started || !awake) return;
-  lcd.setBrightness(0);
-  lcd.fillScreen(TFT_BLACK);
-  lcd.sleep();
+  tft.setBrightness(0);
+  tft.fillScreen(TFT_BLACK);
+  tft.sleep();
   awake = false;
 }
 
@@ -360,13 +360,13 @@ bool active() { return started && awake; }
 
 void setBrightness(uint8_t b) {
   brightness = b;
-  if (active()) lcd.setBrightness(b);
+  if (active()) tft.setBrightness(b);
 }
 
 void setFlip(bool upsideDown) {
   flipped = upsideDown;
   if (!active()) return;
-  lcd.setRotation(flipped ? 3 : 1);
+  tft.setRotation(flipped ? 3 : 1);
   forceAll = true;   // everything has to be sent again
 }
 

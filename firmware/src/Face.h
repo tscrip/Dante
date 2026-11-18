@@ -23,8 +23,7 @@ enum Gag : uint8_t {
   GAG_MAGIC,        // not a random gag: played when the MAGIC button is pressed
 };
 
-// Decorations around the eyes ("z", sweat, "!!", ...). Exposed so other renderers (the
-// character LCD) can show them their own way.
+// Decorations around the eyes ("z", sweat, "!!", ...).
 enum FaceDecor : uint16_t {
   DEC_Z      = 1 << 0,
   DEC_SWEAT  = 1 << 1,
@@ -68,9 +67,6 @@ namespace Face {
   void draw(Gfx& g, int ox, bool chrome = true);
 
   FaceInfo info();
-  // Draws eye `eye` (0 left, 1 right) in its current state, scaled by (sx, sy), centred at (cx, cy),
-  // with corner radius at most `radius`. Used to rasterise tiny eyes into LCD glyphs.
-  void drawEyeScaled(Gfx& g, int eye, int cx, int cy, float sx, float sy, int radius);
 
   // Small pair of eyes centred at (cx, cy); `scale` 1.0 == full-size eyes.
   void drawMini(Gfx& g, int cx, int cy, float scale, MiniExpr expr, uint32_t now);
