@@ -250,7 +250,7 @@ A **Plugins** page under `Features/CustomPlugins/` with three panes:
    Monaco from a CDN) with a `transform(res)` stub. **Run transform** re-runs only the transform
    against the saved sample, so editing the script does not call the API again.
 3. **Result.** The raw `{value, text, pending}` and any errors with line numbers. Below it, the
-   existing **`AppPreview`/`LcdPreview`/`OledPreview` components** show what DANTE would display.
+   existing **`WidgetPreview`/`OledPreview` components** show what DANTE would display.
 
 **Import** accepts a pasted JSON blob or an uploaded file. Before saving, it shows the hosts the plugin
 will call, the secrets it wants, and its code. **Export** writes the definition with `env:` references
