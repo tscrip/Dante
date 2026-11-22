@@ -2,8 +2,12 @@
 //
 // Three printed parts:
 //   front  the shell: the board drops in face-down, the screen shows through the window
-//   back   snaps into the shell; four posts press the board against the front
+//   back   screws onto the shell with four M3 flat-head (countersunk) screws, M3x10 (M3x12 also fits);
+//          four posts press the board against the front
 //   stand  holds the closed case at `tilt` degrees from the desk (60 by default)
+//
+// The screws go into posts in the top and bottom walls, so they never touch the board. They cut
+// their own thread in the plastic; set `inserts = true` to use M3 heat-set inserts instead.
 //
 // The board fit (pocket, window, corner pads, sensor holes, USB opening, back posts) is measured from
 // the "CYD 3.5 case (ESP32-3248S035)" on Printables (model 739905), which fits the board exactly.
@@ -27,37 +31,44 @@ usb_on_right = true;  // seen from the front. false stands the case the other wa
 pcb_w    = 102.3; // pocket width: the board's long side
 pcb_h    = 55.5;  // pocket height: the board's short side
 window_w = 86.3;  // screen window, centred; the window is the full pocket height
-wall     = 1.8;   // side walls
-front    = 1.5;   // front plate beside the screen
-depth    = 14;    // shell depth, front face to back rim
+wall_x   = 1.8;   // end walls (left and right of the screen)
+wall_y   = 7;     // top and bottom walls: thick enough to hold the screws
+front    = 1.5;   // front plate around the screen
+shell_d  = 12.25; // shell depth, front face to back rim
 pad_z    = 4.0;   // the board rests on corner pads this far behind the front face
 hole_d   = 2.9;   // holes in the corner pads, under the board's mounting holes
-corner_r = 1.0;   // outside corner rounding
+corner_r = 1.5;   // outside corner rounding
 
-/* [Back cover] */
-lid_z     = 12.25; // inner face of the back cover
-lid_t     = 1.5;   // back cover thickness (sits 0.25 below the rim)
-lid_clr   = 0.15;  // gap around the back cover
-snap      = 0.5;   // how far the snap tabs reach into the groove
+/* [Back cover and screws] */
+cover_t   = 2.5;   // back cover thickness
 post_z    = 6.75;  // the posts touch the back of the board at this depth
 rib_z     = 10.25; // stiffening ribs reach down to here
+screw_x   = 4;     // screws sit this far in from the pocket's ends, in the middle of the thick walls
+pilot_d   = 2.5;   // hole an M3 screw cuts its thread into (2.6 if it is too hard to turn, 2.4 if it strips)
+pilot_end = 2;     // the screw holes stop this far behind the front face
+inserts   = false; // true: holes for M3 heat-set inserts instead
+insert_d  = 4.0;   // hole for the insert (check your inserts' instructions)
+insert_l  = 5.0;   // insert length
+clear_d   = 3.4;   // screw clearance hole in the back cover
+head_d    = 6.2;   // countersink for an M3 flat head (6.0) plus a little room
 
 /* [Stand] */
 seat_h     = 3;    // material under the case's lowest corner
 rest_len   = 32;   // how far up the back of the case the stand supports it
 foot_depth = 60;   // desk footprint behind the case: longer = harder to tip over when you tap the top
 tail_h     = 5;    // height of the foot behind the backrest
-lip_h      = 2.5;  // lip in front of the screen's bottom edge (keep it below the picture)
+lip_h      = 2.5;  // lip in front of the screen's bottom edge
 lip_t      = 2.4;  // lip thickness
 cheek_h    = 8;    // side cheeks hold the case sideways; kept low so the USB plug clears them
 cheek_t    = 2.4;  // cheek thickness
-fit        = 0.3;  // gap between the case and the stand's cheeks
+fit        = 0.3;  // gap between the case and the stand
 
 $fn = 40;
 
 c = cos(tilt);
 s = sin(tilt);
 eps = 0.01;
+case_d = shell_d + cover_t; // the whole case, front face to back face
 
 // ---------------------------------------------------------------------------------------------
 // Front shell, in the board's own frame: X along the long side, Y along the short side,
@@ -74,29 +85,20 @@ pads = [
 ];
 holes = [[3.5, 3.5], [pcb_w - 3.5, 3.5], [3.5, pcb_h - 3.5], [pcb_w - 3.5, pcb_h - 3.5]];
 
-// The snap tabs on the back cover, and the pry notches above them on one long side: [x0, x1].
-tabs = [[25, 37], [87.3, 99.3]];
+// The four screws, in the middle of the top and bottom walls near the corners.
+screws = [for (x = [screw_x, pcb_w - screw_x], y = [-wall_y / 2, pcb_h + wall_y / 2]) [x, y]];
 
 module rounded_box(x0, y0, x1, y1, z0, z1, r) {
     translate([0, 0, z0]) linear_extrude(z1 - z0)
         offset(r = r) offset(delta = -r) translate([x0, y0]) square([x1 - x0, y1 - y0]);
 }
 
-// The groove the back cover's snap tabs click into, along both long walls: widest at lid_z,
-// closing to nothing at the rim and a little below lid_z (a lead-in for printing).
-module snap_groove() {
-    g = snap + 0.25;
-    rotate([90, 0, 90]) translate([0, 0, -eps]) linear_extrude(pcb_w + 2 * eps)
-        polygon([[-g, lid_z], [0, lid_z - 0.6], [pcb_h, lid_z - 0.6], [pcb_h + g, lid_z],
-                 [pcb_h, depth + eps], [0, depth + eps]]);
-}
-
 module front_shell() {
     difference() {
         union() {
             difference() {
-                rounded_box(-wall, -wall, pcb_w + wall, pcb_h + wall, 0, depth, corner_r);
-                translate([0, 0, front]) cube([pcb_w, pcb_h, depth]);          // board pocket
+                rounded_box(-wall_x, -wall_y, pcb_w + wall_x, pcb_h + wall_y, 0, shell_d, corner_r);
+                translate([0, 0, front]) cube([pcb_w, pcb_h, shell_d]);        // board pocket
             }
             for (p = pads) translate([p[0], p[2], front - eps]) cube([p[1] - p[0], p[3] - p[2], pad_z - front + eps]);
         }
@@ -106,18 +108,18 @@ module front_shell() {
         translate([3.9, 44, -1]) cylinder(d = 2.9, h = front + 2);               // small window beside it
         // USB opening in the end wall (rounded slot)
         translate([pcb_w - 1, 38.25, 7]) rotate([0, 90, 0]) hull()
-            for (dy = [-3.0, 3.0]) translate([0, dy, 0]) cylinder(d = 3.5, h = wall + 2);
-        snap_groove();
-        // pry notches on one long wall, above the snap tabs: lever the back out with a fingernail
-        for (t = tabs) translate([t[0], pcb_h - 1, depth - 1.5]) cube([t[1] - t[0], wall + 2, 2]);
+            for (dy = [-3.0, 3.0]) translate([0, dy, 0]) cylinder(d = 3.5, h = wall_x + 2);
+        // screw holes
+        for (p = screws) translate([p[0], p[1], 0]) {
+            translate([0, 0, pilot_end]) cylinder(d = pilot_d, h = shell_d);
+            if (inserts) translate([0, 0, shell_d - insert_l - 0.5]) cylinder(d = insert_d, h = insert_l + 1);
+        }
     }
 }
 
 // ---------------------------------------------------------------------------------------------
-// Back cover, same frame. Snaps in from the back; posts press the board into the shell.
+// Back cover, same frame. Screws onto the shell's rim; posts press the board into the shell.
 // ---------------------------------------------------------------------------------------------
-
-lid_top = lid_z + lid_t;
 
 posts = [ // [x0, x1, y0, y1]: where the original's posts touch the board between its parts
     [88.8, 92.8, 2.16, 6.16], [86.8, 90.8, 49.34, 53.34],
@@ -127,30 +129,24 @@ vents = [ // [x0, x1, y0, y1]: over the ESP32 and the power parts
     [7, 26, 18.5, 35], [77.8, 91.8, 21, 34], [16, 24, 3, 8.5],
 ];
 
-module snap_tab(x0, x1, side) {
-    // side -1: the y = 0 edge, +1: the y = pcb_h edge. Widest at lid_z, tapering both ways.
-    y = side < 0 ? lid_clr : pcb_h - lid_clr;
-    o = snap + lid_clr;
-    translate([x0, 0, 0]) rotate([90, 0, 90]) linear_extrude(x1 - x0)
-        polygon(side < 0
-            ? [[y + 1, lid_z - 0.6], [y, lid_z - 0.6], [y - o, lid_z], [y, lid_top], [y + 1, lid_top]]
-            : [[y - 1, lid_z - 0.6], [y, lid_z - 0.6], [y + o, lid_z], [y, lid_top], [y - 1, lid_top]]);
-}
-
 module back_cover() {
     difference() {
         union() {
-            translate([lid_clr, lid_clr, lid_z]) cube([pcb_w - 2 * lid_clr, pcb_h - 2 * lid_clr, lid_t]);
-            for (p = posts) translate([p[0], p[2], post_z]) cube([p[1] - p[0], p[3] - p[2], lid_z - post_z + eps]);
+            rounded_box(-wall_x, -wall_y, pcb_w + wall_x, pcb_h + wall_y, shell_d, case_d, corner_r);
+            for (p = posts) translate([p[0], p[2], post_z]) cube([p[1] - p[0], p[3] - p[2], shell_d - post_z + eps]);
             // stiffening ribs
-            for (x = [27, 50.4, 73.8]) translate([x, lid_clr + 0.5, rib_z]) cube([2, pcb_h - 2 * lid_clr - 1, lid_z - rib_z + eps]);
-            for (y = [7.45, 26.35, 47.27]) translate([27, y, rib_z]) cube([48.8, 2, lid_z - rib_z + eps]);
-            for (t = tabs, side = [-1, 1]) snap_tab(t[0], t[1], side);
+            for (x = [27, 50.4, 73.8]) translate([x, 0.5, rib_z]) cube([2, pcb_h - 1, shell_d - rib_z + eps]);
+            for (y = [7.45, 26.35, 47.27]) translate([27, y, rib_z]) cube([48.8, 2, shell_d - rib_z + eps]);
         }
         // vents as slots, so the cover stays stiff
         for (v = vents) for (y = [v[2] + 1 : 3.5 : v[3] - 1.5])
-            translate([v[0], y, lid_z - 1]) linear_extrude(lid_t + 2)
+            translate([v[0], y, shell_d - 1]) linear_extrude(cover_t + 2)
                 hull() for (x = [v[0] + 1, v[1] - 1]) translate([x - v[0], 1]) circle(d = 2);
+        // screw holes, countersunk so the heads sit flush and the back lies flat on the stand
+        for (p = screws) translate([p[0], p[1], 0]) {
+            translate([0, 0, shell_d - 1]) cylinder(d = clear_d, h = cover_t + 2);
+            translate([0, 0, case_d - head_d / 2 + eps]) cylinder(d1 = 0, d2 = head_d, h = head_d / 2);
+        }
     }
 }
 
@@ -168,8 +164,8 @@ module orient() {
 // up the face u = (0, c, s); into the case n = (0, s, -c); the board's X runs right to left.
 module place() {
     multmatrix([[-1, 0, 0, pcb_w / 2],
-                [0, c, s, wall * c - depth * s],
-                [0, s, -c, seat_h + wall * s + depth * c],
+                [0, c, s, wall_y * c - case_d * s],
+                [0, s, -c, seat_h + wall_y * s + case_d * c],
                 [0, 0, 0, 1]]) children();
 }
 
@@ -179,7 +175,7 @@ function sc(v, k) = [v[0] * k, v[1] * k];
 U  = [c, s];        // up the face
 NI = [-s, c];       // out of the screen (forward and up)
 V  = [0, seat_h];
-F  = v2(V, sc(NI, depth + fit));           // just in front of the case's front-bottom edge
+F  = v2(V, sc(NI, case_d + fit));           // just in front of the case's front-bottom edge
 L1 = v2(F, sc(U, lip_h));
 L3 = v2(F, sc(NI, lip_t));
 L2 = v2(L3, sc(U, lip_h));
@@ -200,7 +196,7 @@ module stand_profile() {
 }
 
 module cheek_profile() {
-    h = wall + cheek_h;
+    h = wall_y + cheek_h;
     // the extra offsets merge the two outlines cleanly (no hairline slivers where their edges meet)
     offset(delta = -0.05) offset(delta = 0.05) union() {
         stand_profile();
@@ -209,7 +205,7 @@ module cheek_profile() {
 }
 
 module stand() {
-    inner = pcb_w + 2 * wall + 2 * fit;
+    inner = pcb_w + 2 * wall_x + 2 * fit;
     outer = inner + 2 * cheek_t;
     rotate([90, 0, 90]) {
         translate([0, 0, -inner / 2]) linear_extrude(inner) stand_profile();
@@ -222,11 +218,11 @@ assert(T2[0] < foot_back, "the foot is too short for this tilt and backrest");
 // ---------------------------------------------------------------------------------------------
 
 if (part == "front") front_shell();
-else if (part == "back") mirror([0, 0, 1]) translate([0, 0, -lid_top]) back_cover();
+else if (part == "back") mirror([0, 0, 1]) translate([0, 0, -case_d]) back_cover();
 else if (part == "stand") stand();
 else if (part == "print") {
     front_shell();
-    translate([0, pcb_h + 10, 0]) mirror([0, 0, 1]) translate([0, 0, -lid_top]) back_cover();
+    translate([0, pcb_h + 2 * wall_y + 6, 0]) mirror([0, 0, 1]) translate([0, 0, -case_d]) back_cover();
     translate([pcb_w / 2, -15 - foot_back, 0]) stand();
 } else { // assembled
     color("gold") place() orient() front_shell();

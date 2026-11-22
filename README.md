@@ -81,8 +81,9 @@ screen stand in for the four buttons, so there's nothing to wire. Flash it with 
 - **Yellow board:** [`case/cyd35_tilt_case.scad`](case/cyd35_tilt_case.scad) holds the ESP32-3248S035C at a
   60° tilt so the screen faces you. Print the three ready-made parts, all without supports:
   [`cyd35_front.stl`](case/cyd35_front.stl) (face down), [`cyd35_back.stl`](case/cyd35_back.stl) (flat side down)
-  and [`cyd35_stand.stl`](case/cyd35_stand.stl) (on its base). Drop the board face-down into the front, press the
-  back in until it clicks, and stand the case in the stand with the USB port on the right. If the picture is
+  and [`cyd35_stand.stl`](case/cyd35_stand.stl) (on its base). Drop the board face-down into the front, screw the
+  back on with four **M3×10 flat-head (countersunk) screws**, and stand the case in the stand with the USB port
+  on the right. The screws cut their own thread in the plastic (or set `inserts = true` for heat-set inserts). If the picture is
   upside down, tick *Screen is mounted upside down* on the **Device** page. The angle, the USB side and the
   stand's size are settings at the top of the file.
 - **Two small OLEDs:** [`case/dante_case.scad`](case/dante_case.scad).
