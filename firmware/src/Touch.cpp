@@ -115,8 +115,9 @@ bool poll(ButtonEvent& ev) {
 
 void describe(char* out, size_t n) {
   if (!available()) { snprintf(out, n, "touch: none"); return; }
-  if (!seenTouch) { snprintf(out, n, "touch: GT911, not touched yet"); return; }
-  snprintf(out, n, "touch: last at x=%d y=%d, %lus ago", lastX, lastY, (unsigned long)((millis() - lastAt) / 1000));
+  if (!seenTouch) { snprintf(out, n, "touch: not touched yet"); return; }
+  snprintf(out, n, "touch: last at x=%d y=%d (screen is 480x320), %lus ago",
+           lastX, lastY, (unsigned long)((millis() - lastAt) / 1000));
 }
 
 #ifdef DANTE_SIMULATOR

@@ -153,6 +153,11 @@ I2C scan now: bus 1 (SDA=8 SCL=9): nothing
 * **`strips (no PSRAM)` on an R8 module:** the PSRAM setting in `platformio.ini` doesn't match the module.
 * **`NO MEMORY FOR THE FRAME BUFFER`:** please report it, with the module marking.
 * **OLED: nothing found on I2C:** check SDA → GPIO 8, SCL → GPIO 9, power and GND.
+* **Yellow board, taps do nothing:** type `?` in the monitor (or use **Device → Check wiring** in the PC
+  app). The second line says whether the touch chip answered: `touch panel: GT911 found at 0x5D` (or
+  `0x14`) is good. `NOT FOUND` means the chip didn't answer; DANTE tries again a few times in the first
+  15 seconds, so unplug it for a few seconds and plug it back in. Also check the model ends in **C**:
+  the resistive `…035R` has a different touch chip.
 * **Yellow board, taps land in the wrong place** (left and right swapped, or nothing on one side): type
   `?` in the monitor, touch a corner, and type `?` again: the last line shows where DANTE thinks you
   touched (the screen is 480 wide, 320 high). If it's mirrored, change `TOUCH_OFFSET_ROTATION` in

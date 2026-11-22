@@ -21,13 +21,29 @@ public sealed partial record WiringReport(DateTimeOffset At, string Boot, string
 
     private static bool IsOled(int a) => a is 0x3C or 0x3D;
 
+    /// <summary>
+    /// The report comes from the yellow touch board (firmware 3.6.1+), which reports its touch chip
+    /// ("touch panel: GT911 found at 0x5D") instead of an I2C scan.
+    /// </summary>
+    public bool TouchBoard => Scan.StartsWith("touch panel:", StringComparison.Ordinal);
+
     /// <summary>Plain-language reading of the report for the screen the PC app is set up for.</summary>
     public IReadOnlyList<string> Explain(DeviceSettings settings)
     {
         var hints = new List<string>();
         var bus = Bus();
 
-        if (settings.Display == DisplayType.Tft35 || (settings.Display == DisplayType.Auto && !bus.Any(IsOled)))
+        if (TouchBoard)
+        {
+            // The yellow ESP32-3248S035C: screen and touch panel are built in, so only the touch chip is worth checking.
+            hints.Add(Scan.Contains("NOT FOUND", StringComparison.Ordinal)
+                ? "The touch chip (GT911) didn't answer, so taps can't work. DANTE tries again a few times after starting; " +
+                  "unplug DANTE for a few seconds and plug it back in. If it still isn't found, check that the board's model ends " +
+                  "in \"C\" (capacitive touch): the \"R\" version has a different touch chip that DANTE doesn't support yet."
+                : "The touch chip (GT911) answers, so taps should work. If they land on the wrong side, see " +
+                  "\"Yellow board, taps land in the wrong place\" in firmware/README.md.");
+        }
+        else if (settings.Display == DisplayType.Tft35 || (settings.Display == DisplayType.Auto && !bus.Any(IsOled)))
         {
             // The TFT is on SPI with no way to read back from it: the scan can't see it.
             hints.Add("The 3.5\" TFT is on SPI, which DANTE can't detect, so the scan can't check it. If it stays white or black, check: " +

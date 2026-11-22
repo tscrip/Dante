@@ -158,7 +158,12 @@ void describe(char* out, size_t n) {
 
 void scanNow(char* out, size_t n) {
 #if !HAS_OLED
+  // No OLED to look for; the one I2C device worth reporting is the touch panel.
+#if HAS_TOUCH && !defined(DANTE_SIMULATOR)
+  Tft::touchStatus(out, n);
+#else
   snprintf(out, n, "I2C scan: not used on this board (the screen is built in)");
+#endif
 #else
   size_t used = snprintf(out, n, "I2C scan now: bus 1 (SDA=%d SCL=%d):", PIN_SDA, PIN_SCL);
   int found = 0;

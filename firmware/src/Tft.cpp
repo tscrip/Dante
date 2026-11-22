@@ -53,7 +53,7 @@ class Panel : public lgfx::LGFX_Device {
   lgfx::Bus_SPI bus;
   lgfx::Light_PWM light;
 #if HAS_TOUCH
-  lgfx::Touch_GT911 touch;
+  lgfx::Touch_GT911 touchPanel;
 #endif
 
  public:
@@ -104,13 +104,18 @@ class Panel : public lgfx::LGFX_Device {
     {
       // GT911 on its own I2C bus. The panel is 320x480 in portrait, like the screen; LovyanGFX turns
       // touch points with the screen (setRotation), so x, y come out in the same pixels DANTE draws in.
-      auto c = touch.config();
+      auto c = touchPanel.config();
       c.x_min = 0;
       c.x_max = 319;
       c.y_min = 0;
       c.y_max = 479;
-      c.pin_int = TOUCH_PIN_INT;
-      c.pin_rst = TOUCH_PIN_RST;
+      // No INT and no RST here, on purpose:
+      //  * with INT set, LovyanGFX only reads the chip while INT is low, so a board that wires INT
+      //    differently never reports a touch. Without it, the chip is simply read every poll.
+      //  * with RST set, LovyanGFX talks to the chip ~5 ms after the reset, but the GT911 needs
+      //    ~50-100 ms to wake up; resetTouchChip() below does the reset with the proper waits.
+      c.pin_int = -1;
+      c.pin_rst = -1;
       c.bus_shared = false;
       c.offset_rotation = TOUCH_OFFSET_ROTATION;
       c.i2c_port = TOUCH_I2C_PORT;
@@ -118,8 +123,8 @@ class Panel : public lgfx::LGFX_Device {
       c.pin_sda = TOUCH_PIN_SDA;
       c.pin_scl = TOUCH_PIN_SCL;
       c.freq = 400000;
-      touch.config(c);
-      panel.setTouch(&touch);
+      touchPanel.config(c);
+      panel.setTouch(&touchPanel);
     }
 #endif
     setPanel(&panel);
@@ -128,6 +133,36 @@ class Panel : public lgfx::LGFX_Device {
 #endif
 
 Panel tft;
+
+#if HAS_TOUCH && !defined(DANTE_SIMULATOR)
+// The GT911 touch chip: did it answer, and when to try again if it didn't.
+bool touchFound = false;
+uint8_t touchTries = 0;
+uint32_t touchRetryAt = 0;
+const uint8_t TOUCH_MAX_TRIES = 5;
+
+// Resets the GT911 the way its datasheet asks. INT held low while RST goes high selects I2C address
+// 0x5D (LovyanGFX also tries 0x14, in case INT is wired differently), and the chip then needs about
+// 50-100 ms before it answers on I2C.
+void resetTouchChip() {
+  pinMode(TOUCH_PIN_INT, OUTPUT);
+  digitalWrite(TOUCH_PIN_INT, LOW);
+  pinMode(TOUCH_PIN_RST, OUTPUT);
+  digitalWrite(TOUCH_PIN_RST, LOW);
+  delay(10);
+  digitalWrite(TOUCH_PIN_RST, HIGH);
+  delay(10);
+  pinMode(TOUCH_PIN_INT, INPUT);   // let go: the chip drives it from now on
+  delay(100);
+}
+
+// Wakes the touch chip and checks that it answers on I2C.
+void startTouch() {
+  touchTries++;
+  resetTouchChip();
+  touchFound = tft.touch() && tft.touch()->init();   // init() only tries again if it failed before
+}
+#endif
 
 // Two ways to draw a frame:
 //  * With PSRAM (e.g. N16R8 / N8R8 modules): the whole frame is drawn once into PSRAM, compared with
@@ -400,7 +435,14 @@ namespace Tft {
 
 bool begin() {
   if (!started) {
+#if HAS_TOUCH && !defined(DANTE_SIMULATOR)
+    resetTouchChip();   // before tft.init(), which starts the touch panel too
+    touchTries = 1;
+#endif
     tft.init();
+#if HAS_TOUCH && !defined(DANTE_SIMULATOR)
+    touchFound = tft.touch() && tft.touch()->init();
+#endif
     psramMode = allocPsram();
     if (!psramMode) {
       strip.setColorDepth(16);
@@ -486,10 +528,26 @@ bool simSnapshot(uint16_t* out, uint8_t& backlight) {
 #if HAS_TOUCH && !defined(DANTE_SIMULATOR)
 uint8_t readTouch(int& x, int& y) {
   if (!active()) return 0;
+  if (!touchFound) {
+    // Not found at boot: try again every few seconds, a few times (each try pauses ~120 ms).
+    if (touchTries < TOUCH_MAX_TRIES && (int32_t)(millis() - touchRetryAt) >= 0) {
+      touchRetryAt = millis() + 3000;
+      startTouch();
+    }
+    if (!touchFound) return 0;
+  }
   lgfx::touch_point_t points[2];
   uint8_t n = tft.getTouch(points, 2);
   if (n) { x = points[0].x; y = points[0].y; }
   return n;
+}
+
+void touchStatus(char* out, size_t n) {
+  if (touchFound)
+    snprintf(out, n, "touch panel: GT911 found at 0x%02X", (unsigned)tft.touch()->config().i2c_addr);
+  else
+    snprintf(out, n, "touch panel: GT911 NOT FOUND on I2C (SDA=%d SCL=%d RST=%d), tried %u times",
+             TOUCH_PIN_SDA, TOUCH_PIN_SCL, TOUCH_PIN_RST, (unsigned)touchTries);
 }
 #endif
 
