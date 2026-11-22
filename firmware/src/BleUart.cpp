@@ -12,7 +12,7 @@ const char* TX_UUID      = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E";
 
 // Writes arrive on the Bluetooth task; the main loop drains them. Single producer /
 // single consumer ring buffer, so two atomic indexes are all the locking needed.
-const uint16_t RING = 2048;
+const uint16_t RING = 4096;   // room for a couple of long messages (widget list, album art) while a frame draws
 uint8_t ring[RING];
 std::atomic<uint16_t> head{0}, tail{0};
 

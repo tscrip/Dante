@@ -94,6 +94,22 @@ public class EngineIntegrationTests : IAsyncLifetime
     private static bool Is(JsonObject m, string type) => m["t"]!.GetValue<string>() == type;
 
     [Fact]
+    public async Task A_sync_request_resends_the_widget_list_without_a_greeting()
+    {
+        await WaitFor(m => Is(m, "apps"));                       // the first round, after hello
+        for (var i = 0; i < 40 && !_buddy.Received.Any(m => Is(m, "say")); i++) await Task.Delay(50);
+        while (_buddy.Received.TryDequeue(out _)) { }
+
+        // DANTE missed the widget list (e.g. part of it was lost) and asks for everything again.
+        _buddy.Press("""{"t":"sync"}""");
+        var apps = await WaitFor(m => Is(m, "apps"));
+        Assert.Equal("builds", apps["apps"]![0]!["id"]!.GetValue<string>());
+        await WaitFor(m => Is(m, "cfg"));
+        await Task.Delay(300);
+        Assert.DoesNotContain(_buddy.Received, m => Is(m, "say"));   // no "Hello again!" bubble for a resync
+    }
+
+    [Fact]
     public async Task Screen_settings_from_the_client_reach_the_buddy()
     {
         var initial = await WaitFor(m => Is(m, "cfg"));

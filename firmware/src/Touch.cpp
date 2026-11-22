@@ -52,7 +52,7 @@ bool Gestures::feed(uint32_t now, uint8_t fingers, int x, int y, ButtonEvent& ev
     down = false;
     zeroSince = 0;
     if (done) return false;
-    ev = { zone(), false };
+    ev = { zone(), false, (int16_t)startX, (int16_t)startY };
     return true;
   }
 
@@ -85,7 +85,7 @@ bool Gestures::feed(uint32_t now, uint8_t fingers, int x, int y, ButtonEvent& ev
   bool still = abs(dx) < TOUCH_SWIPE_PX && abs(dy) < TOUCH_SWIPE_PX;
   if (still && now - downAt >= BTN_LONG_MS) {
     done = true;
-    ev = { zone(), true };
+    ev = { zone(), true, (int16_t)startX, (int16_t)startY };
     return true;
   }
   return false;

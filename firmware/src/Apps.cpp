@@ -1,5 +1,6 @@
 #include "Apps.h"
 #include <math.h>
+#include <Preferences.h>
 
 namespace {
   App apps[MAX_APPS];
@@ -20,6 +21,7 @@ namespace {
     if (!strcmp(s, "status"))  return VIS_STATUS;
     if (!strcmp(s, "timer"))   return VIS_TIMER;
     if (!strcmp(s, "spark2"))  return VIS_SPARK2;
+    if (!strcmp(s, "media"))   return VIS_MEDIA;
     return VIS_TEXT;
   }
 
@@ -252,6 +254,26 @@ namespace {
   }
 
   // Countdown: big m:ss, the text beside it, a progress bar along the bottom.
+  // A media player, small: play state + title, artist, volume. (The 3.5" TFT draws its own big media
+  // screen with album art and buttons: MediaScreen.h.)
+  void drawMedia(Gfx& g, const App& a, int ox, uint32_t now) {
+    if (a.playing) {                              // playing: a "play" triangle; paused: two bars
+      g.drawTriangle(ox + 0, 9, ox + 0, 18, ox + 6, 13);
+    } else {
+      g.drawBox(ox + 0, 9, 2, 9);
+      g.drawBox(ox + 4, 9, 2, 9);
+    }
+    g.setFont(u8g2_font_6x12_tr);
+    drawMarquee(g, a.txt[0] ? a.txt : "Nothing playing", ox + 10, 18, 118, now, a.changedAt, 7, 19);
+    g.setFont(u8g2_font_4x6_tr);
+    char right[12] = "";
+    if (a.muted) copyStr(right, sizeof(right), "muted");
+    else if (a.volume >= 0) snprintf(right, sizeof(right), "vol %d%%", a.volume);
+    int rw = right[0] ? g.getStrWidth(right) + 4 : 0;
+    if (a.sub[0]) drawMarquee(g, a.sub, ox + 10, 29, 118 - rw, now, a.changedAt, 23, 30);
+    if (right[0]) g.drawStr(ox + 128 - rw + 4, 29, right);
+  }
+
   void drawTimer(Gfx& g, const App& a, int ox, uint32_t now) {
     float left = Apps::secondsLeft(a, now);
     bool done = a.hasTimer && a.timerRun && left <= 0;
@@ -339,7 +361,36 @@ void drawMarquee(Gfx& g, const char* text, int x, int y, int w, uint32_t now, ui
 
 namespace Apps {
 
-void setList(JsonArrayConst arr) {
+// The widget list is kept in flash, so the screens (and their page dots) are there from the moment
+// DANTE starts, before the PC has connected. It's only written when it changes (flash wears out).
+// The buffers are borrowed only while needed: memory is tight on boards without PSRAM.
+void remember(JsonArrayConst arr) {
+  char* now = (char*)malloc(RX_LINE_MAX * 2);
+  if (!now) return;
+  char* stored = now + RX_LINE_MAX;
+  size_t n = serializeJson(arr, now, RX_LINE_MAX);
+  Preferences prefs;
+  if (n > 0 && n < RX_LINE_MAX - 1 && prefs.begin("dante", false)) {
+    if (prefs.getString("apps", stored, RX_LINE_MAX) != n || strcmp(stored, now)) prefs.putString("apps", now);
+    prefs.end();
+  }
+  free(now);
+}
+
+void restore() {
+  Preferences prefs;
+  if (!prefs.begin("dante", true)) return;   // a freshly flashed chip: nothing stored yet
+  char* stored = (char*)malloc(RX_LINE_MAX);
+  if (!stored) { prefs.end(); return; }
+  size_t n = prefs.getString("apps", stored, RX_LINE_MAX);
+  prefs.end();
+  JsonDocument doc;
+  if (n && !deserializeJson(doc, stored, n) && doc.is<JsonArrayConst>()) setList(doc.as<JsonArrayConst>(), false);
+  free(stored);
+}
+
+void setList(JsonArrayConst arr, bool save) {
+  if (save) remember(arr);
   static App old[MAX_APPS];
   int oldCount = appCount;
   memcpy(old, apps, sizeof(App) * oldCount);
@@ -348,6 +399,7 @@ void setList(JsonArrayConst arr) {
     if (appCount >= MAX_APPS) break;
     App& a = apps[appCount];
     memset(&a, 0, sizeof(App));
+    a.volume = -1;   // unknown until a media player says
     copyStr(a.id, sizeof(a.id), o["id"] | "");
     if (!a.id[0]) continue;
     copyStr(a.name, sizeof(a.name), o["name"] | a.id);
@@ -369,6 +421,8 @@ void setList(JsonArrayConst arr) {
         memcpy(a.hist2, old[i].hist2, sizeof(a.hist2));
         a.hasTimer = old[i].hasTimer; a.timerRun = old[i].timerRun;
         a.timerTotal = old[i].timerTotal; a.timerAt = old[i].timerAt;
+        memcpy(a.sub, old[i].sub, sizeof(a.sub)); a.playing = old[i].playing; a.muted = old[i].muted;
+        a.volume = old[i].volume; memcpy(a.artHash, old[i].artHash, sizeof(a.artHash));
         break;
       }
     }
@@ -437,9 +491,26 @@ App* applyValue(JsonDocument& msg) {
     a->timerRun = msg["run"] | false;
     a->timerAt = now;
   }
+  if (msg["play"].is<bool>()) {        // a media player: artist, play state, mute, volume, album art
+    const char* sub = msg["sub"] | "";
+    if (strncmp(sub, a->sub, TXT_LEN - 1)) changed = true;
+    copyStr(a->sub, sizeof(a->sub), sub);
+    a->playing = msg["play"];
+    a->muted = msg["mute"] | false;
+    a->volume = msg["vol"].is<int>() ? (int8_t)constrain(msg["vol"].as<int>(), 0, 100) : -1;
+    copyStr(a->artHash, sizeof(a->artHash), msg["art"] | "");
+  }
   a->lvl = msg["lvl"] | a->lvl;
   if (changed) a->changedAt = now;
   return a;
+}
+
+void mediaPressed(App& a, const char* ctl) {
+  if (!ctl) return;
+  if (!strcmp(ctl, "play")) a.playing = !a.playing;
+  else if (!strcmp(ctl, "mute")) a.muted = !a.muted;
+  else if (a.volume >= 0 && !strcmp(ctl, "volu")) a.volume = (int8_t)min(100, a.volume + 5);
+  else if (a.volume >= 0 && !strcmp(ctl, "vold")) a.volume = (int8_t)max(0, a.volume - 5);
 }
 
 void update(uint32_t now) {
@@ -465,6 +536,7 @@ void draw(Gfx& g, int index, int ox, int page, int pages, uint32_t now) {
     case VIS_STATUS:  drawStatus(g, *a, ox, now); break;
     case VIS_TIMER:   drawTimer(g, *a, ox, now); break;
     case VIS_SPARK2:  drawSpark2(g, *a, ox, now); break;
+    case VIS_MEDIA:   drawMedia(g, *a, ox, now); break;
     default:          drawText(g, *a, ox, now); break;
   }
 }

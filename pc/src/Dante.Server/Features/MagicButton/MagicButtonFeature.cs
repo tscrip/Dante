@@ -1,4 +1,7 @@
 using Dante.Core.Engine;
+using Dante.Core.Media;
+using Dante.Core.Os;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Dante.Server.Features.MagicButton;
 
@@ -9,8 +12,9 @@ public sealed class MagicButtonFeature : IFeature
 
     public void AddServices(IServiceCollection services)
     {
-        services.AddSingleton<ICommandRunner, ProcessCommandRunner>();
-        services.AddSingleton(sp => PcActions.BackendForThisOs(sp.GetRequiredService<ICommandRunner>()));
+        // Shared with the media player plugin: TryAdd, so whichever feature registers first wins.
+        services.TryAddSingleton<ICommandRunner, ProcessCommandRunner>();
+        services.TryAddSingleton(sp => MediaBackends.ForThisOs(sp.GetRequiredService<ICommandRunner>()));
         services.AddSingleton<IPcActions, PcActions>();
         services.AddSingleton<MagicButtonService>();
     }

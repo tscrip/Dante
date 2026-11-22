@@ -226,6 +226,11 @@ public enum VisualKind
     /// memory). The reading's <c>Value</c> is the top line and <c>Value2</c> the bottom; both use Min..Max.
     /// </summary>
     DualSparkline,
+    /// <summary>
+    /// A media player: what's playing (title, artist, album art on the colour screen), play/pause and volume,
+    /// with on-screen controls on touch screens. Needs a widget that gives a <c>MediaReading</c>.
+    /// </summary>
+    Media,
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<TakeoverMode>))]

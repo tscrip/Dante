@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
-namespace Dante.Server.Features.MagicButton;
+namespace Dante.Core.Media;
 
 /// <summary>
 /// Windows: media keys via keybd_event (any player that listens to them: Spotify, browsers, ...),
@@ -18,6 +18,12 @@ public sealed class WindowsMediaBackend : IMediaBackend
     public Task<bool> ToggleSpeakerMuteAsync(CancellationToken ct) => Task.FromResult(CoreAudio.ToggleMute(capture: false));
     public Task<bool> ToggleMicMuteAsync(CancellationToken ct) => Task.FromResult(CoreAudio.ToggleMute(capture: true));
     public Task<int?> ChangeVolumeAsync(bool up, CancellationToken ct) => Task.FromResult<int?>(CoreAudio.Step(up));
+
+    public Task<VolumeState?> GetVolumeAsync(CancellationToken ct)
+    {
+        try { return Task.FromResult<VolumeState?>(CoreAudio.Get()); }
+        catch (ActionFailedException) { return Task.FromResult<VolumeState?>(null); }   // no speakers: nothing to show
+    }
 
     private static Task Key(byte vk)
     {
@@ -55,6 +61,15 @@ internal static class CoreAudio
         Check(up ? volume.VolumeStepUp(ref ctx) : volume.VolumeStepDown(ref ctx));
         Check(volume.GetMasterVolumeLevelScalar(out var level));
         return (int)Math.Round(level * 100);
+    }
+
+    /// <summary>The speakers' volume and mute state.</summary>
+    public static VolumeState Get()
+    {
+        var volume = Endpoint(capture: false);
+        Check(volume.GetMasterVolumeLevelScalar(out var level));
+        Check(volume.GetMute(out var muted));
+        return new VolumeState((int)Math.Round(level * 100), muted);
     }
 
     private static IAudioEndpointVolume Endpoint(bool capture)

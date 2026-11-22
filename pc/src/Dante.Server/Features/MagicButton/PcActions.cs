@@ -1,4 +1,6 @@
 using Dante.Core.Engine;
+using Dante.Core.Media;
+using Dante.Core.Os;
 
 namespace Dante.Server.Features.MagicButton;
 
@@ -8,30 +10,8 @@ public interface IPcActions
     Task<string> RunAsync(MagicAction action, CancellationToken ct);
 }
 
-/// <summary>Media and audio controls, implemented per operating system.</summary>
-public interface IMediaBackend
-{
-    Task PlayPauseAsync(CancellationToken ct);
-    Task NextAsync(CancellationToken ct);
-    Task PreviousAsync(CancellationToken ct);
-    /// <returns>True if the speakers are muted afterwards.</returns>
-    Task<bool> ToggleSpeakerMuteAsync(CancellationToken ct);
-    /// <returns>True if the microphone is muted afterwards.</returns>
-    Task<bool> ToggleMicMuteAsync(CancellationToken ct);
-    /// <returns>The volume in percent afterwards, if known.</returns>
-    Task<int?> ChangeVolumeAsync(bool up, CancellationToken ct);
-}
-
-/// <summary>Raised when an action can't be done here; the message is shown on DANTE.</summary>
-public sealed class ActionFailedException(string message) : Exception(message);
-
 public sealed class PcActions(IMediaBackend media, ICommandRunner runner, IUrlOpener urls) : IPcActions
 {
-    public static IMediaBackend BackendForThisOs(ICommandRunner runner) =>
-        OperatingSystem.IsWindows() ? new WindowsMediaBackend()
-        : OperatingSystem.IsMacOS() ? new MacMediaBackend(runner)
-        : new LinuxMediaBackend(runner);
-
     public async Task<string> RunAsync(MagicAction action, CancellationToken ct)
     {
         switch (action.Kind)

@@ -11,6 +11,8 @@
 #include "Link.h"
 #include "Buttons.h"
 #include "Touch.h"
+#include "Art.h"
+#include "MediaScreen.h"
 #include "Face.h"
 #include "Apps.h"
 #include "Displays.h"
@@ -91,18 +93,32 @@ static void sendSimple(const char* type, const char* id) {
   Link::send(d);
 }
 
+// Asks the PC to send everything again (settings, widgets, values), at most every few seconds.
+// Used when DANTE notices it missed something, e.g. a value for a widget it doesn't know.
+static void requestSync() {
+  static uint32_t last = 0;
+  static bool sent = false;
+  uint32_t now = millis();
+  if (sent && now - last < 5000) return;
+  sent = true;
+  last = now;
+  sendSimple("sync", nullptr);
+}
+
 static const char* screenId(int s) {
   if (s == 0) return "face";
   App* a = Apps::get(s - 1);
   return a ? a->id : "face";
 }
 
-static void sendButton(ButtonId b, bool longPress, int scr) {
+// `ctl`: which on-screen control a tap hit (the media screen on a touch screen), or nullptr.
+static void sendButton(ButtonId b, bool longPress, int scr, const char* ctl = nullptr) {
   JsonDocument d;
   d["t"] = "btn";
   d["b"] = b == BTN_SELECT ? "sel" : b == BTN_LEFT ? "left" : b == BTN_RIGHT ? "right" : "magic";
   d["long"] = longPress;
   d["scr"] = screenId(scr);
+  if (ctl) d["ctl"] = ctl;
   Link::send(d);
 }
 
@@ -130,6 +146,9 @@ static void onMessage(JsonDocument& m) {
     App* a = Apps::applyValue(m);
     const char* quip = m["quip"] | "";
     if (a && quip[0]) showToast(a->name, quip);
+    if (!a) requestSync();   // a value for a widget we don't know: we missed the widget list
+  } else if (!strcmp(t, "art")) {
+    if (Displays::isTft()) Art::chunk(m);      // album art: only the colour screen shows it
   } else if (!strcmp(t, "mood")) {
     Face::setMood(Face::moodFromString(m["m"] | "happy"));
     Face::setPending(m["n"] | 0);
@@ -169,6 +188,12 @@ static void onText(const char* line) {
   Displays::scanNow(buf, sizeof(buf));
   Link::sendText(buf);
   if (Touch::available()) { Touch::describe(buf, sizeof(buf)); Link::sendText(buf); }
+#ifndef DANTE_SIMULATOR
+  // How much memory is left: album art needs ~30 KB in one piece on boards without PSRAM.
+  snprintf(buf, sizeof(buf), "memory: %u KB free, largest block %u KB",
+           (unsigned)(ESP.getFreeHeap() / 1024), (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) / 1024));
+  Link::sendText(buf);
+#endif
 }
 
 // ---- input --------------------------------------------------------------------------
@@ -218,7 +243,20 @@ static void handleButton(const ButtonEvent& ev) {
       break;
     default: break;
   }
-  sendButton(ev.id, ev.longPress, pressedOn);
+  // The media screen on the TFT: a tap names the control it hit; a real SELECT works the play button.
+  const char* ctl = nullptr;
+  App* app = screen > 0 ? Apps::get(screen - 1) : nullptr;
+  if (ev.id == BTN_SELECT && app && app->vis == VIS_MEDIA && Displays::isTft()) {
+    uint32_t now = millis();
+    if (ev.x >= 0) {
+      ctl = MediaScreen::hit(ev.x, ev.y);
+      if (ctl && ev.longPress) return;   // holding a control: nothing extra (a tap already did it)
+    }
+    const char* shown = ctl ? ctl : (ev.longPress ? "next" : "play");
+    MediaScreen::pressed(shown, now);
+    Apps::mediaPressed(*app, shown);      // show the result straight away; the PC confirms it shortly
+  }
+  sendButton(ev.id, ev.longPress, pressedOn, ctl);
 }
 
 // ---- rendering ------------------------------------------------------------------------
@@ -424,6 +462,8 @@ static void renderTft(Alert* alert, uint32_t now) {
       g.setTransform(TFT_SX, (TFT_H - TFT_BAR - 8) / 32.0f, 0, TFT_BAR + 4);
       g.setColors(moodColor(Face::info()), Rgb::Black, accent());
       Face::draw(g, 0, false);
+    } else if (App* a = Apps::get(screen - 1); a && a->vis == VIS_MEDIA) {
+      MediaScreen::draw(g, *a, accent(), now);   // album art and big buttons, drawn in screen pixels
     } else if (App* a = Apps::get(screen - 1)) {
       g.setTransform(TFT_SX, TFT_SX, 0, TFT_BAND_Y);
       g.setColors(levelColor(a->lvl), Rgb::Black, accent());
@@ -438,6 +478,7 @@ void setup() {
   Buttons::begin();
   Displays::begin();
   Touch::begin();
+  Apps::restore();   // last time's widgets, so their screens and page dots are there right away
   Face::begin();
   Face::setLook(Displays::settings().look);
   Link::begin(onMessage);

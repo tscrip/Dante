@@ -64,6 +64,10 @@
                 T(64, 24, 17, Clock, "font-weight=\"700\" text-anchor=\"middle\"") +
                 """<rect x="1" y="28" width="126" height="3" fill="none" stroke-width=".6"/>""" +
                 $"""<rect x="1" y="28" width="{N(126 * TimerFraction)}" height="3" stroke="none"/>""",
+            VisualKind.Media =>
+                T(1, 7, 7, Name) + T(126, 7, 7, "vol 40%", "text-anchor=\"end\" opacity=\".85\"") +
+                """<polygon points="1,12 1,21 8,16.5" stroke="none"/>""" +
+                T(11, 21, 10, Text ?? "Song title", "font-weight=\"700\"") + T(11, 30, 7, "Artist", "opacity=\".85\""),
             _ => "",
         };
         return $"""<svg viewBox="0 0 128 32" width="{128 * Scale}" height="{32 * Scale}" font-family="monospace" fill="{Px}" stroke="{Px}">{body}</svg>""";

@@ -48,6 +48,8 @@ public sealed class DanteEngine : BackgroundService
         public string? AlertText;
         public string? AlertKey;
         public string? Error;
+        /// <summary>Hash of the picture DANTE has for this widget (album art), so it is only sent when it changes.</summary>
+        public string? SentArt;
     }
 
     private readonly ConfigStore _config;
@@ -223,9 +225,10 @@ public sealed class DanteEngine : BackgroundService
         r.UpdatedAt = now;
         r.NonZeroSince = reading.Value > 0 ? r.NonZeroSince ?? now : null;
 
-        var changed = old is null || old.Value != reading.Value || old.Value2 != reading.Value2 || old.Text != reading.Text || r.Level != level || old.Timer != reading.Timer;
-        // A running countdown changes every poll, but that's not news worth a quip.
-        var quip = old is null || reading.Timer is not null ? null
+        var changed = old is null || old.Value != reading.Value || old.Value2 != reading.Value2 || old.Text != reading.Text || r.Level != level || old.Timer != reading.Timer
+                      || !SameMedia(old.Media, reading.Media);
+        // A running countdown changes every poll, and a media player every song: neither is news worth a quip.
+        var quip = old is null || reading.Timer is not null || reading.Media is not null ? null
             : QuipBank.Pick(_cfg.Personality, new QuipContext(r.Def, old.Value, reading.Value, r.Level, level, reading.Text), _rng);
         r.Level = level;
 
@@ -233,13 +236,32 @@ public sealed class DanteEngine : BackgroundService
         EvaluateTakeover(r, now);
     }
 
+    /// <summary>Same media state (the album art compared by content: a player may hand over a new copy each time).</summary>
+    private static bool SameMedia(MediaReading? a, MediaReading? b) =>
+        a is null || b is null ? a is null && b is null
+        : a.Artist == b.Artist && a.Playing == b.Playing && a.Muted == b.Muted && a.Volume == b.Volume
+          && (a.Art ?? []).AsSpan().SequenceEqual(b.Art ?? []);
+
     private void SendValue(Runtime r, string? quip)
     {
         if (!r.Def.ShowInCarousel && quip is null) return;
         if (r.Def.ShowInCarousel)
-            _link.Send(DeviceProtocol.Value(r.Def.Id, r.Reading?.Value, r.Reading?.Text, r.Level, quip, r.Reading?.Timer, r.Reading?.Value2));
+        {
+            SendArtIfChanged(r);
+            _link.Send(DeviceProtocol.Value(r.Def.Id, r.Reading, r.Level, quip));
+        }
         else
             _link.Send(DeviceProtocol.Say(quip!));
+    }
+
+    /// <summary>Album art goes to DANTE (in chunks) only when the picture changed, before the value that shows it.</summary>
+    private void SendArtIfChanged(Runtime r)
+    {
+        if (r.Reading?.Media?.Art is not { } art || !DeviceProtocol.ArtFits(art)) return;
+        var hash = DeviceProtocol.ArtHash(art);
+        if (hash == r.SentArt) return;
+        foreach (var chunk in DeviceProtocol.Art(r.Def.Id, art)) _link.Send(chunk);
+        r.SentArt = hash;
     }
 
     private bool EvaluateTakeovers(DateTimeOffset now)
@@ -373,7 +395,11 @@ public sealed class DanteEngine : BackgroundService
         _link.Send(DeviceProtocol.Cfg(_cfg.Device));
         _link.Send(DeviceProtocol.Widgets(_apps.Where(r => r.Def.ShowInCarousel).Select(r => r.Def)));
         foreach (var r in _apps.Where(r => r.Def.ShowInCarousel && r.Reading is not null))
-            _link.Send(DeviceProtocol.Value(r.Def.Id, r.Reading!.Value, r.Reading.Text, r.Level, null, r.Reading.Timer, r.Reading.Value2));
+        {
+            r.SentArt = null;   // DANTE may have restarted: its pictures are gone
+            SendArtIfChanged(r);
+            _link.Send(DeviceProtocol.Value(r.Def.Id, r.Reading, r.Level, null));
+        }
         foreach (var r in _apps.Where(r => r.Takeover.Raised))
             _link.Send(DeviceProtocol.Alert(r.Def.Id, r.Def.Name, r.AlertText ?? r.Def.Name, r.Def.Takeover.Level));
         _alerts.ResendAll();
@@ -416,6 +442,9 @@ public sealed class DanteEngine : BackgroundService
             {
                 case "hello":
                     SendEverything(greeting: true);
+                    break;
+                case "sync":   // DANTE noticed it missed something (e.g. the widget list): resend, quietly
+                    SendEverything(greeting: false);
                     break;
                 case "ack" when runtime is not null:
                     runtime.Takeover.Ack(now);

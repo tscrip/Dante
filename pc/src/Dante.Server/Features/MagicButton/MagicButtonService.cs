@@ -1,6 +1,7 @@
 using Dante.Core.Config;
 using Dante.Core.Device;
 using Dante.Core.Engine;
+using Dante.Core.Media;
 
 namespace Dante.Server.Features.MagicButton;
 

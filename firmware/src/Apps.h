@@ -4,7 +4,7 @@
 #include "Gfx.h"
 #include "config.h"
 
-enum Visual : uint8_t { VIS_GAUGE = 0, VIS_BAR, VIS_COUNTER, VIS_TEXT, VIS_SPARK, VIS_STATUS, VIS_TIMER, VIS_SPARK2 };
+enum Visual : uint8_t { VIS_GAUGE = 0, VIS_BAR, VIS_COUNTER, VIS_TEXT, VIS_SPARK, VIS_STATUS, VIS_TIMER, VIS_SPARK2, VIS_MEDIA };
 
 struct App {
   char id[ID_LEN];
@@ -36,15 +36,28 @@ struct App {
   bool timerRun;
   float timerTotal;  // seconds in the whole countdown (for the progress bar)
   uint32_t timerAt;  // millis() when `value` arrived
+
+  // Media players (`media`): `txt` is the title; the artist, play state, mute, volume (-1 = unknown)
+  // and the fingerprint of the album art to show (see Art.h).
+  char sub[TXT_LEN];
+  bool playing;
+  bool muted;
+  int8_t volume;
+  char artHash[9];
 };
 
 namespace Apps {
-  void setList(JsonArrayConst arr);   // replaces list, keeps values of matching ids
+  // Replaces the list, keeping the values of matching ids. `save`: also remember it in flash.
+  void setList(JsonArrayConst arr, bool save = true);
+  // At boot: the widget list from last time, so the screens and page dots show straight away.
+  void restore();
   int count();
   App* get(int i);
   App* find(const char* id);
   // Applies a `val` message. Returns the app (or nullptr if unknown id).
   App* applyValue(JsonDocument& msg);
+  // A media control was tapped: show its effect straight away, before the PC confirms it.
+  void mediaPressed(App& a, const char* ctl);
 
   void update(uint32_t now);
   // Seconds left on a countdown app right now.
