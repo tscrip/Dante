@@ -6,11 +6,11 @@
 // ESP32-3248S035C "yellow board"). Taps turn into the same ButtonEvents the buttons make, so
 // everything else (screens, nudges, the PC's button handling) works unchanged:
 //
-//   tap the left third of the screen   = LEFT     (hold = long LEFT: jump home to the face)
-//   tap the middle                     = SELECT   (hold = long SELECT)
-//   tap the right third                = RIGHT    (hold = long RIGHT)
+//   tap anywhere                       = SELECT   (hold = long SELECT)
 //   swipe left / right                 = RIGHT / LEFT (next / previous screen, like a phone)
+//   swipe down                         = long LEFT (home to the face)
 //   tap with two fingers               = MAGIC    (hold = long MAGIC)
+// During a nudge that means: tap = "I'm on it", swipe either way = "later".
 namespace Touch {
 
   // The gesture logic on its own: fed what the panel reports, it says which "button" was pressed.

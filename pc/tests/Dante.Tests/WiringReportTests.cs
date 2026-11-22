@@ -24,6 +24,31 @@ public class WiringReportTests
         Assert.Equal([0x3C], r.Bus());
     }
 
+    private const string TouchBoot = "DANTE 3.6.1: board esp32-3248s035c (built-in 3.5\" TFT) | screen: tft | last reset: power on";
+
+    [Fact]
+    public void Touch_board_with_its_touch_chip_found_says_taps_should_work()
+    {
+        var r = Report("touch panel: GT911 found at 0x5D", TouchBoot);
+        Assert.True(r.TouchBoard);
+        var hint = Assert.Single(r.Explain(new DeviceSettings { Display = DisplayType.Auto }));
+        Assert.Contains("answers", hint);
+        Assert.DoesNotContain("GPIO 12", hint);   // no S3 wiring advice for a board with nothing to wire
+    }
+
+    [Fact]
+    public void Touch_board_without_its_touch_chip_says_what_to_try()
+    {
+        var r = Report("touch panel: GT911 NOT FOUND on I2C (SDA=33 SCL=32 RST=25), tried 5 times", TouchBoot);
+        var hint = Assert.Single(r.Explain(new DeviceSettings { Display = DisplayType.Tft35 }));
+        Assert.Contains("didn't answer", hint);
+        Assert.Contains("\"C\"", hint);
+    }
+
+    [Fact]
+    public void Ordinary_scans_are_not_mistaken_for_a_touch_board() =>
+        Assert.False(Report("I2C scan now: bus 1 (SDA=8 SCL=9): nothing").TouchBoard);
+
     [Fact]
     public void Empty_bus_points_at_the_wiring()
     {

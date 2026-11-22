@@ -53,7 +53,7 @@ class Panel : public lgfx::LGFX_Device {
   lgfx::Bus_SPI bus;
   lgfx::Light_PWM light;
 #if HAS_TOUCH
-  lgfx::Touch_GT911 touch;
+  lgfx::Touch_GT911 touchPanel;
 #endif
 
  public:
@@ -104,13 +104,18 @@ class Panel : public lgfx::LGFX_Device {
     {
       // GT911 on its own I2C bus. The panel is 320x480 in portrait, like the screen; LovyanGFX turns
       // touch points with the screen (setRotation), so x, y come out in the same pixels DANTE draws in.
-      auto c = touch.config();
+      auto c = touchPanel.config();
       c.x_min = 0;
       c.x_max = 319;
       c.y_min = 0;
       c.y_max = 479;
-      c.pin_int = TOUCH_PIN_INT;
-      c.pin_rst = TOUCH_PIN_RST;
+      // No INT and no RST here, on purpose:
+      //  * with INT set, LovyanGFX only reads the chip while INT is low, so a board that wires INT
+      //    differently never reports a touch. Without it, the chip is simply read every poll.
+      //  * with RST set, LovyanGFX talks to the chip ~5 ms after the reset, but the GT911 needs
+      //    ~50-100 ms to wake up; resetTouchChip() below does the reset with the proper waits.
+      c.pin_int = -1;
+      c.pin_rst = -1;
       c.bus_shared = false;
       c.offset_rotation = TOUCH_OFFSET_ROTATION;
       c.i2c_port = TOUCH_I2C_PORT;
@@ -118,8 +123,8 @@ class Panel : public lgfx::LGFX_Device {
       c.pin_sda = TOUCH_PIN_SDA;
       c.pin_scl = TOUCH_PIN_SCL;
       c.freq = 400000;
-      touch.config(c);
-      panel.setTouch(&touch);
+      touchPanel.config(c);
+      panel.setTouch(&touchPanel);
     }
 #endif
     setPanel(&panel);
@@ -129,12 +134,44 @@ class Panel : public lgfx::LGFX_Device {
 
 Panel tft;
 
+#if HAS_TOUCH && !defined(DANTE_SIMULATOR)
+// The GT911 touch chip: did it answer, and when to try again if it didn't.
+bool touchFound = false;
+uint8_t touchTries = 0;
+uint32_t touchRetryAt = 0;
+const uint8_t TOUCH_MAX_TRIES = 5;
+
+// Resets the GT911 the way its datasheet asks. INT held low while RST goes high selects I2C address
+// 0x5D (LovyanGFX also tries 0x14, in case INT is wired differently), and the chip then needs about
+// 50-100 ms before it answers on I2C.
+void resetTouchChip() {
+  pinMode(TOUCH_PIN_INT, OUTPUT);
+  digitalWrite(TOUCH_PIN_INT, LOW);
+  pinMode(TOUCH_PIN_RST, OUTPUT);
+  digitalWrite(TOUCH_PIN_RST, LOW);
+  delay(10);
+  digitalWrite(TOUCH_PIN_RST, HIGH);
+  delay(10);
+  pinMode(TOUCH_PIN_INT, INPUT);   // let go: the chip drives it from now on
+  delay(100);
+}
+
+// Wakes the touch chip and checks that it answers on I2C.
+void startTouch() {
+  touchTries++;
+  resetTouchChip();
+  touchFound = tft.touch() && tft.touch()->init();   // init() only tries again if it failed before
+}
+#endif
+
 // Two ways to draw a frame:
 //  * With PSRAM (e.g. N16R8 / N8R8 modules): the whole frame is drawn once into PSRAM, compared with
 //    the previous one, and only the changed part of each 16-row band is sent, by DMA from a small
 //    internal buffer while the next band is prepared. A blink or a glance sends a fraction of the screen.
-//  * Without: the frame is drawn in strips of TFT_STRIP_H rows (the scene is drawn once per strip),
-//    and strips that come out unchanged are skipped.
+//  * Without (e.g. the yellow ESP32-3248S035C board): the frame is drawn in strips of TFT_STRIP_H rows
+//    (the scene is drawn once per strip). Each strip is split into columns that are compared with what
+//    the screen shows (by hash), and only the changed span is sent, by DMA. There are two strip buffers,
+//    so the next strip is drawn while the previous one is still on its way to the screen.
 LGFX_Sprite full(&tft);          // PSRAM mode: the frame being drawn
 TftGfx fullCanvas(full);
 uint16_t* previous = nullptr;    // PSRAM mode: what the screen shows now
@@ -143,10 +180,14 @@ const int BAND = 16;
 bool psramMode = false;
 bool forceAll = true;            // send everything next frame (after begin / flip)
 
-LGFX_Sprite strip(&tft);         // strip mode
-TftGfx canvas(strip);
+LGFX_Sprite strips[2] = { LGFX_Sprite(&tft), LGFX_Sprite(&tft) };   // strip mode: two buffers
+TftGfx canvases[2] = { TftGfx(strips[0]), TftGfx(strips[1]) };
+int stripBuffers = 0;            // 2 normally; 1 if there was only room for one
 const int STRIPS = (TFT_H + TFT_STRIP_H - 1) / TFT_STRIP_H;
-uint32_t sent[STRIPS];           // strip mode: hash of what each strip shows now
+const int CHUNK_W = 32;          // strip mode: columns compared at a time
+const int CHUNKS = TFT_W / CHUNK_W;
+static_assert(TFT_W % CHUNK_W == 0, "the screen width must be a whole number of chunks");
+uint32_t sent[STRIPS][CHUNKS];   // strip mode: hash of what each part of the screen shows now
 bool started = false, awake = false;
 
 // Frame-rate statistics over the last couple of seconds.
@@ -154,12 +195,6 @@ uint32_t statFrom = 0, statFrames = 0, statBytes = 0;
 float fps = 0, kbPerFrame = 0;
 uint8_t brightness = 200;
 bool flipped = false;
-
-uint32_t hashBuffer(const uint32_t* p, size_t words) {
-  uint32_t h = 2166136261u;
-  for (size_t i = 0; i < words; i++) h = (h ^ p[i]) * 16777619u;
-  return h;
-}
 
 // u8g2 fonts wrapped for LovyanGFX, made on first use.
 lgfx::U8g2font* fontFor(const uint8_t* data) {
@@ -375,22 +410,57 @@ uint32_t pushChanged() {
   return bytes;
 }
 
+// Hash of one CHUNK_W-wide column block of a strip.
+uint32_t hashChunk(const uint16_t* buf, int rows, int chunk) {
+  uint32_t h = 2166136261u;
+  for (int r = 0; r < rows; r++) {
+    const uint32_t* p = (const uint32_t*)(buf + r * TFT_W + chunk * CHUNK_W);
+    for (int i = 0; i < CHUNK_W / 2; i++) h = (h ^ p[i]) * 16777619u;
+  }
+  return h;
+}
+
 uint32_t pushStrips(const std::function<void(TftGfx& g)>& draw) {
   uint32_t bytes = 0;
+  int cur = 0;   // the buffer to draw into; the other one may still be going out by DMA
+  tft.startWrite();
   for (int i = 0; i < STRIPS; i++) {
     int top = i * TFT_STRIP_H;
-    strip.clearClipRect();
-    strip.fillScreen(TFT_BLACK);
-    canvas.setStripTop(top);
-    canvas.setDrawColor(1);
-    draw(canvas);
-    strip.clearClipRect();
-    uint32_t h = hashBuffer((const uint32_t*)strip.getBuffer(), strip.bufferLength() / 4);
-    if (h == sent[i] && !forceAll) continue;   // nothing changed in this strip
-    strip.pushSprite(0, top);
-    sent[i] = h;
-    bytes += strip.bufferLength();
+    int rows = TFT_H - top < TFT_STRIP_H ? TFT_H - top : TFT_STRIP_H;
+    if (stripBuffers < 2) tft.waitDMA();   // only one buffer: it must be sent before drawing again
+    LGFX_Sprite& s = strips[cur];
+    TftGfx& g = canvases[cur];
+    s.clearClipRect();
+    s.fillScreen(TFT_BLACK);
+    g.setStripTop(top);
+    g.setDrawColor(1);
+    draw(g);
+    s.clearClipRect();
+
+    // Which columns changed? Send only the span from the first to the last changed block.
+    uint16_t* buf = (uint16_t*)s.getBuffer();
+    int first = CHUNKS, last = -1;
+    for (int c = 0; c < CHUNKS; c++) {
+      uint32_t h = hashChunk(buf, rows, c);
+      if (h == sent[i][c] && !forceAll) continue;
+      sent[i][c] = h;
+      if (c < first) first = c;
+      last = c;
+    }
+    if (last < 0) continue;   // nothing changed in this strip
+
+    int x0 = first * CHUNK_W, w = (last - first + 1) * CHUNK_W;
+    // DMA needs the span as one block: move its rows together, in place, at the start of the buffer
+    // (each row moves down or stays, so nothing is overwritten before it is copied).
+    if (w < TFT_W)
+      for (int r = 0; r < rows; r++) memmove(buf + r * w, buf + r * TFT_W + x0, w * 2);
+    // pushImageDMA waits for the previous transfer (from the other buffer) before starting this one.
+    tft.pushImageDMA(x0, top, w, rows, (const lgfx::swap565_t*)buf);
+    bytes += w * rows * 2;
+    if (stripBuffers == 2) cur ^= 1;
   }
+  tft.waitDMA();
+  tft.endWrite();
   forceAll = false;
   return bytes;
 }
@@ -400,12 +470,25 @@ namespace Tft {
 
 bool begin() {
   if (!started) {
+#if HAS_TOUCH && !defined(DANTE_SIMULATOR)
+    resetTouchChip();   // before tft.init(), which starts the touch panel too
+    touchTries = 1;
+#endif
     tft.init();
+#if HAS_TOUCH && !defined(DANTE_SIMULATOR)
+    touchFound = tft.touch() && tft.touch()->init();
+#endif
     psramMode = allocPsram();
     if (!psramMode) {
-      strip.setColorDepth(16);
-      strip.setPsram(false);
-      if (!strip.createSprite(TFT_W, TFT_STRIP_H)) return false;
+      // Two strip buffers if there is room (smoother), otherwise one.
+      stripBuffers = 0;
+      for (auto& s : strips) {
+        s.setColorDepth(16);
+        s.setPsram(false);
+        if (!s.createSprite(TFT_W, TFT_STRIP_H)) break;
+        stripBuffers++;
+      }
+      if (stripBuffers == 0) return false;
     }
     started = true;
   } else {
@@ -486,17 +569,34 @@ bool simSnapshot(uint16_t* out, uint8_t& backlight) {
 #if HAS_TOUCH && !defined(DANTE_SIMULATOR)
 uint8_t readTouch(int& x, int& y) {
   if (!active()) return 0;
+  if (!touchFound) {
+    // Not found at boot: try again every few seconds, a few times (each try pauses ~120 ms).
+    if (touchTries < TOUCH_MAX_TRIES && (int32_t)(millis() - touchRetryAt) >= 0) {
+      touchRetryAt = millis() + 3000;
+      startTouch();
+    }
+    if (!touchFound) return 0;
+  }
   lgfx::touch_point_t points[2];
   uint8_t n = tft.getTouch(points, 2);
   if (n) { x = points[0].x; y = points[0].y; }
   return n;
+}
+
+void touchStatus(char* out, size_t n) {
+  if (touchFound)
+    snprintf(out, n, "touch panel: GT911 found at 0x%02X", (unsigned)tft.touch()->config().i2c_addr);
+  else
+    snprintf(out, n, "touch panel: GT911 NOT FOUND on I2C (SDA=%d SCL=%d RST=%d), tried %u times",
+             TOUCH_PIN_SDA, TOUCH_PIN_SCL, TOUCH_PIN_RST, (unsigned)touchTries);
 }
 #endif
 
 void describe(char* out, size_t n) {
   if (!started) { snprintf(out, n, "TFT not started"); return; }
   snprintf(out, n, "TFT: %s, %.0f fps, %.0f KB per frame sent, SPI %d MHz",
-           psramMode ? "PSRAM frame buffer" : "strips (no PSRAM)", fps, kbPerFrame, TFT_SPI_HZ / 1000000);
+           psramMode ? "PSRAM frame buffer" : stripBuffers == 2 ? "strips (no PSRAM), 2 buffers" : "strips (no PSRAM), 1 buffer",
+           fps, kbPerFrame, TFT_SPI_HZ / 1000000);
 }
 
 } // namespace Tft

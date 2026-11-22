@@ -36,6 +36,7 @@ void loop();
 
 // ---- the stand-ins declared in simulator/host ----------------------------------------------
 int g_simPins[64];
+bool g_simPsram = true;
 HardwareSerial Serial(true);
 HardwareSerial Serial0(false);
 TwoWire Wire;
@@ -202,6 +203,7 @@ void simulateHardware(const std::string& hw) {
   if (hw == "tft" || hw == "cyd") Wire.present = {};
   else                  Wire.present = { OLED };
   Touch::simEnable(hw == "cyd");   // the yellow board has a touch panel; the others have buttons
+  g_simPsram = hw != "cyd";        // ...and no PSRAM, so its TFT draws in strips, like the real board
 }
 } // namespace
 

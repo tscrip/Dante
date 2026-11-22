@@ -88,6 +88,8 @@ namespace Tft {
   // The touch panel: how many fingers are on the screen (0 = none), and where the first one is, in
   // the same screen pixels DANTE draws in (already turned to match the rotation / upside-down setting).
   uint8_t readTouch(int& x, int& y);
+  // "touch panel: GT911 found at 0x5D" or "... NOT FOUND ...", for `?` and Check wiring.
+  void touchStatus(char* out, size_t n);
 #endif
 #ifdef DANTE_SIMULATOR
   // The screen as RGB565 (TFT_W x TFT_H) plus the backlight level, for the simulator's frames.
