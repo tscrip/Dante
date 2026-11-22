@@ -95,6 +95,7 @@ public sealed class ConfigStore
         config.Device.Brightness = Math.Clamp(config.Device.Brightness, 0, 255);
         config.Device.AccentColor = $"#{config.Device.AccentRgb:X6}";   // normalised; junk becomes the default
         if (!Enum.IsDefined(config.Device.Look)) config.Device.Look = Look.Classic;
+        if (!Enum.IsDefined(config.Device.Motion)) config.Device.Motion = Motion.Auto;
         MigrateLegacy(config);
         // Firmware advertised "DeskBuddy", then "HANK", before the project became DANTE.
         if (LegacyNames.Contains(config.Device.BluetoothName?.Trim() ?? "", StringComparer.OrdinalIgnoreCase))

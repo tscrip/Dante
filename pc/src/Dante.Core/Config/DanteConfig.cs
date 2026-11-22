@@ -76,6 +76,9 @@ public sealed class DeviceSettings
     /// <summary>DANTE's look: eye style, little habits and accessories (OLED and TFT).</summary>
     public Look Look { get; set; } = Look.Classic;
 
+    /// <summary>How much DANTE's face moves around (hops, shakes, gliding glances). See <see cref="Motion"/>.</summary>
+    public Motion Motion { get; set; } = Motion.Auto;
+
     /// <summary>Older configs had one flag per screen (two-screen mode); the first screen's flag carries over.</summary>
     [JsonPropertyName("flipScreen1")]
     public bool? LegacyFlipScreen1 { get; set; }
@@ -151,6 +154,22 @@ public enum DisplayType
 /// <summary>
 /// DANTE's look. The numeric value goes over the wire, so only append new looks at the end.
 /// </summary>
+/// <summary>
+/// How lively the face is. Moving the whole face means redrawing (and resending) most of the screen, which
+/// boards without PSRAM (the yellow ESP32-3248S035C) can't do smoothly; calm keeps the expressions, blinks
+/// and glances but drops the hops, shakes and screen knocks.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<Motion>))]
+public enum Motion
+{
+    /// <summary>DANTE decides: calm on boards that draw the colour screen in strips (no PSRAM), lively otherwise.</summary>
+    Auto = 0,
+    /// <summary>All the movement: hops, foot tapping, shaking, gliding glances.</summary>
+    Lively = 1,
+    /// <summary>Expressions, blinks and quick glances, but the face stays put: smoother on slower boards.</summary>
+    Calm = 2,
+}
+
 [JsonConverter(typeof(JsonStringEnumConverter<Look>))]
 public enum Look
 {

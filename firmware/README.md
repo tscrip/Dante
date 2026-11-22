@@ -221,6 +221,12 @@ Each mood has its own eyes and idle habits (and, on the TFT, its own colour):
 | `meltdown` | wide eyes | shaking, sweat drop, flashes of X eyes, "!!" |
 | sleepy | heavy lids (no PC connected) | floating "z"s, nodding off and snapping awake |
 
+**Movement** (*Mood & personality → Movement* in the PC app): *Lively* has all the hops, foot tapping,
+shaking and gliding glances. *Calm* keeps the expressions, blinks, gags and (quicker) glances, but the face
+stays put and nudges don't shake the screen, so far less of the screen has to be redrawn: on the yellow
+board that's 2-5x less data per frame in the busy moods. *Automatic* (the default) is calm on boards that
+draw the TFT in strips (no PSRAM) and lively everywhere else.
+
 **Gags** (SELECT on the face): heart eyes, dizzy spirals, wink, laughing `> <` with "ha ha", surprised
 double-take and "boop!" squish.
 

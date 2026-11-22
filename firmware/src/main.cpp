@@ -316,8 +316,9 @@ static void drawToast(Gfx& g, uint32_t now) {
   drawMarquee(g, toast.text, bx + 3, textY, bw - 6, now, toast.start + 300, by + 1, by + bh - 1);
 }
 
-// "Knock knock": shake every 3 s.
+// "Knock knock": shake every 3 s (not in calm mode: the shake moves the whole screen).
 static int knockOffset(uint32_t t) {
+  if (Face::calm()) return 0;
   uint32_t ph = t % 3000;
   return ph < 450 ? (int)(sinf(ph * 0.09f) * 3) : 0;
 }
@@ -508,6 +509,7 @@ void loop() {
   lastFrame = now;
 
   Face::setAlone(!Link::pcAlive());
+  Face::setCalm(Displays::calmMotion());
   Face::update(now);
   Apps::update(now);
 

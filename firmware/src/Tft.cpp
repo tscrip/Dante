@@ -497,27 +497,30 @@ uint32_t pushChanged() {
   return bytes;
 }
 
-// Hash of one CHUNK_W-wide column block of a strip.
-uint32_t hashChunk(const uint16_t* buf, int rows, int chunk) {
-  uint32_t h = 2166136261u;
-  for (int r = 0; r < rows; r++) {
-    const uint32_t* p = (const uint32_t*)(buf + r * TFT_W + chunk * CHUNK_W);
-    for (int i = 0; i < CHUNK_W / 2; i++) h = (h ^ p[i]) * 16777619u;
+// Fingerprints, FNV-1a style over 32-bit words (two pixels at a time).
+constexpr uint32_t FNV_BASIS = 2166136261u, FNV_PRIME = 16777619u;
+
+// Fingerprint of one row of one CHUNK_W-wide column block.
+inline uint32_t hashRowChunk(const uint16_t* row, int chunk) {
+  const uint32_t* p = (const uint32_t*)(row + chunk * CHUNK_W);
+  uint32_t h = FNV_BASIS;
+  for (int i = 0; i < CHUNK_W / 2; i++) h = (h ^ p[i]) * FNV_PRIME;
+  return h;
+}
+
+// The same for an all-black row of a block (worked out once).
+uint32_t blackRowChunk() {
+  static uint32_t h = 0;
+  static bool done = false;
+  if (!done) {
+    h = FNV_BASIS;
+    for (int i = 0; i < CHUNK_W / 2; i++) h = (h ^ 0u) * FNV_PRIME;
+    done = true;
   }
   return h;
 }
 
-// The fingerprint of an all-black block of `rows` rows (worked out once).
-uint32_t blackHash(int rows) {
-  static int forRows = -1;
-  static uint32_t h = 0;
-  if (rows != forRows) {
-    h = 2166136261u;
-    for (int i = 0; i < rows * CHUNK_W / 2; i++) h = (h ^ 0u) * 16777619u;   // same steps as hashChunk
-    forRows = rows;
-  }
-  return h;
-}
+uint32_t rowSent[TFT_H];         // strip mode: fingerprint of each screen row as it shows now
 
 uint32_t pushStrips(const std::function<void(TftGfx& g)>& draw) {
   uint32_t bytes = 0;
@@ -537,31 +540,53 @@ uint32_t pushStrips(const std::function<void(TftGfx& g)>& draw) {
     draw(g);
     s.clearClipRect();
 
-    // Which columns changed? Send only the span from the first to the last changed block. Blocks
-    // nothing was drawn into are still black, so they get the "all black" fingerprint without
-    // looking at their pixels (comparing every pixel was ~40% of a frame).
+    // What changed? Each row of each column block gets a fingerprint; they add up to one per block
+    // (which columns changed) and one per row (which rows changed), so only the rectangle that really
+    // changed is sent. Blocks nothing was drawn into are still black: their pixels aren't read at all.
     uint16_t* buf = (uint16_t*)s.getBuffer();
     int dx0, dx1;
     if (!g.drawnSpan(dx0, dx1)) { dx0 = 1; dx1 = 0; }   // nothing drawn at all
+    bool touched[CHUNKS];
+    uint32_t colH[CHUNKS];
+    for (int c = 0; c < CHUNKS; c++) {
+      touched[c] = !((c + 1) * CHUNK_W <= dx0 || c * CHUNK_W > dx1);
+      colH[c] = FNV_BASIS;
+    }
+    const uint32_t black = blackRowChunk();
+    int r0 = rows, r1 = -1;
+    for (int r = 0; r < rows; r++) {
+      const uint16_t* row = buf + r * TFT_W;
+      uint32_t rowH = FNV_BASIS;
+      for (int c = 0; c < CHUNKS; c++) {
+        uint32_t h = touched[c] ? hashRowChunk(row, c) : black;
+        colH[c] = (colH[c] ^ h) * FNV_PRIME;
+        rowH = (rowH ^ h) * FNV_PRIME;
+      }
+      if (rowH != rowSent[top + r] || forceAll) {
+        rowSent[top + r] = rowH;
+        if (r < r0) r0 = r;
+        r1 = r;
+      }
+    }
     int first = CHUNKS, last = -1;
     for (int c = 0; c < CHUNKS; c++) {
-      bool untouched = (c + 1) * CHUNK_W <= dx0 || c * CHUNK_W > dx1;
-      uint32_t h = untouched ? blackHash(rows) : hashChunk(buf, rows, c);
-      if (h == sent[i][c] && !forceAll) continue;
-      sent[i][c] = h;
+      if (colH[c] == sent[i][c] && !forceAll) continue;
+      sent[i][c] = colH[c];
       if (c < first) first = c;
       last = c;
     }
-    if (last < 0) continue;   // nothing changed in this strip
+    if (last < 0 && r1 < 0) continue;            // nothing changed in this strip
+    if (last < 0) { first = 0; last = CHUNKS - 1; }   // (fingerprints disagree: play safe, send the rows whole)
+    if (r1 < 0) { r0 = 0; r1 = rows - 1; }
 
-    int x0 = first * CHUNK_W, w = (last - first + 1) * CHUNK_W;
-    // DMA needs the span as one block: move its rows together, in place, at the start of the buffer
-    // (each row moves down or stays, so nothing is overwritten before it is copied).
-    if (w < TFT_W)
-      for (int r = 0; r < rows; r++) memmove(buf + r * w, buf + r * TFT_W + x0, w * 2);
+    int x0 = first * CHUNK_W, w = (last - first + 1) * CHUNK_W, n = r1 - r0 + 1;
+    // DMA needs the rectangle as one block: move its rows together, in place, at the start of the
+    // buffer (each row moves down or stays, so nothing is overwritten before it is copied).
+    if (w < TFT_W || r0 > 0)
+      for (int r = 0; r < n; r++) memmove(buf + r * w, buf + (r0 + r) * TFT_W + x0, w * 2);
     // pushImageDMA waits for the previous transfer (from the other buffer) before starting this one.
-    tft.pushImageDMA(x0, top, w, rows, (const lgfx::swap565_t*)buf);
-    bytes += w * rows * 2;
+    tft.pushImageDMA(x0, top + r0, w, n, (const lgfx::swap565_t*)buf);
+    bytes += w * n * 2;
     if (stripBuffers == 2) cur ^= 1;
   }
   tft.waitDMA();
@@ -616,6 +641,7 @@ void end() {
 }
 
 bool active() { return started && awake; }
+bool stripMode() { return started && !psramMode; }
 
 void setBrightness(uint8_t b) {
   brightness = b;

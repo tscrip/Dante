@@ -37,6 +37,7 @@ void load() {
   cfg.bright = prefs.getUChar("bright", 200);
   cfg.accent = prefs.getUInt("accent", 0x5EEAD4) & 0xFFFFFF;
   cfg.look = prefs.getUChar("look", 0);
+  cfg.motion = prefs.getUChar("motion", Displays::MOTION_AUTO);
   prefs.end();
 }
 
@@ -47,6 +48,7 @@ void save() {
   prefs.putUChar("bright", cfg.bright);
   prefs.putUInt("accent", cfg.accent);
   prefs.putUChar("look", cfg.look);
+  prefs.putUChar("motion", cfg.motion);
   // Settings of removed features: two screens (2.x) and the character LCD (3.4 and older).
   for (const char* old : { "screens", "layout", "content", "swap", "flip1", "flip2", "lcdAddr", "lcdSize" })
     if (prefs.isKey(old)) prefs.remove(old);
@@ -100,6 +102,12 @@ bool oledDetected() { return oledFound; }
 Kind active() { return current; }
 bool isTft() { return current == KIND_TFT; }
 U8G2& oled() { return panel1; }
+bool calmMotion() {
+  if (cfg.motion == MOTION_CALM) return true;
+  if (cfg.motion == MOTION_LIVELY) return false;
+  return current == KIND_TFT && Tft::stripMode();   // auto: calm only where moving the face is costly
+}
+
 const char* kindName() { return current == KIND_TFT ? "tft" : "oled"; }
 
 bool applyConfig(JsonDocument& m) {
@@ -111,11 +119,16 @@ bool applyConfig(JsonDocument& m) {
     const char* d = m["display"];
     cfg.kind = !strcmp(d, "oled") ? KIND_OLED : !strcmp(d, "tft") ? KIND_TFT : KIND_AUTO;
   }
+  if (m["motion"].is<const char*>()) {
+    const char* mo = m["motion"];
+    cfg.motion = !strcmp(mo, "lively") ? MOTION_LIVELY : !strcmp(mo, "calm") ? MOTION_CALM : MOTION_AUTO;
+  }
   if (m["flip"].is<bool>()) cfg.flip = m["flip"];
   else if (m["flip1"].is<bool>()) cfg.flip = m["flip1"];   // a PC app from before 3.0
 
   bool changed = before.kind != cfg.kind || before.flip != cfg.flip || before.bright != cfg.bright ||
-                 before.accent != cfg.accent || before.look != cfg.look;
+                 before.accent != cfg.accent || before.look != cfg.look ||
+                 before.motion != cfg.motion;
   if (changed) { apply(); save(); }
   return changed;
 }

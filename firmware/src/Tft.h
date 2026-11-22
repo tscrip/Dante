@@ -91,6 +91,7 @@ namespace Tft {
   bool begin();                    // panel + strip buffer; false if the buffer couldn't be allocated
   void end();                      // backlight off, panel asleep
   bool active();
+  bool stripMode();                // drawing in strips (no PSRAM): moving big things is costly
   void setBrightness(uint8_t b);
   void setFlip(bool upsideDown);
   // Draws one frame. `draw` runs once per strip and must draw the whole screen each time

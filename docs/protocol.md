@@ -1,4 +1,4 @@
-# DANTE wire protocol (v1, firmware 3.8)
+# DANTE wire protocol (v1, firmware 3.9)
 
 Transport: **Bluetooth LE**, Nordic UART Service: service `6E400001-B5A3-F393-E0A9-E50E24DCCA9E`,
 the PC writes to RX `6E400002-…`, DANTE notifies on TX `6E400003-…` (lines may be split across
@@ -28,7 +28,7 @@ Limits on the device: max 12 apps, `id` ≤ 15 chars, `name` ≤ 19 chars, `unit
 | `alert` | `id`, `title`, `txt`, `lvl` (1 nudge, 2 urgent) | Take over the screen and nudge the human until acknowledged or cleared. Apps raise these through their take-over rules; features such as calendar reminders (`id` `calendar`) and the Pomodoro timer (`id` `pomodoro`) raise their own. |
 | `clear` | `id`   | Remove the takeover for that id. |
 | `say`   | `txt`  | Show a toast speech bubble (no value attached). |
-| `cfg`   | `bright` (0-255), `display` (`auto`\|`oled`\|`tft`), `flip` (bool), `accent` (0xRRGGBB as a number), `look` (0-4) | Device settings; every field optional; stored in flash. `accent` is the TFT's accent colour (title, happy eyes, highlights). `look` is DANTE's style: 0 Classic, 1 Gentleman, 2 Nerd, 3 Grumpy Uncle, 4 Party. DANTE always drives **one** screen. `display` picks it: `oled` = 0.91" SSD1306 128x32 (I2C), `tft` = 3.5" 480x320 ST7796 colour TFT (SPI), `auto` = the OLED if it answers on I2C, otherwise the TFT (which can't be detected). `bright` is the OLED contrast or the TFT backlight (0 = off). `flip` rotates the screen 180°. (Older firmware also took `lcd1602` / `lcd2004` with `lcdSize` and `lcdAddr` for character LCDs, and `screens`, `layout`, `content`, `swap`, `flip1`, `flip2` for two-screen mode; 3.2 ignores them, treats an LCD as `auto`, and reads `flip1` as `flip` when `flip` is missing.) |
+| `cfg`   | `bright` (0-255), `display` (`auto`\|`oled`\|`tft`), `flip` (bool), `accent` (0xRRGGBB as a number), `look` (0-4), `motion` (`auto`\|`lively`\|`calm`) | Device settings; every field optional; stored in flash. `accent` is the TFT's accent colour (title, happy eyes, highlights). `look` is DANTE's style: 0 Classic, 1 Gentleman, 2 Nerd, 3 Grumpy Uncle, 4 Party. `motion` (firmware 3.9+) is how much the face moves: `calm` keeps the expressions, blinks and glances but drops hops, shakes and nudge knocks (much less to redraw and send); `auto` = calm when the TFT is drawn in strips (no PSRAM), lively otherwise. DANTE always drives **one** screen. `display` picks it: `oled` = 0.91" SSD1306 128x32 (I2C), `tft` = 3.5" 480x320 ST7796 colour TFT (SPI), `auto` = the OLED if it answers on I2C, otherwise the TFT (which can't be detected). `bright` is the OLED contrast or the TFT backlight (0 = off). `flip` rotates the screen 180°. (Older firmware also took `lcd1602` / `lcd2004` with `lcdSize` and `lcdAddr` for character LCDs, and `screens`, `layout`, `content`, `swap`, `flip1`, `flip2` for two-screen mode; 3.2 ignores them, treats an LCD as `auto`, and reads `flip1` as `flip` when `flip` is missing.) |
 
 ## Device → PC
 

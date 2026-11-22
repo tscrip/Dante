@@ -70,6 +70,20 @@
     </div>
 </div>
 
+<div class="panel">
+    <h2>Movement</h2>
+    <p class="muted small">How much DANTE's face moves around. Hopping, shaking and gliding mean redrawing most of the
+        3.5" screen, which boards without extra memory (like the yellow touch board) can't do smoothly.</p>
+    <div class="fields">
+        <label class="check"><input type="radio" name="motion" checked="@(_cfg.Device.Motion == Motion.Auto)" @onchange="() => _cfg.Device.Motion = Motion.Auto" />
+            <span><strong>Automatic</strong> <span class="muted small">— calm on boards that need it, lively everywhere else</span></span></label>
+        <label class="check"><input type="radio" name="motion" checked="@(_cfg.Device.Motion == Motion.Lively)" @onchange="() => _cfg.Device.Motion = Motion.Lively" />
+            <span><strong>Lively</strong> <span class="muted small">— hops, foot tapping, shaking, gliding glances, screen knocks during nudges</span></span></label>
+        <label class="check"><input type="radio" name="motion" checked="@(_cfg.Device.Motion == Motion.Calm)" @onchange="() => _cfg.Device.Motion = Motion.Calm" />
+            <span><strong>Calm</strong> <span class="muted small">— expressions, blinks and quick glances, but the face stays put: smoother on slower boards</span></span></label>
+    </div>
+</div>
+
 <button class="btn primary" @onclick="Save">Save</button>
 
 @code {

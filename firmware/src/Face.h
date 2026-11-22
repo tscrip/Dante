@@ -67,6 +67,10 @@ namespace Face {
   void setPending(int n);
   void setLook(uint8_t look);       // a Look; out-of-range values mean LOOK_CLASSIC
   void setAlone(bool alone);
+  // Calm: the face stays put (no hops, shakes or jitter; quick glances that settle at once), so on boards
+  // that draw in strips only the parts that really change (blinks, lids) have to be redrawn and sent.
+  void setCalm(bool calm);
+  bool calm();
 
   void playGag(Gag g, uint16_t durationMs = 2400);
   void playRandomGag();
