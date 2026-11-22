@@ -61,6 +61,50 @@ public static class DeviceProtocol
         return msg;
     }
 
+    /// <summary>A <see cref="Value"/> message plus what a media player is doing (<c>sub</c>, <c>play</c>, <c>mute</c>, <c>vol</c>, <c>art</c>).</summary>
+    public static JsonObject Value(string appId, WidgetReading? reading, int level, string? quip)
+    {
+        var msg = Value(appId, reading?.Value, reading?.Text, level, quip, reading?.Timer, reading?.Value2);
+        if (reading?.Media is { } m)
+        {
+            msg["sub"] = Format.ToDeviceText(m.Artist ?? "", 47);
+            msg["play"] = m.Playing;
+            msg["mute"] = m.Muted;
+            if (m.Volume is { } vol) msg["vol"] = Math.Clamp(vol, 0, 100);
+            if (ArtFits(m.Art)) msg["art"] = ArtHash(m.Art!);   // which picture to show: sent with Art() when it changes
+        }
+        return msg;
+    }
+
+    /// <summary>The largest album art DANTE accepts (it has little memory): a ~120 px JPEG is 4-8 KB.</summary>
+    public const int MaxArtBytes = 12 * 1024;
+    private const int ArtChunkBytes = 1024;   // ~1.4 KB of base64 per message, well under DANTE's 2 KB line limit
+
+    public static bool ArtFits(byte[]? art) => art is { Length: > 0 and <= MaxArtBytes };
+
+    /// <summary>A short fingerprint of a picture, so DANTE can tell whether it already has it.</summary>
+    public static string ArtHash(byte[] art) => Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(art))[..8].ToLowerInvariant();
+
+    /// <summary>
+    /// A widget's picture (a JPEG) as <c>art</c> messages: <c>i</c> of <c>n</c> chunks of base64 in <c>d</c>,
+    /// all tagged with the picture's hash <c>h</c>. DANTE puts it together and shows it once all chunks arrived.
+    /// </summary>
+    public static IEnumerable<JsonObject> Art(string appId, byte[] jpeg)
+    {
+        if (!ArtFits(jpeg)) yield break;
+        var hash = ArtHash(jpeg);
+        var count = (jpeg.Length + ArtChunkBytes - 1) / ArtChunkBytes;
+        for (var i = 0; i < count; i++)
+        {
+            var part = jpeg.AsSpan(i * ArtChunkBytes, Math.Min(ArtChunkBytes, jpeg.Length - i * ArtChunkBytes));
+            yield return new JsonObject
+            {
+                ["t"] = "art", ["id"] = appId, ["h"] = hash, ["i"] = i, ["n"] = count, ["len"] = jpeg.Length,
+                ["d"] = Convert.ToBase64String(part),
+            };
+        }
+    }
+
     public static JsonObject Mood(MoodResult mood) => new()
     {
         ["t"] = "mood",
@@ -113,6 +157,11 @@ public sealed record DeviceEvent(string Type, JsonObject Raw)
     public string? Button => Raw["b"]?.GetValue<string>();
     public bool Long => Raw["long"]?.GetValue<bool>() ?? false;
     public string? Screen => Raw["scr"]?.GetValue<string>();
+    /// <summary>
+    /// Which on-screen control a tap hit, for screens with controls on touch screens (the media player:
+    /// prev, play, next, vold, volu, mute). Null for a plain button press.
+    /// </summary>
+    public string? Control => Raw["ctl"]?.GetValue<string>();
 
     public static DeviceEvent? TryParse(string line)
     {

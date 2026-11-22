@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 
-namespace Dante.Server.Features.MagicButton;
+namespace Dante.Core.Os;
 
 public sealed record CommandResult(int ExitCode, string Output, string Error, bool NotFound = false)
 {

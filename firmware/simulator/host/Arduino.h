@@ -126,6 +126,7 @@ class HardwareSerial : public Stream {
  public:
   explicit HardwareSerial(bool stdio) : stdio_(stdio) {}
   void begin(unsigned long) {}
+  size_t setRxBufferSize(size_t n) { return n; }   // stdin has all the buffering it needs
   int available() override;
   int read() override;
   size_t write(uint8_t c) override;

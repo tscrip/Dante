@@ -1,6 +1,8 @@
 using System.Globalization;
 
-namespace Dante.Server.Features.MagicButton;
+using Dante.Core.Os;
+
+namespace Dante.Core.Media;
 
 /// <summary>
 /// macOS: audio via AppleScript (osascript). Media keys are posted as system-defined events through
@@ -45,6 +47,22 @@ public sealed class MacMediaBackend(ICommandRunner runner) : IMediaBackend
             $"set volume output volume ((output volume of (get volume settings)) {(up ? "+" : "-")} 6)",
             "return output volume of (get volume settings)");
         return int.TryParse(output, NumberStyles.Integer, CultureInfo.InvariantCulture, out var level) ? level : null;
+    }
+
+    public async Task<VolumeState?> GetVolumeAsync(CancellationToken ct)
+    {
+        var result = await runner.RunAsync("osascript",
+            ["-e", "set s to get volume settings", "-e", "return ((output volume of s) as text) & \",\" & ((output muted of s) as text)"], ct);
+        return result.Ok ? ParseVolume(result.Output) : null;
+    }
+
+    /// <summary>"45,false" → 45 %, not muted. "missing value" (a device without volume) → null.</summary>
+    internal static VolumeState? ParseVolume(string output)
+    {
+        var parts = output.Trim().Split(',');
+        return parts.Length == 2 && int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var level)
+            ? new VolumeState(level, parts[1].Trim().Equals("true", StringComparison.OrdinalIgnoreCase))
+            : null;
     }
 
     private async Task MediaKey(int key, CancellationToken ct)

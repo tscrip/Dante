@@ -53,6 +53,8 @@ public sealed record WidgetReading
     public IReadOnlyList<PendingItem>? Pending { get; init; }
     /// <summary>For countdowns (<see cref="VisualKind.Timer"/>): DANTE ticks the clock down by itself between readings.</summary>
     public TimerReading? Timer { get; init; }
+    /// <summary>For media players (<see cref="VisualKind.Media"/>): artist, play state, volume, album art. The title goes in <see cref="Text"/>.</summary>
+    public MediaReading? Media { get; init; }
     public string? Error { get; init; }
 
     public static WidgetReading Fail(string error) => new() { Error = error };
@@ -63,6 +65,13 @@ public sealed record WidgetReading
 
 /// <summary>A countdown: seconds left, the length of the whole countdown (for the progress bar), and whether it is ticking.</summary>
 public sealed record TimerReading(int RemainingSeconds, int TotalSeconds, bool Running);
+
+/// <summary>
+/// What a media player is doing, for <see cref="VisualKind.Media"/> (the title is the reading's Text).
+/// <paramref name="Art"/> is the album art as a small square JPEG, ready for DANTE (see
+/// <see cref="Device.DeviceProtocol.MaxArtBytes"/>); it is only sent to DANTE when it changes.
+/// </summary>
+public sealed record MediaReading(string? Artist, bool Playing, bool Muted = false, int? Volume = null, byte[]? Art = null);
 
 public static class WidgetSettingsExtensions
 {

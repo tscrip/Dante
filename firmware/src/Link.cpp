@@ -78,8 +78,14 @@ namespace Link {
 
   void begin(Handler handler) {
     onMsg = handler;
+    // A bigger receive buffer (the default is 256 bytes): drawing a frame can take tens of ms, and
+    // whatever arrives meanwhile must wait somewhere. With 256 bytes, the PC's widget list (its
+    // longest message) was often cut off, so DANTE showed no widgets until the PC sent it again.
+    // Must be set before begin().
+    Serial.setRxBufferSize(USB_RX_BUFFER);
     Serial.begin(USB_BAUD);
 #if ARDUINO_USB_CDC_ON_BOOT
+    Serial0.setRxBufferSize(USB_RX_BUFFER);
     Serial0.begin(USB_BAUD);
 #endif
     BleUart::begin(DEVICE_NAME);

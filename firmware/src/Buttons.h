@@ -6,6 +6,7 @@ enum ButtonId : uint8_t { BTN_LEFT = 0, BTN_RIGHT = 1, BTN_SELECT = 2, BTN_MAGIC
 struct ButtonEvent {
   ButtonId id;
   bool longPress;
+  int16_t x = -1, y = -1;   // touch screens: where the tap started (screen pixels); -1 for real buttons
 };
 
 // Debounced buttons with short/long press detection.

@@ -7,6 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The tests check internal helpers (e.g. parsers for command output). -->
+    <InternalsVisibleTo Include="Dante.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="InTheHand.BluetoothLE" Version="4.0.45" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />

@@ -109,6 +109,7 @@ public class PcActionsTests
         public Task<bool> ToggleSpeakerMuteAsync(CancellationToken ct) => Task.FromResult(true);
         public Task<bool> ToggleMicMuteAsync(CancellationToken ct) => Task.FromResult(false);
         public Task<int?> ChangeVolumeAsync(bool up, CancellationToken ct) => Task.FromResult<int?>(up ? 55 : null);
+        public Task<VolumeState?> GetVolumeAsync(CancellationToken ct) => Task.FromResult<VolumeState?>(null);
     }
 
     private static PcActions Make(FakeRunner? run = null, RecordingOpener? urls = null) =>
@@ -282,4 +283,38 @@ public class MagicButtonEngineTests : IAsyncLifetime
         Assert.Equal("Refreshing apps!", await _magic.RunAsync(longPress: true));
         Assert.DoesNotContain(MagicActionKind.RefreshApps, _actions.Ran);
     }
+}
+
+public class VolumeReadingTests
+{
+    [Theory]
+    [InlineData("Volume: 0.40", 40, false)]
+    [InlineData("Volume: 0.55 [MUTED]", 55, true)]
+    [InlineData("Volume: 1.00", 100, false)]
+    public void Wpctl_output_becomes_volume_and_mute(string output, int percent, bool muted) =>
+        Assert.Equal(new VolumeState(percent, muted), LinuxMediaBackend.ParseWpctl(output));
+
+    [Fact]
+    public void Garbage_from_wpctl_means_unknown() => Assert.Null(LinuxMediaBackend.ParseWpctl("oops"));
+
+    [Fact]
+    public async Task Linux_falls_back_to_pactl_and_survives_having_neither()
+    {
+        var pulse = new FakeRunner { Missing = { "wpctl" } };
+        pulse.Results["pactl get-sink-volume @DEFAULT_SINK@"] = new(0, "Volume: front-left: 26214 /  40% / -23.88 dB", "");
+        pulse.Results["pactl get-sink-mute @DEFAULT_SINK@"] = new(0, "Mute: yes", "");
+        Assert.Equal(new VolumeState(40, true), await new LinuxMediaBackend(pulse).GetVolumeAsync(default));
+
+        var none = new FakeRunner { Missing = { "wpctl", "pactl" } };
+        Assert.Null(await new LinuxMediaBackend(none).GetVolumeAsync(default));   // no volume shown, no error
+    }
+
+    [Theory]
+    [InlineData("45,false", 45, false)]
+    [InlineData("0,true", 0, true)]
+    public void Mac_volume_settings_become_volume_and_mute(string output, int percent, bool muted) =>
+        Assert.Equal(new VolumeState(percent, muted), MacMediaBackend.ParseVolume(output));
+
+    [Fact]
+    public void A_mac_output_without_volume_is_unknown() => Assert.Null(MacMediaBackend.ParseVolume("missing value,false"));
 }

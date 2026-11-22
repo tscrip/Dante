@@ -155,6 +155,9 @@ I2C scan now: bus 1 (SDA=8 SCL=9): nothing
 * **`strips (no PSRAM)` on an R8 module:** the PSRAM setting in `platformio.ini` doesn't match the module.
 * **`NO MEMORY FOR THE FRAME BUFFER`:** please report it, with the module marking.
 * **OLED: nothing found on I2C:** check SDA → GPIO 8, SCL → GPIO 9, power and GND.
+* **Media player: no album art (a music note instead):** the picture needs about 30 KB of memory in one piece.
+  Type `?` in the monitor: the `memory:` line shows what is left. The ESP32-S3 with PSRAM has plenty; on the
+  yellow board it should fit, but if the largest block is under 30 KB, please tell us. The OLED never shows art.
 * **Yellow board, taps do nothing:** type `?` in the monitor (or use **Device → Check wiring** in the PC
   app). The second line says whether the touch chip answered: `touch panel: GT911 found at 0x5D` (or
   `0x14`) is good. `NOT FOUND` means the chip didn't answer; DANTE tries again a few times in the first
@@ -195,6 +198,7 @@ If no message arrives from the PC for 30 s DANTE decides it is alone: it gets sl
 | Timer screen | SELECT / long SELECT | Start or pause the countdown / reset it (the Pomodoro timer). |
 | Any other screen | long SELECT | Tells the PC "refresh now". |
 | Speech bubble | any | Dismiss it. |
+| Media player screen | SELECT / long SELECT | Play / pause / next song. On a touch screen, tap the on-screen buttons instead: previous, play/pause, next, volume down, mute, volume up (the button lights up and the screen changes straight away; the PC confirms a moment later). |
 | Nudge | SELECT | "I'm on it": `ack` to the PC, DANTE winks. |
 | Nudge | LEFT / RIGHT | "Later": `snooze` to the PC. |
 | Any screen | MAGIC / long MAGIC | Always runs what the PC app's *Magic button* page says, whatever is on screen; DANTE sparkles and shows the result. |
@@ -246,6 +250,7 @@ Each widget picks a visual (called `vis` in the protocol):
 | `spark2` | two sparklines, one per line, each with its label and value (e.g. CPU and memory); on the TFT the top line is in the accent colour |
 | `status` | OK / warning / error icon plus scrolling text |
 | `timer` | countdown (m:ss, or 2h05) with a progress bar; DANTE ticks it down itself |
+| `media` | a media player: title, artist, play state, volume. On the 3.5" TFT a full screen with album art and six buttons (`MediaScreen.cpp`); on the OLED a small version |
 
 Values tween smoothly, and critical values blink.
 
@@ -263,7 +268,9 @@ Values tween smoothly, and critical values blink.
 | `src/Buttons.*` | debounced short / long presses |
 | `src/Touch.*` | the touch screen as buttons: taps, holds, swipes and two-finger taps become button presses (yellow board, simulator) |
 | `src/Face.*` | procedural eyes, moods, gags, mini faces |
-| `src/Apps.*` | widget store and the eight visuals, marquee helper |
+| `src/Apps.*` | widget store and the nine visuals, marquee helper; the widget list is kept in flash so the screens are there at boot |
+| `src/MediaScreen.*` | the media player screen on the TFT: album art, title, volume, six buttons, tap targets |
+| `src/Art.*` | album art: puts the PC's `art` chunks together and decodes the JPEG once into a 120×120 picture |
 | `src/SimMain.cpp` | the simulator's `main()` (empty in the ESP32 build) |
 | `simulator/host/` | stand-ins for the Arduino / ESP32 headers, used only by the simulator build |
 

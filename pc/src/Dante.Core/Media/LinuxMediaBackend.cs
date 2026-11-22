@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace Dante.Server.Features.MagicButton;
+using Dante.Core.Os;
+
+namespace Dante.Core.Media;
 
 /// <summary>
 /// Linux: audio via PipeWire's <c>wpctl</c>, falling back to PulseAudio's <c>pactl</c> (pipewire-pulse
@@ -35,6 +37,25 @@ public sealed partial class LinuxMediaBackend(ICommandRunner runner) : IMediaBac
         var vol = await Pactl(ct, "get-sink-volume", "@DEFAULT_SINK@");
         return PactlPercent().Match(vol) is { Success: true } p ? int.Parse(p.Groups[1].Value, CultureInfo.InvariantCulture) : null;
     }
+
+    public async Task<VolumeState?> GetVolumeAsync(CancellationToken ct)
+    {
+        var wp = await runner.RunAsync("wpctl", ["get-volume", Sink], ct);
+        if (wp.Ok) return ParseWpctl(wp.Output);
+        var vol = await runner.RunAsync("pactl", ["get-sink-volume", "@DEFAULT_SINK@"], ct);
+        var mute = await runner.RunAsync("pactl", ["get-sink-mute", "@DEFAULT_SINK@"], ct);
+        return vol.Ok && PactlPercent().Match(vol.Output) is { Success: true } p
+            ? new VolumeState(int.Parse(p.Groups[1].Value, CultureInfo.InvariantCulture),
+                              mute.Ok && mute.Output.Contains("yes", StringComparison.OrdinalIgnoreCase))
+            : null;   // neither tool: no volume to show (not an error)
+    }
+
+    /// <summary>"Volume: 0.40 [MUTED]" → 40 %, muted.</summary>
+    internal static VolumeState? ParseWpctl(string output) =>
+        WpctlVolume().Match(output) is { Success: true } m
+            ? new VolumeState((int)Math.Round(double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) * 100),
+                              output.Contains("[MUTED]", StringComparison.Ordinal))
+            : null;
 
     private async Task<bool> ToggleMute(string wpTarget, string paKind, CancellationToken ct)
     {

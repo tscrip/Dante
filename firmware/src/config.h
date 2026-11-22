@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 // ---- Identity ---------------------------------------------------------------
-#define FW_VERSION      "3.7.0"
+#define FW_VERSION      "3.8.0"
 #define DEVICE_NAME     "DANTE"
 
 // ---- Board ------------------------------------------------------------------------
@@ -126,7 +126,8 @@
 
 // ---- Link ---------------------------------------------------------------------
 #define USB_BAUD        115200
-#define RX_LINE_MAX        1024
+#define USB_RX_BUFFER   4096      // bytes the serial port holds while DANTE is busy drawing a frame
+#define RX_LINE_MAX     2048      // a full list of 12 widgets is ~1.5 KB; album art arrives in chunks below this
 #define PC_TIMEOUT_MS   30000UL   // no message for this long => DANTE feels alone
 
 // ---- Timing -------------------------------------------------------------------

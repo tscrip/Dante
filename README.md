@@ -210,6 +210,7 @@ The pages of the PC app:
 | **Calendar** | *Next meeting* (countdown) | Outlook / Microsoft 365 sign-in, reminder times (e.g. 10 and 1 minutes before), which meetings to skip |
 | **Pomodoro** | *Timer* | focus / break lengths, long breaks, auto-start; live timer with start, skip and reset |
 | **System performance** | *CPU & memory* (two live graphs on one screen, or just one) | live CPU and memory of this PC; works on Windows, macOS and Linux with nothing to install |
+| **Media player** | *Now playing* (title, artist, album art; play / pause, next, previous, volume, mute) | which player to follow (or whatever is playing). Windows: any player in the volume pop-up. Linux: needs `playerctl`. macOS: Spotify and Apple Music |
 | **Days until** | *Countdown to a date* (one per date) | — (each widget has its event and date) |
 | **Web API (JSON)** | *JSON value* (one per URL) | — (each widget has its URL and which field to show) |
 | **Command** | *Command output* (one per command) | — (each widget has its program) |
@@ -219,6 +220,9 @@ Tips:
 - **Secrets** (tokens, passwords) can be written as `env:VARIABLE_NAME` in any secret field, so they stay
   in an environment variable instead of the config file.
 - **Calendar** needs a free "app registration" in Microsoft Entra; the steps are on its plugin page.
+- **Media player**: on the 3.5" screen it shows album art and big buttons (tap them on a touch screen); with
+  buttons, SELECT plays / pauses and a long SELECT skips to the next song. On Linux install `playerctl` first
+  (e.g. `sudo apt install playerctl`). On macOS, allow DANTE's app to control Spotify / Music when asked.
 - **Days until** is the example plugin: small, fully commented, and the template for new ones.
 
 ## Make your own plugin with Claude
