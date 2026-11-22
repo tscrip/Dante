@@ -85,7 +85,9 @@ screen stand in for the four buttons, so there's nothing to wire. Flash it with 
   back on with four **M3×10 flat-head (countersunk) screws**, and stand the case in the stand with the USB port
   on the right. The screws cut their own thread in the plastic (or set `inserts = true` for heat-set inserts). If the picture is
   upside down, tick *Screen is mounted upside down* on the **Device** page. The angle, the USB side and the
-  stand's size are settings at the top of the file.
+  stand's size are settings at the top of the file. For CAD programs (Fusion, Onshape, FreeCAD...) the same three
+  parts are there as STEP files (`cyd35_front.step`, `cyd35_back.step`, `cyd35_stand.step`); after changing the
+  model, `case/make_step.sh` rebuilds the STL and STEP files.
 - **Two small OLEDs:** [`case/dante_case.scad`](case/dante_case.scad).
 
 ## Wiring

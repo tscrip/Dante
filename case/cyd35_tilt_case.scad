@@ -18,6 +18,8 @@
 //   openscad -D 'part="back"'  -o case/cyd35_back.stl  case/cyd35_tilt_case.scad
 //   openscad -D 'part="stand"' -o case/cyd35_stand.stl case/cyd35_tilt_case.scad
 //
+// STEP files of the three parts, for CAD programs: case/make_step.sh (also rebuilds the STLs).
+//
 // Print orientation (no supports needed): front face down, back with its flat outside down,
 // stand on its base, all exactly as the "print" layout and the STL files have them.
 
@@ -139,13 +141,16 @@ module back_cover() {
             for (y = [7.45, 26.35, 47.27]) translate([27, y, rib_z]) cube([48.8, 2, shell_d - rib_z + eps]);
         }
         // vents as slots, so the cover stays stiff
-        for (v = vents) for (y = [v[2] + 1 : 3.5 : v[3] - 1.5])
-            translate([v[0], y, shell_d - 1]) linear_extrude(cover_t + 2)
-                hull() for (x = [v[0] + 1, v[1] - 1]) translate([x - v[0], 1]) circle(d = 2);
+        // (every other slot is 0.4 shorter at each end: slot ends in one straight line make a mesh
+        // that CAD programs can't turn into a solid, see make_step.sh)
+        for (v = vents) for (i = [0 : floor((v[3] - v[2] - 2.5) / 3.5)])
+            translate([0, v[2] + 1 + i * 3.5, shell_d - 1]) linear_extrude(cover_t + 2)
+                hull() for (x = [v[0] + 1 + (i % 2) * 0.4, v[1] - 1 - (i % 2) * 0.4]) translate([x, 1]) circle(d = 2);
         // screw holes, countersunk so the heads sit flush and the back lies flat on the stand
         for (p = screws) translate([p[0], p[1], 0]) {
             translate([0, 0, shell_d - 1]) cylinder(d = clear_d, h = cover_t + 2);
-            translate([0, 0, case_d - head_d / 2 + eps]) cylinder(d1 = 0, d2 = head_d, h = head_d / 2);
+            sink = (head_d - clear_d) / 2; // 90° countersink, starting where it meets the hole
+            translate([0, 0, case_d - sink]) cylinder(d1 = clear_d, d2 = head_d + 2 * eps, h = sink + eps);
         }
     }
 }
