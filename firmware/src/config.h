@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 // ---- Identity ---------------------------------------------------------------
-#define FW_VERSION      "3.6.1"
+#define FW_VERSION      "3.7.0"
 #define DEVICE_NAME     "DANTE"
 
 // ---- Board ------------------------------------------------------------------------
@@ -36,7 +36,8 @@
 #define TFT_PIN_DC      2
 #define TFT_PIN_RST     -1        // tied to the ESP32's own reset
 #define TFT_PIN_BL      27        // backlight, PWM-dimmed (brightness from the PC app)
-#define TFT_SPI_HZ      40000000
+#define TFT_SPI_HZ      80000000  // the panel is wired to the ESP32's fast (IOMUX) HSPI pins on the board; if the
+                                  // picture shows noise or wrong pixels, go back to 40000000
 // Panels differ: if black shows as white, flip TFT_INVERT; if red and blue are swapped, flip TFT_BGR.
 #define TFT_INVERT      false
 #define TFT_BGR         false
@@ -119,8 +120,8 @@
 #define BTN_LONG_MS     800
 
 // ---- Touch (yellow board, and the simulator) ---------------------------------------
-// The screen is split in three: a tap on the left third = LEFT, the middle = SELECT, the right
-// third = RIGHT. Holding = a long press. A swipe also flips screens, a two-finger tap = MAGIC.
+// A tap anywhere = SELECT (hold = long SELECT), swipe left / right = next / previous screen, swipe
+// down = home to the face, a two-finger tap = MAGIC. See Touch.h.
 #define TOUCH_SWIPE_PX  60        // a finger that moves this far (screen pixels) is a swipe, not a tap
 
 // ---- Link ---------------------------------------------------------------------

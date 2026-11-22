@@ -295,7 +295,7 @@ TFT). What you see is what the hardware will do. It's also the quickest way to t
    yellow board) and click **Start simulator**. The app runs the program itself.
 3. Click DANTE's buttons on screen (hold for a long press) or use the keyboard: ←/→ = LEFT/RIGHT,
    Enter/Space = SELECT, M = MAGIC. With the yellow board there are no buttons: click the screen itself
-   (left third, middle, right third; drag to swipe; right-click = two-finger tap = MAGIC).
+   (click = SELECT; drag left/right to swipe, drag down for the face; right-click = two-finger tap = MAGIC).
 
 Everything else (widgets, plugins, Claude Code hooks, Pomodoro, the Magic button) works with the
 simulator exactly as with a real DANTE. After changing firmware code, rebuild and press **Power-cycle**.

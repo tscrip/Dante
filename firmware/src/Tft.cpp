@@ -168,8 +168,10 @@ void startTouch() {
 //  * With PSRAM (e.g. N16R8 / N8R8 modules): the whole frame is drawn once into PSRAM, compared with
 //    the previous one, and only the changed part of each 16-row band is sent, by DMA from a small
 //    internal buffer while the next band is prepared. A blink or a glance sends a fraction of the screen.
-//  * Without: the frame is drawn in strips of TFT_STRIP_H rows (the scene is drawn once per strip),
-//    and strips that come out unchanged are skipped.
+//  * Without (e.g. the yellow ESP32-3248S035C board): the frame is drawn in strips of TFT_STRIP_H rows
+//    (the scene is drawn once per strip). Each strip is split into columns that are compared with what
+//    the screen shows (by hash), and only the changed span is sent, by DMA. There are two strip buffers,
+//    so the next strip is drawn while the previous one is still on its way to the screen.
 LGFX_Sprite full(&tft);          // PSRAM mode: the frame being drawn
 TftGfx fullCanvas(full);
 uint16_t* previous = nullptr;    // PSRAM mode: what the screen shows now
@@ -178,10 +180,14 @@ const int BAND = 16;
 bool psramMode = false;
 bool forceAll = true;            // send everything next frame (after begin / flip)
 
-LGFX_Sprite strip(&tft);         // strip mode
-TftGfx canvas(strip);
+LGFX_Sprite strips[2] = { LGFX_Sprite(&tft), LGFX_Sprite(&tft) };   // strip mode: two buffers
+TftGfx canvases[2] = { TftGfx(strips[0]), TftGfx(strips[1]) };
+int stripBuffers = 0;            // 2 normally; 1 if there was only room for one
 const int STRIPS = (TFT_H + TFT_STRIP_H - 1) / TFT_STRIP_H;
-uint32_t sent[STRIPS];           // strip mode: hash of what each strip shows now
+const int CHUNK_W = 32;          // strip mode: columns compared at a time
+const int CHUNKS = TFT_W / CHUNK_W;
+static_assert(TFT_W % CHUNK_W == 0, "the screen width must be a whole number of chunks");
+uint32_t sent[STRIPS][CHUNKS];   // strip mode: hash of what each part of the screen shows now
 bool started = false, awake = false;
 
 // Frame-rate statistics over the last couple of seconds.
@@ -189,12 +195,6 @@ uint32_t statFrom = 0, statFrames = 0, statBytes = 0;
 float fps = 0, kbPerFrame = 0;
 uint8_t brightness = 200;
 bool flipped = false;
-
-uint32_t hashBuffer(const uint32_t* p, size_t words) {
-  uint32_t h = 2166136261u;
-  for (size_t i = 0; i < words; i++) h = (h ^ p[i]) * 16777619u;
-  return h;
-}
 
 // u8g2 fonts wrapped for LovyanGFX, made on first use.
 lgfx::U8g2font* fontFor(const uint8_t* data) {
@@ -410,22 +410,57 @@ uint32_t pushChanged() {
   return bytes;
 }
 
+// Hash of one CHUNK_W-wide column block of a strip.
+uint32_t hashChunk(const uint16_t* buf, int rows, int chunk) {
+  uint32_t h = 2166136261u;
+  for (int r = 0; r < rows; r++) {
+    const uint32_t* p = (const uint32_t*)(buf + r * TFT_W + chunk * CHUNK_W);
+    for (int i = 0; i < CHUNK_W / 2; i++) h = (h ^ p[i]) * 16777619u;
+  }
+  return h;
+}
+
 uint32_t pushStrips(const std::function<void(TftGfx& g)>& draw) {
   uint32_t bytes = 0;
+  int cur = 0;   // the buffer to draw into; the other one may still be going out by DMA
+  tft.startWrite();
   for (int i = 0; i < STRIPS; i++) {
     int top = i * TFT_STRIP_H;
-    strip.clearClipRect();
-    strip.fillScreen(TFT_BLACK);
-    canvas.setStripTop(top);
-    canvas.setDrawColor(1);
-    draw(canvas);
-    strip.clearClipRect();
-    uint32_t h = hashBuffer((const uint32_t*)strip.getBuffer(), strip.bufferLength() / 4);
-    if (h == sent[i] && !forceAll) continue;   // nothing changed in this strip
-    strip.pushSprite(0, top);
-    sent[i] = h;
-    bytes += strip.bufferLength();
+    int rows = TFT_H - top < TFT_STRIP_H ? TFT_H - top : TFT_STRIP_H;
+    if (stripBuffers < 2) tft.waitDMA();   // only one buffer: it must be sent before drawing again
+    LGFX_Sprite& s = strips[cur];
+    TftGfx& g = canvases[cur];
+    s.clearClipRect();
+    s.fillScreen(TFT_BLACK);
+    g.setStripTop(top);
+    g.setDrawColor(1);
+    draw(g);
+    s.clearClipRect();
+
+    // Which columns changed? Send only the span from the first to the last changed block.
+    uint16_t* buf = (uint16_t*)s.getBuffer();
+    int first = CHUNKS, last = -1;
+    for (int c = 0; c < CHUNKS; c++) {
+      uint32_t h = hashChunk(buf, rows, c);
+      if (h == sent[i][c] && !forceAll) continue;
+      sent[i][c] = h;
+      if (c < first) first = c;
+      last = c;
+    }
+    if (last < 0) continue;   // nothing changed in this strip
+
+    int x0 = first * CHUNK_W, w = (last - first + 1) * CHUNK_W;
+    // DMA needs the span as one block: move its rows together, in place, at the start of the buffer
+    // (each row moves down or stays, so nothing is overwritten before it is copied).
+    if (w < TFT_W)
+      for (int r = 0; r < rows; r++) memmove(buf + r * w, buf + r * TFT_W + x0, w * 2);
+    // pushImageDMA waits for the previous transfer (from the other buffer) before starting this one.
+    tft.pushImageDMA(x0, top, w, rows, (const lgfx::swap565_t*)buf);
+    bytes += w * rows * 2;
+    if (stripBuffers == 2) cur ^= 1;
   }
+  tft.waitDMA();
+  tft.endWrite();
   forceAll = false;
   return bytes;
 }
@@ -445,9 +480,15 @@ bool begin() {
 #endif
     psramMode = allocPsram();
     if (!psramMode) {
-      strip.setColorDepth(16);
-      strip.setPsram(false);
-      if (!strip.createSprite(TFT_W, TFT_STRIP_H)) return false;
+      // Two strip buffers if there is room (smoother), otherwise one.
+      stripBuffers = 0;
+      for (auto& s : strips) {
+        s.setColorDepth(16);
+        s.setPsram(false);
+        if (!s.createSprite(TFT_W, TFT_STRIP_H)) break;
+        stripBuffers++;
+      }
+      if (stripBuffers == 0) return false;
     }
     started = true;
   } else {
@@ -554,7 +595,8 @@ void touchStatus(char* out, size_t n) {
 void describe(char* out, size_t n) {
   if (!started) { snprintf(out, n, "TFT not started"); return; }
   snprintf(out, n, "TFT: %s, %.0f fps, %.0f KB per frame sent, SPI %d MHz",
-           psramMode ? "PSRAM frame buffer" : "strips (no PSRAM)", fps, kbPerFrame, TFT_SPI_HZ / 1000000);
+           psramMode ? "PSRAM frame buffer" : stripBuffers == 2 ? "strips (no PSRAM), 2 buffers" : "strips (no PSRAM), 1 buffer",
+           fps, kbPerFrame, TFT_SPI_HZ / 1000000);
 }
 
 } // namespace Tft

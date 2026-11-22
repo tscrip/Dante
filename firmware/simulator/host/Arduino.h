@@ -39,11 +39,13 @@ void delay(uint32_t ms);
 void delayMicroseconds(uint32_t us);
 uint32_t esp_random();
 
-// Memory: the simulated board has plenty of "PSRAM", so the TFT runs its full-frame mode.
+// Memory: the simulated S3 has plenty of "PSRAM", so the TFT runs its full-frame mode; the simulated
+// yellow board has none, like the real one.
 #define MALLOC_CAP_SPIRAM   (1 << 10)
 #define MALLOC_CAP_DMA      (1 << 3)
 #define MALLOC_CAP_INTERNAL (1 << 11)
-inline bool psramFound() { return true; }
+extern bool g_simPsram;   // false when pretending to be the yellow board (no PSRAM: the TFT draws in strips)
+inline bool psramFound() { return g_simPsram; }
 inline void* heap_caps_malloc(size_t n, uint32_t) { return malloc(n); }
 inline void heap_caps_free(void* p) { free(p); }
 inline long random(long a, long b) { return b <= a ? a : a + (long)(esp_random() % (uint32_t)(b - a)); }

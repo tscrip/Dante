@@ -38,11 +38,9 @@ uint8_t readPanel(int& x, int& y) {
 
 namespace Touch {
 
+// A tap (or hold) anywhere is SELECT; with two fingers it's MAGIC. Moving between screens is swiping.
 ButtonId Gestures::zone() const {
-  if (mostFingers >= 2) return BTN_MAGIC;
-  if (startX < TFT_W / 3) return BTN_LEFT;
-  if (startX >= TFT_W - TFT_W / 3) return BTN_RIGHT;
-  return BTN_SELECT;
+  return mostFingers >= 2 ? BTN_MAGIC : BTN_SELECT;
 }
 
 bool Gestures::feed(uint32_t now, uint8_t fingers, int x, int y, ButtonEvent& ev) {
@@ -71,13 +69,17 @@ bool Gestures::feed(uint32_t now, uint8_t fingers, int x, int y, ButtonEvent& ev
   if (fingers > mostFingers) mostFingers = fingers;   // the second finger often lands a moment later
   if (done) return false;
 
-  // A clear sideways move with one finger is a swipe: flip screens straight away, like a phone.
-  // Finger moving left = the next screen slides in from the right = RIGHT.
+  // A clear move with one finger is a swipe, acted on straight away, like a phone:
+  //   finger moving left  = the next screen slides in from the right = RIGHT
+  //   finger moving right = the previous screen = LEFT
+  //   finger moving down  = home to the face (a long LEFT, as on the buttons)
+  //   finger moving up    = nothing (yet)
   int dx = x - startX, dy = y - startY;
-  if (mostFingers == 1 && abs(dx) >= TOUCH_SWIPE_PX && abs(dx) > abs(dy)) {
+  if (mostFingers == 1 && (abs(dx) >= TOUCH_SWIPE_PX || abs(dy) >= TOUCH_SWIPE_PX)) {
     done = true;
-    ev = { dx < 0 ? BTN_RIGHT : BTN_LEFT, false };
-    return true;
+    if (abs(dx) > abs(dy)) { ev = { dx < 0 ? BTN_RIGHT : BTN_LEFT, false }; return true; }
+    if (dy > 0) { ev = { BTN_LEFT, true }; return true; }
+    return false;
   }
   // Held still long enough: a long press, fired while the finger is still down (like the buttons).
   bool still = abs(dx) < TOUCH_SWIPE_PX && abs(dy) < TOUCH_SWIPE_PX;

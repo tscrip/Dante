@@ -88,11 +88,13 @@ There are no buttons; the touch screen stands in for them:
 
 | Touch | Does what this button does |
 |---|---|
-| Tap the left third of the screen | LEFT (hold: long LEFT, jump home to the face) |
-| Tap the middle | SELECT (hold: long SELECT) |
-| Tap the right third | RIGHT (hold: long RIGHT) |
-| Swipe left / right | RIGHT / LEFT: next / previous screen, like a phone |
+| Tap anywhere | SELECT (hold: long SELECT) |
+| Swipe left | RIGHT: the next screen, like a phone |
+| Swipe right | LEFT: the previous screen |
+| Swipe down | long LEFT: jump home to the face |
 | Tap with two fingers | MAGIC (hold: long MAGIC) |
+
+During a nudge: tap = "I'm on it", swipe left or right = "later".
 
 The pins are fixed by the board and set in `src/config.h` (the `DANTE_BOARD_CYD35C` section). The
 resistive version (*ESP32-3248S035R*, XPT2046 touch) is not supported yet.
@@ -162,6 +164,9 @@ I2C scan now: bus 1 (SDA=8 SCL=9): nothing
   `?` in the monitor, touch a corner, and type `?` again: the last line shows where DANTE thinks you
   touched (the screen is 480 wide, 320 high). If it's mirrored, change `TOUCH_OFFSET_ROTATION` in
   `src/config.h` (try 2, then 1, 3, 4...) and flash again.
+* **Yellow board, speckles, stray pixels or a garbled picture:** the screen runs at 80 MHz on this board.
+  Set `TFT_SPI_HZ` back to `40000000` in its section of `src/config.h` and flash again (a little less smooth,
+  but every panel handles it).
 * **Yellow board, colours wrong:** the same `TFT_INVERT` / `TFT_BGR` settings, in its section of `src/config.h`.
 * **Power:** if the line ends in `last reset: BROWNOUT`, the supply dipped. Try another USB cable or port.
 
