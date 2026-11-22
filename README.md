@@ -71,6 +71,11 @@ in an app on your PC, which talks to DANTE over Bluetooth or USB. You add new th
 | **Jumper wires** and a **USB-C cable** | the cable must carry data, not just power |
 | **A PC** | Windows, Linux or macOS. Bluetooth works on Windows and Linux; on macOS use USB. |
 
+**No soldering option:** the yellow **ESP32-3248S035C** board (sold as a "3.5 inch ESP32 display" with
+capacitive touch; the model ends in **C**) has the 3.5" screen and a touch panel built in. Taps on the
+screen stand in for the four buttons, so there's nothing to wire. Flash it with its own command (see
+[Flash DANTE](#2-flash-dante)); details in [`firmware/README.md`](firmware/README.md#the-yellow-board-esp32-3248s035c-touch).
+
 A 3D-printable case is in [`case/`](case) (an OpenSCAD model; it is still sized for the small OLEDs).
 
 ## Wiring
@@ -136,6 +141,12 @@ cd firmware
 
 ```bash
 pio run -t upload
+```
+
+For the yellow touch board (ESP32-3248S035C) use this instead:
+
+```bash
+pio run -e esp32-3248s035c -t upload
 ```
 
 The first build downloads the ESP32 tools and takes a few minutes. If the upload hangs on
@@ -280,10 +291,11 @@ TFT). What you see is what the hardware will do. It's also the quickest way to t
    pio run -e simulator
    ```
 
-2. In the PC app open **Simulator**, pick the screen (3.5" TFT or 0.91" OLED) and click **Start simulator**.
-   The app runs the program itself.
+2. In the PC app open **Simulator**, pick the hardware (3.5" TFT, 0.91" OLED, or the 3.5" touch screen of the
+   yellow board) and click **Start simulator**. The app runs the program itself.
 3. Click DANTE's buttons on screen (hold for a long press) or use the keyboard: ←/→ = LEFT/RIGHT,
-   Enter/Space = SELECT, M = MAGIC.
+   Enter/Space = SELECT, M = MAGIC. With the yellow board there are no buttons: click the screen itself
+   (left third, middle, right third; drag to swipe; right-click = two-finger tap = MAGIC).
 
 Everything else (widgets, plugins, Claude Code hooks, Pomodoro, the Magic button) works with the
 simulator exactly as with a real DANTE. After changing firmware code, rebuild and press **Power-cycle**.

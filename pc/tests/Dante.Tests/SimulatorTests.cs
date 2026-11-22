@@ -9,8 +9,76 @@ public class SimulatorTests
     [Theory]
     [InlineData(SimulatedHardware.Tft, "tft")]
     [InlineData(SimulatedHardware.Oled, "oled")]
+    [InlineData(SimulatedHardware.TouchBoard, "cyd")]
     public void Hardware_maps_to_the_simulator_argument(SimulatedHardware hw, string arg) =>
         Assert.Equal(arg, hw.Argument());
+
+    [Fact]
+    public void Only_the_yellow_board_has_a_touch_screen()
+    {
+        Assert.True(SimulatedHardware.TouchBoard.HasTouch());
+        Assert.False(SimulatedHardware.Tft.HasTouch());
+        Assert.False(SimulatedHardware.Oled.HasTouch());
+        Assert.Contains("touch", SimulatedHardware.TouchBoard.Describe());
+    }
+
+    [Fact]
+    public void The_yellow_board_setting_survives_a_save_and_load()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"dante-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new ConfigStore(Path.Combine(dir, "config.json"));
+            var cfg = store.Snapshot();
+            SimulatedHardware.TouchBoard.ApplyTo(cfg.Device);
+            store.Save(cfg);
+            Assert.Contains("\"TouchBoard\"", File.ReadAllText(Path.Combine(dir, "config.json")));
+            Assert.Equal(SimulatedHardware.TouchBoard, new ConfigStore(Path.Combine(dir, "config.json")).Snapshot().Device.SimulatedHardware);
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task A_touch_board_says_so_in_its_hello_and_taps_reach_the_simulator()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"dante-{Guid.NewGuid():N}");
+        var store = new ConfigStore(Path.Combine(dir, "config.json"));
+        var cfg = store.Snapshot();
+        cfg.Device.Connection = ConnectionKind.Simulator;
+        SimulatedHardware.TouchBoard.ApplyTo(cfg.Device);
+        store.Save(cfg);
+
+        var sim = new FakeDante();
+        var link = new DeviceLink(store, NullLogger<DeviceLink>.Instance, TimeProvider.System, _ => sim);
+        await link.StartAsync(default);
+        try
+        {
+            for (var i = 0; i < 60 && link.Status != LinkStatus.Connected; i++) await Task.Delay(50);
+            Assert.False(link.TouchScreen);                       // nothing heard yet
+
+            sim.Press("""{"t":"hello","fw":"3.6.0","name":"DANTE","display":"tft","oled":false,"touch":true}""");
+            for (var i = 0; i < 40 && !link.TouchScreen; i++) await Task.Delay(50);
+            Assert.True(link.TouchScreen);
+
+            // Out-of-range values are clamped to the screen (and to two fingers).
+            link.SimTouch(3, 900, -5);
+            for (var i = 0; i < 40 && !sim.Received.Any(m => m["t"]!.GetValue<string>() == "sim.touch"); i++) await Task.Delay(50);
+            var touch = Assert.Single(sim.Received, m => m["t"]!.GetValue<string>() == "sim.touch");
+            Assert.Equal(2, touch["n"]!.GetValue<int>());
+            Assert.Equal(479, touch["x"]!.GetValue<int>());
+            Assert.Equal(0, touch["y"]!.GetValue<int>());
+
+            // A board with buttons doesn't send "touch".
+            sim.Press("""{"t":"hello","fw":"3.6.0","name":"DANTE","display":"tft","oled":false}""");
+            for (var i = 0; i < 40 && link.TouchScreen; i++) await Task.Delay(50);
+            Assert.False(link.TouchScreen);
+        }
+        finally
+        {
+            await link.StopAsync(default);
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 
     [Fact]
     public void Picking_hardware_points_the_screen_settings_at_it()

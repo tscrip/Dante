@@ -42,10 +42,13 @@ else
     }
 
     <div class="sim-device" tabindex="0" @onkeydown="KeyDown" @onkeyup="KeyUp" @onkeydown:preventDefault @onkeyup:preventDefault>
-        <div class="sim-top">
-            @SimButton("magic", "MAGIC", "magic")
-            @SimButton("sel", "SELECT", "select")
-        </div>
+        @if (!TouchBoard)
+        {
+            <div class="sim-top">
+                @SimButton("magic", "MAGIC", "magic")
+                @SimButton("sel", "SELECT", "select")
+            </div>
+        }
         <div class="sim-screens">
             @if (_shape is { } shape)
             {
@@ -58,13 +61,25 @@ else
                 <p class="muted small" style="color:#8b95a7">Waiting for DANTE to start...</p>
             }
         </div>
-        <div class="sim-bottom">
-            @SimButton("left", "◀ LEFT", "")
-            @SimButton("right", "RIGHT ▶", "")
-        </div>
+        @if (!TouchBoard)
+        {
+            <div class="sim-bottom">
+                @SimButton("left", "◀ LEFT", "")
+                @SimButton("right", "RIGHT ▶", "")
+            </div>
+        }
     </div>
-    <p class="sim-keys">Click the device, then use the keyboard: ← / → = LEFT / RIGHT, Enter or Space = SELECT, M = MAGIC.
-        Hold a button (or key) for a long press.</p>
+    @if (TouchBoard)
+    {
+        <p class="sim-keys">The yellow board has no buttons: click the screen like a finger. Left third = LEFT, middle = SELECT,
+            right third = RIGHT; hold for a long press; drag sideways to swipe between screens; right-click (or Shift+click) = a
+            two-finger tap = MAGIC. The keyboard works too: ← / →, Enter, M.</p>
+    }
+    else
+    {
+        <p class="sim-keys">Click the device, then use the keyboard: ← / → = LEFT / RIGHT, Enter or Space = SELECT, M = MAGIC.
+            Hold a button (or key) for a long press.</p>
+    }
 
     <div class="panel" style="margin-top:1rem">
         <h2>Poke it</h2>
@@ -91,6 +106,10 @@ else
     private readonly HashSet<string> _down = [];
     private bool _drawing;
     private string? _pending;
+    private DotNetObjectReference<SimulatorPage>? _self;
+
+    /// <summary>Pretending to be the yellow board: taps on the screen instead of buttons.</summary>
+    private bool TouchBoard => _cfg.Device.SimulatedHardware.HasTouch();
 
     protected override void OnInitialized()
     {
@@ -103,6 +122,7 @@ else
     public override void Dispose()
     {
         Link.SimFrameReceived -= OnFrame;
+        _self?.Dispose();
         base.Dispose();
     }
 
@@ -188,7 +208,19 @@ else
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (Link.LastSimFrame is { } f && _shape is not null) await Draw(f);
+        if (TouchBoard && _shape is not null)
+        {
+            // Each new canvas needs the mouse wired up once; the script ignores a canvas it already knows.
+            _self ??= DotNetObjectReference.Create(this);
+            try { await JS.InvokeVoidAsync("danteSim.attachTouch", _self); }
+            catch (JSDisconnectedException) { }
+            catch (InvalidOperationException) { }   // prerendering / page going away
+        }
     }
+
+    /// <summary>Called by simulator.js: the mouse is a finger on the yellow board's touch screen.</summary>
+    [JSInvokable]
+    public void Touch(int fingers, int x, int y) => Link.SimTouch(fingers, x, y);
 
     /// <summary>Only one draw in flight; a newer frame replaces any that is still waiting.</summary>
     private async Task Draw(string frame)

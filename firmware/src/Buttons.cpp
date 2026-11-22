@@ -1,6 +1,7 @@
 #include "Buttons.h"
 #include "config.h"
 
+#if HAS_BUTTONS
 namespace {
   const uint8_t pins[BTN_COUNT] = { PIN_BTN_LEFT, PIN_BTN_RIGHT, PIN_BTN_SELECT, PIN_BTN_MAGIC };
 
@@ -42,3 +43,12 @@ namespace Buttons {
     return false;
   }
 }
+
+#else
+// No buttons on this board (the touch screen stands in for them, see Touch.h). Note: on the classic
+// ESP32, GPIO 6 and 7 belong to the flash chip, so the S3 button pins must never be touched here.
+namespace Buttons {
+  void begin() {}
+  bool poll(ButtonEvent&) { return false; }
+}
+#endif

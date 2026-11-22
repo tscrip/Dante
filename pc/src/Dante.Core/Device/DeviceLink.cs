@@ -89,6 +89,8 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
     public bool? OledDetected { get; private set; }
     /// <summary>DANTE is driving the 3.5" colour TFT.</summary>
     public bool DeviceTft => DeviceDisplay == "tft";
+    /// <summary>DANTE has a touch screen instead of buttons (the ESP32-3248S035C "yellow board"; firmware 3.6+).</summary>
+    public bool TouchScreen { get; private set; }
     /// <summary>Latest reply to <see cref="DeviceProtocol.Diag"/>.</summary>
     public WiringReport? LastDiag { get; private set; }
     public string? LastError { get; private set; }
@@ -106,6 +108,16 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
     /// <summary>Simulator only: press (down) or release one of the simulated DANTE's buttons.</summary>
     public void SimButton(string button, bool down) =>
         Send(new System.Text.Json.Nodes.JsonObject { ["t"] = "sim.btn", ["b"] = button, ["down"] = down });
+
+    /// <summary>
+    /// Simulator only (yellow board): what the "fingers" are doing on the touch screen. <paramref name="fingers"/>
+    /// is 0 when nothing touches it; x, y are screen pixels (0-479, 0-319).
+    /// </summary>
+    public void SimTouch(int fingers, int x, int y) =>
+        Send(new System.Text.Json.Nodes.JsonObject
+        {
+            ["t"] = "sim.touch", ["n"] = Math.Clamp(fingers, 0, 2), ["x"] = Math.Clamp(x, 0, 479), ["y"] = Math.Clamp(y, 0, 319),
+        });
     public event Action? StatusChanged;
 
     public IReadOnlyList<LogLine> RecentLog()
@@ -203,6 +215,7 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
         Firmware = null;
         DeviceDisplay = null;
         OledDetected = null;
+        TouchScreen = false;
         LastSimFrame = null;
         SetStatus(LinkStatus.Connected, Target(settings));
 
@@ -265,6 +278,7 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
                     Firmware = evt.Raw["fw"]?.GetValue<string>();
                     DeviceDisplay = evt.Raw["display"]?.GetValue<string>();
                     OledDetected = evt.Raw["oled"]?.GetValue<bool>();
+                    TouchScreen = evt.Raw["touch"]?.GetValue<bool>() == true;   // absent on boards with buttons
                 }
                 StatusChanged?.Invoke();
                 EventReceived?.Invoke(evt);

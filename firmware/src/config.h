@@ -2,12 +2,78 @@
 #include <Arduino.h>
 
 // ---- Identity ---------------------------------------------------------------
-#define FW_VERSION      "3.5.0"
+#define FW_VERSION      "3.6.0"
 #define DEVICE_NAME     "DANTE"
 
-// ---- Board: ESP32-S3 (e.g. ESP32-S3-DevKitC-1) --------------------------------
+// ---- Board ------------------------------------------------------------------------
+// Two boards are supported; platformio.ini picks one per build environment:
+//   * esp32-s3          an ESP32-S3 dev board, with a screen and 4 buttons wired by hand (below).
+//   * esp32-3248s035c   the "yellow board" (ESP32-3248S035C): a plain ESP32 with a 3.5" ST7796 TFT
+//                       and a capacitive GT911 touch panel built in. Taps on the screen stand in for
+//                       the buttons (Touch.h). Built with -DDANTE_BOARD_CYD35C.
+// The simulator compiles the S3 settings; it gets the touch layer too, for the yellow board's sake.
+
+#if defined(DANTE_BOARD_CYD35C)
+// ==== Yellow board: ESP32-3248S035C (ESP32-WROOM-32, 4 MB flash, no PSRAM) ========================
+#define BOARD_ID        "esp32-3248s035c"
+#define HAS_OLED        0         // the screen is built in: always the TFT
+#define HAS_BUTTONS     0         // no buttons: the touch panel stands in for them
+#define HAS_TOUCH       1
+
+// The OLED symbols below only keep the shared code compiling; nothing uses them on this board.
+#define PIN_SDA         33
+#define PIN_SCL         32
+#define SCREEN_W        128
+#define SCREEN_H        32
+#define OLED_I2C_ADDR   0x3C
+
+// 3.5" TFT, 480x320, ST7796, wired on the board to the classic ESP32's HSPI pins.
+#define TFT_SPI_HOST    SPI2_HOST // = HSPI on the classic ESP32
+#define TFT_PIN_SCK     14
+#define TFT_PIN_MOSI    13
+#define TFT_PIN_MISO    12
+#define TFT_PIN_CS      15
+#define TFT_PIN_DC      2
+#define TFT_PIN_RST     -1        // tied to the ESP32's own reset
+#define TFT_PIN_BL      27        // backlight, PWM-dimmed (brightness from the PC app)
+#define TFT_SPI_HZ      40000000
+// Panels differ: if black shows as white, flip TFT_INVERT; if red and blue are swapped, flip TFT_BGR.
+#define TFT_INVERT      false
+#define TFT_BGR         false
+#define TFT_W           480
+#define TFT_H           320
+#define TFT_STRIP_H     40        // no PSRAM: drawn in strips of 40 rows (38 KB), leaving room for Bluetooth
+#define TFT_FRAME_MS    33
+
+// GT911 capacitive touch on its own I2C bus.
+#define TOUCH_PIN_SDA   33
+#define TOUCH_PIN_SCL   32
+#define TOUCH_PIN_INT   21
+#define TOUCH_PIN_RST   25
+#define TOUCH_I2C_PORT  1
+// If taps land in the wrong place (left and right swapped, or up and down), change this 0-7: it turns
+// and mirrors the touch panel's coordinates relative to the screen. `?` in the serial monitor shows
+// where the last touch landed.
+#define TOUCH_OFFSET_ROTATION 0
+
+// Unused here (no buttons), kept so the shared code compiles.
+#define PIN_BTN_LEFT    -1
+#define PIN_BTN_RIGHT   -1
+#define PIN_BTN_SELECT  -1
+#define PIN_BTN_MAGIC   -1
+
+#else
+// ==== ESP32-S3 (e.g. ESP32-S3-DevKitC-1) =========================================================
 // Pins avoid the S3's strapping pins (0, 3, 45, 46), native USB (19, 20), the UART0
 // pins (43, 44) and 26-37, which the flash / octal PSRAM use on most S3 modules.
+#define BOARD_ID        "esp32-s3"
+#define HAS_OLED        1
+#define HAS_BUTTONS     1
+#ifdef DANTE_SIMULATOR
+#define HAS_TOUCH       1         // the simulator's "yellow board" mode: mouse clicks on the screen are taps
+#else
+#define HAS_TOUCH       0
+#endif
 
 // ---- Screen ------------------------------------------------------------------
 // DANTE drives exactly one screen: the 0.91" OLED (I2C) or the 3.5" colour TFT (SPI). Which one is
@@ -25,8 +91,10 @@
 // ---- 3.5" TFT, 480x320, ST7796 driver, SPI ---------------------------------------
 // The 8-pin modules label the SPI pins SCL (= SCK) and SDA (= MOSI). There is no MISO: DANTE
 // never reads from the panel. 10-13 are the S3's native FSPI pins (fastest routing).
+#define TFT_SPI_HOST    SPI2_HOST // = FSPI on the S3
 #define TFT_PIN_SCK     12
 #define TFT_PIN_MOSI    11
+#define TFT_PIN_MISO    -1
 #define TFT_PIN_CS      10
 #define TFT_PIN_DC      13
 #define TFT_PIN_RST     14
@@ -45,9 +113,15 @@
 #define PIN_BTN_RIGHT   5
 #define PIN_BTN_SELECT  6    // the "top" button
 #define PIN_BTN_MAGIC   7    // also on top: does whatever the PC app says (mute, play/pause, ...)
+#endif
 
 #define BTN_DEBOUNCE_MS 25
 #define BTN_LONG_MS     800
+
+// ---- Touch (yellow board, and the simulator) ---------------------------------------
+// The screen is split in three: a tap on the left third = LEFT, the middle = SELECT, the right
+// third = RIGHT. Holding = a long press. A swipe also flips screens, a two-finger tap = MAGIC.
+#define TOUCH_SWIPE_PX  60        // a finger that moves this far (screen pixels) is a swipe, not a tap
 
 // ---- Link ---------------------------------------------------------------------
 #define USB_BAUD        115200

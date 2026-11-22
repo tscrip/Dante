@@ -103,6 +103,7 @@ public class EngineIntegrationTests : IAsyncLifetime
         for (var i = 0; i < 40 && _link.DeviceDisplay is null; i++) await Task.Delay(50);
         Assert.Equal("oled", _link.DeviceDisplay);
         Assert.False(_link.OledDetected);
+        Assert.False(_link.TouchScreen);           // no "touch" in its hello: a board with buttons
         Assert.False(_link.DeviceTft);
 
         var cfg = _store.Snapshot();

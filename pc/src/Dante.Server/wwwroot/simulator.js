@@ -37,7 +37,47 @@
     canvas.style.filter = `brightness(${Math.max(0.08, (f.light ?? 255) / 255)})`;   // the PWM backlight
   }
 
+  // Yellow board: mouse (or finger) on the canvas = a finger on DANTE's touch screen. Reports
+  // (fingers, x, y) in screen pixels to the page's .NET object. Right-click or Shift+click = two fingers.
+  function attachTouch(dotnet) {
+    const canvas = document.getElementById('sim-screen');
+    if (!canvas || canvas.danteTouch) return;   // already attached to this canvas
+    canvas.danteTouch = true;
+    canvas.style.cursor = 'pointer';
+    canvas.style.touchAction = 'none';
+    let fingers = 0, lastMove = 0;
+    const at = (e) => {
+      const r = canvas.getBoundingClientRect();
+      // The canvas has a border and is scaled by CSS; map to the 480x320 screen.
+      const bx = (canvas.offsetWidth - canvas.clientWidth) / 2, by = (canvas.offsetHeight - canvas.clientHeight) / 2;
+      const x = (e.clientX - r.left - bx) * canvas.width / canvas.clientWidth;
+      const y = (e.clientY - r.top - by) * canvas.height / canvas.clientHeight;
+      return [Math.round(x), Math.round(y)];
+    };
+    const send = (n, e) => dotnet.invokeMethodAsync('Touch', n, ...at(e)).catch(() => {});
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    canvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      canvas.setPointerCapture(e.pointerId);
+      fingers = e.button === 2 || e.shiftKey ? 2 : 1;
+      send(fingers, e);
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!fingers || e.timeStamp - lastMove < 30) return;   // only while pressed, ~30 updates a second
+      lastMove = e.timeStamp;
+      send(fingers, e);
+    });
+    const up = (e) => {
+      if (!fingers) return;
+      fingers = 0;
+      send(0, e);
+    };
+    canvas.addEventListener('pointerup', up);
+    canvas.addEventListener('pointercancel', up);
+  }
+
   window.danteSim = {
+    attachTouch,
     draw(frameJson) {
       const f = JSON.parse(frameJson);
       const canvas = document.getElementById('sim-screen');

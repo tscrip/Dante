@@ -67,7 +67,8 @@
                     </select>
                     <button class="btn sm" @onclick="RefreshPorts" title="Rescan">⟳</button>
                 </div>
-                <span class="help">ESP32-S3: plug into the port marked <strong>USB</strong> (the "UART" port works too). Windows: COMx · Linux: /dev/ttyACM0 · macOS: /dev/cu.usbmodem…</span>
+                <span class="help">ESP32-S3: plug into the port marked <strong>USB</strong> (the "UART" port works too). Windows: COMx · Linux: /dev/ttyACM0 · macOS: /dev/cu.usbmodem…
+                    The yellow touch board shows up as Windows: COMx · Linux: /dev/ttyUSB0 · macOS: /dev/cu.usbserial…</span>
             </label>
             <label class="field"><span>Or type a port</span><input type="text" @bind="_cfg.Device.PortName" placeholder="COM5" /></label>
         }
@@ -107,10 +108,20 @@
             <button class="btn" @onclick='() => Engine.TestAlert("Hey! Over here!", 1)'>Test nudge</button>
             <button class="btn" @onclick='() => Engine.TestAlert("Something is on fire!", 2)'>Test urgent</button>
         </div>
-        <p class="muted small" style="margin-top:1rem">Buttons on DANTE: <strong>LEFT/RIGHT</strong> browse widgets ·
-            <strong>SELECT</strong> on the face plays a gag, on a widget opens its link, long-press refreshes everything ·
-            <strong>MAGIC</strong> does what you set on the <a href="magic">Magic button</a> page ·
-            during a nudge SELECT = "I'm on it", LEFT/RIGHT = snooze.</p>
+        @if (Link.TouchScreen)
+        {
+            <p class="muted small" style="margin-top:1rem">This DANTE has a touch screen instead of buttons. Tap the
+                <strong>left or right third</strong> (or swipe) to browse widgets · tap the <strong>middle</strong> for SELECT: a gag on
+                the face, a widget's link, hold to refresh everything · tap with <strong>two fingers</strong> for MAGIC, which does what
+                you set on the <a href="magic">Magic button</a> page · during a nudge, middle = "I'm on it", left/right = snooze.</p>
+        }
+        else
+        {
+            <p class="muted small" style="margin-top:1rem">Buttons on DANTE: <strong>LEFT/RIGHT</strong> browse widgets ·
+                <strong>SELECT</strong> on the face plays a gag, on a widget opens its link, long-press refreshes everything ·
+                <strong>MAGIC</strong> does what you set on the <a href="magic">Magic button</a> page ·
+                during a nudge SELECT = "I'm on it", LEFT/RIGHT = snooze.</p>
+        }
     </div>
 </div>
 
@@ -132,7 +143,7 @@
                     {
                         <div class="notice error small">DANTE didn't find the OLED on its I2C bus. Check the wiring: SDA → GPIO 8, SCL → GPIO 9, plus power and GND.</div>
                     }
-                    else if (_cfg.Device.Display == DisplayType.Auto && Link.DeviceTft)
+                    else if (_cfg.Device.Display == DisplayType.Auto && Link.DeviceTft && !Link.TouchScreen)
                     {
                         <div class="notice small">No OLED answered, so DANTE assumes the 3.5" TFT (it can't detect an SPI screen).
                             If you have one, pick it above so DANTE doesn't have to guess.</div>
@@ -169,14 +180,22 @@
         </div>
         <div>
             <h3 class="small muted">Wiring</h3>
-            <table class="small">
-                <tbody>
-                    @foreach (var (screenPin, gpio) in WiringFor(_cfg.Device.Display))
-                    {
-                        <tr><td>@screenPin</td><td>→ @gpio</td></tr>
-                    }
-                </tbody>
-            </table>
+            @if (Link.TouchScreen)
+            {
+                <p class="small">Nothing to wire: this DANTE is a yellow ESP32-3248S035C board, with the 3.5" screen and its touch
+                    panel built in. It always uses that screen, whatever the screen type above says.</p>
+            }
+            else
+            {
+                <table class="small">
+                    <tbody>
+                        @foreach (var (screenPin, gpio) in WiringFor(_cfg.Device.Display))
+                        {
+                            <tr><td>@screenPin</td><td>→ @gpio</td></tr>
+                        }
+                    </tbody>
+                </table>
+            }
             <p class="muted small">DANTE remembers the screen type, so it starts up in the right mode even before the PC connects.
                 Before it has ever been configured it uses the OLED if it answers, and the TFT otherwise.</p>
         </div>

@@ -5,11 +5,13 @@
 //   * every protocol line (docs/protocol.md) goes in and out exactly as over USB serial;
 //   * extra lines for the simulator itself:
 //       PC  -> sim  {"t":"sim.btn","b":"left|right|sel|magic","down":true|false}
+//       PC  -> sim  {"t":"sim.touch","n":0|1|2,"x":0-479,"y":0-319}   fingers on the screen (cyd only)
 //       sim -> PC   {"t":"sim.frame", ...}   what the screens show, whenever it changes.
 //
-// Usage: program [--hw oled|tft]
+// Usage: program [--hw oled|tft|cyd]
 //   oled = 0.91" 128x32 OLED
 //   tft  = 3.5" 480x320 ST7796 TFT (drawn by the real LovyanGFX into a memory "panel")
+//   cyd  = the ESP32-3248S035C "yellow board": the same TFT with a touch panel (mouse clicks = taps)
 #ifdef DANTE_SIMULATOR
 
 #include <Arduino.h>
@@ -27,6 +29,7 @@
 #include "config.h"
 #include "Displays.h"
 #include "Tft.h"
+#include "Touch.h"
 
 void setup();
 void loop();
@@ -53,6 +56,26 @@ std::deque<uint8_t> serialRx;         // bytes the firmware reads from `Serial`
 const uint32_t BTN_GAP_MS = BTN_DEBOUNCE_MS + 15;
 std::deque<std::pair<int, int>> buttonQueue;   // (pin, level)
 uint32_t lastButtonChange = 0;
+
+// Touches from the PC app, spaced out the same way so a quick click is seen as down, then up. Moves
+// while the finger count stays the same just update the latest position.
+struct SimTouch { int n, x, y; };
+const uint32_t TOUCH_GAP_MS = 30;
+std::deque<SimTouch> touchQueue;
+uint32_t lastTouchChange = 0;
+
+void queueTouch(SimTouch t) {
+  if (!touchQueue.empty() && touchQueue.back().n == t.n) touchQueue.back() = t;
+  else touchQueue.push_back(t);
+}
+
+void applyTouches() {
+  if (touchQueue.empty() || millis() - lastTouchChange < TOUCH_GAP_MS) return;
+  const SimTouch& t = touchQueue.front();
+  Touch::simSet((uint8_t)t.n, t.x, t.y);
+  touchQueue.pop_front();
+  lastTouchChange = millis();
+}
 
 void applyButtons() {
   if (buttonQueue.empty() || millis() - lastButtonChange < BTN_GAP_MS) return;
@@ -94,6 +117,9 @@ void pumpInbox() {
       if (!strcmp(t, "sim.btn")) {
         int pin = pinFor(d["b"] | "");
         if (pin >= 0) buttonQueue.emplace_back(pin, (d["down"] | false) ? LOW : HIGH);   // pressed = pulled to GND
+      } else if (!strcmp(t, "sim.touch")) {
+        int n = d["n"] | 0;
+        queueTouch({ constrain(n, 0, 5), d["x"] | 0, d["y"] | 0 });
       }
       continue;
     }
@@ -173,8 +199,9 @@ void simulateHardware(const std::string& hw) {
   // What answers on the I2C bus: the firmware's own detection then picks the screen. Nothing
   // answering means the TFT (on SPI, which can't be detected), exactly as on the board.
   const uint8_t OLED = 0x3C;
-  if (hw == "tft") Wire.present = {};
+  if (hw == "tft" || hw == "cyd") Wire.present = {};
   else                  Wire.present = { OLED };
+  Touch::simEnable(hw == "cyd");   // the yellow board has a touch panel; the others have buttons
 }
 } // namespace
 
@@ -220,6 +247,7 @@ int main(int argc, char** argv) {
   for (;;) {
     pumpInbox();
     applyButtons();
+    applyTouches();
     loop();
     emitFrame();
     if (stdinClosed) {

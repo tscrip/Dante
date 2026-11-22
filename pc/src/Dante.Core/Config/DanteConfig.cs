@@ -94,18 +94,35 @@ public enum ConnectionKind
 
 /// <summary>What the simulator pretends is wired up.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<SimulatedHardware>))]
-public enum SimulatedHardware { Tft, Oled }
+public enum SimulatedHardware
+{
+    /// <summary>An ESP32-S3 with the 3.5" TFT and four buttons.</summary>
+    Tft,
+    /// <summary>An ESP32-S3 with the 0.91" OLED and four buttons.</summary>
+    Oled,
+    /// <summary>The ESP32-3248S035C "yellow board": the 3.5" TFT with a touch panel instead of buttons.</summary>
+    TouchBoard,
+}
 
 public static class SimulatedHardwareExtensions
 {
     /// <summary>The simulator's --hw argument.</summary>
-    public static string Argument(this SimulatedHardware hw) => hw == SimulatedHardware.Oled ? "oled" : "tft";
+    public static string Argument(this SimulatedHardware hw) => hw switch
+    {
+        SimulatedHardware.Oled => "oled",
+        SimulatedHardware.TouchBoard => "cyd",
+        _ => "tft",
+    };
 
     public static string Describe(this SimulatedHardware hw) => hw switch
     {
         SimulatedHardware.Oled => "0.91\" OLED",
+        SimulatedHardware.TouchBoard => "3.5\" touch screen (yellow board)",
         _ => "3.5\" TFT",
     };
+
+    /// <summary>The simulated board has a touch screen instead of buttons.</summary>
+    public static bool HasTouch(this SimulatedHardware hw) => hw == SimulatedHardware.TouchBoard;
 
     /// <summary>
     /// Points the screen settings at the simulated hardware: automatic screen type, so DANTE's own
