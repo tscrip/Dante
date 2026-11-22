@@ -11,15 +11,18 @@ U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C panel1(U8G2_R0, U8X8_PIN_NONE, PIN_SCL, P
 namespace {
 Displays::Settings cfg;
 bool oledFound = false;
-uint8_t oledAddr = OLED_I2C_ADDR;   // SSD1306 modules answer at 0x3C, or 0x3D with the address jumper moved
 Displays::Kind current = Displays::KIND_OLED;   // cfg.kind with KIND_AUTO resolved
 bool tftFailed = false;
 Preferences prefs;
+
+#if HAS_OLED
+uint8_t oledAddr = OLED_I2C_ADDR;   // SSD1306 modules answer at 0x3C, or 0x3D with the address jumper moved
 
 bool probe(uint8_t addr) {
   Wire.beginTransmission(addr);
   return Wire.endTransmission() == 0;
 }
+#endif
 
 void load() {
   // Note: opening a namespace read-only fails on a freshly flashed chip (it doesn't exist
@@ -51,6 +54,7 @@ void save() {
 }
 
 Displays::Kind resolve() {
+  if (!HAS_OLED) return Displays::KIND_TFT;   // a board with a built-in screen: always that one
   if (cfg.kind != Displays::KIND_AUTO) return cfg.kind;
   return oledFound ? Displays::KIND_OLED : Displays::KIND_TFT;
 }
@@ -59,9 +63,11 @@ Displays::Kind resolve() {
 void apply() {
   current = resolve();
 
+#if HAS_OLED
   panel1.setDisplayRotation(cfg.flip ? U8G2_R2 : U8G2_R0);
   panel1.setContrast(cfg.bright);
   panel1.setPowerSave(current == Displays::KIND_OLED ? 0 : 1);
+#endif
 
   if (current == Displays::KIND_TFT) {
     Tft::setFlip(cfg.flip);
@@ -77,6 +83,7 @@ namespace Displays {
 
 void begin() {
   load();
+#if HAS_OLED
   Wire.begin(PIN_SDA, PIN_SCL, 400000);
   oledFound = probe(OLED_I2C_ADDR);
   if (!oledFound && probe(OLED_I2C_ADDR ^ 0x01)) { oledFound = true; oledAddr = OLED_I2C_ADDR ^ 0x01; }
@@ -84,6 +91,7 @@ void begin() {
   panel1.setI2CAddress(oledAddr << 1);
   panel1.setBusClock(400000);
   panel1.begin();               // harmless if nothing is attached
+#endif
   apply();
 }
 
@@ -129,6 +137,7 @@ const char* resetReason() {
 }
 
 void describe(char* out, size_t n) {
+#if HAS_OLED
   char oled[8] = "none";
   if (oledFound) snprintf(oled, sizeof(oled), "0x%02X", oledAddr);
   snprintf(out, n, "DANTE " FW_VERSION ": I2C (SDA=%d SCL=%d): OLED %s | TFT (SPI, SCK=%d MOSI=%d CS=%d DC=%d RST=%d BL=%d)%s"
@@ -136,6 +145,11 @@ void describe(char* out, size_t n) {
            PIN_SDA, PIN_SCL, oled,
            TFT_PIN_SCK, TFT_PIN_MOSI, TFT_PIN_CS, TFT_PIN_DC, TFT_PIN_RST, TFT_PIN_BL, tftFailed ? ": NO MEMORY FOR THE FRAME BUFFER" : "",
            kindName(), cfg.kind == KIND_AUTO ? " (auto)" : " (set by PC app)", resetReason());
+#else
+  // A board with the screen built in: nothing to wire, so just the board and the reset reason.
+  snprintf(out, n, "DANTE " FW_VERSION ": board " BOARD_ID " (built-in 3.5\" TFT%s) | screen: tft | last reset: %s",
+           tftFailed ? ": NO MEMORY FOR THE FRAME BUFFER" : "", resetReason());
+#endif
   if (current == KIND_TFT) {   // how smoothly it runs
     size_t used = strlen(out);
     if (used + 3 < n) { strcat(out, " | "); Tft::describe(out + used + 3, n - used - 3); }
@@ -143,6 +157,9 @@ void describe(char* out, size_t n) {
 }
 
 void scanNow(char* out, size_t n) {
+#if !HAS_OLED
+  snprintf(out, n, "I2C scan: not used on this board (the screen is built in)");
+#else
   size_t used = snprintf(out, n, "I2C scan now: bus 1 (SDA=%d SCL=%d):", PIN_SDA, PIN_SCL);
   int found = 0;
   for (uint8_t a = 0x08; a <= 0x77 && used < n; a++) {
@@ -151,6 +168,7 @@ void scanNow(char* out, size_t n) {
     found++;
   }
   if (!found && used < n) snprintf(out + used, n - used, " nothing");
+#endif
 }
 
 } // namespace Displays

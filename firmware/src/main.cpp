@@ -1,5 +1,6 @@
 // DANTE firmware: a tiny desk companion with opinions.
-// ESP32-S3 + one screen (SSD1306 128x32 OLED or 3.5" ST7796 TFT) + 4 buttons, talking JSON lines over Bluetooth LE / USB.
+// ESP32-S3 + one screen (SSD1306 128x32 OLED or 3.5" ST7796 TFT) + 4 buttons, or the ESP32-3248S035C
+// "yellow board" (3.5" TFT with a touch panel instead of buttons), talking JSON lines over Bluetooth LE / USB.
 // Protocol: docs/protocol.md
 #include <Arduino.h>
 #include <Wire.h>
@@ -9,6 +10,7 @@
 #include "config.h"
 #include "Link.h"
 #include "Buttons.h"
+#include "Touch.h"
 #include "Face.h"
 #include "Apps.h"
 #include "Displays.h"
@@ -73,6 +75,7 @@ static void fillHello(JsonDocument& d) {
   d["name"] = DEVICE_NAME;
   d["display"] = Displays::kindName();      // oled / tft
   d["oled"] = Displays::oledDetected();
+  if (Touch::available()) d["touch"] = true;   // a touch screen instead of buttons (yellow board)
 }
 
 static void sendHello() {
@@ -165,6 +168,7 @@ static void onText(const char* line) {
   Link::sendText(buf);
   Displays::scanNow(buf, sizeof(buf));
   Link::sendText(buf);
+  if (Touch::available()) { Touch::describe(buf, sizeof(buf)); Link::sendText(buf); }
 }
 
 // ---- input --------------------------------------------------------------------------
@@ -433,6 +437,7 @@ void setup() {
   randomSeed(esp_random());
   Buttons::begin();
   Displays::begin();
+  Touch::begin();
   Face::begin();
   Face::setLook(Displays::settings().look);
   Link::begin(onMessage);
@@ -455,6 +460,7 @@ void loop() {
 
   ButtonEvent ev;
   while (Buttons::poll(ev)) handleButton(ev);
+  while (Touch::poll(ev)) handleButton(ev);      // taps on a touch screen are presses too
 
   uint32_t now = millis();
   if (now - lastFrame < FRAME_MS) { delay(1); return; }

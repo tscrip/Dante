@@ -84,6 +84,11 @@ namespace Tft {
   void frame(const std::function<void(TftGfx& g)>& draw);
   // "PSRAM frame buffer, 30 fps, 41 KB per frame" (or the strip mode), for the USB log and Check wiring.
   void describe(char* out, size_t n);
+#if HAS_TOUCH && !defined(DANTE_SIMULATOR)
+  // The touch panel: how many fingers are on the screen (0 = none), and where the first one is, in
+  // the same screen pixels DANTE draws in (already turned to match the rotation / upside-down setting).
+  uint8_t readTouch(int& x, int& y);
+#endif
 #ifdef DANTE_SIMULATOR
   // The screen as RGB565 (TFT_W x TFT_H) plus the backlight level, for the simulator's frames.
   bool simSnapshot(uint16_t* out, uint8_t& backlight);

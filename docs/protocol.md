@@ -33,7 +33,7 @@ Limits on the device: max 12 apps, `id` ≤ 15 chars, `name` ≤ 19 chars, `unit
 
 | `t`      | Fields | Meaning |
 |----------|--------|---------|
-| `hello`  | `fw`, `name`, `display`, `oled` | Firmware version, device name, screen type in use (`oled`/`tft`), and whether an OLED answered on the I2C bus at boot (`oled`). PC replies by sending `cfg`, `apps`, every `val`, `mood`, active `alert`s. |
+| `hello`  | `fw`, `name`, `display`, `oled`, optional `touch` | Firmware version, device name, screen type in use (`oled`/`tft`), and whether an OLED answered on the I2C bus at boot (`oled`). `touch: true` (firmware 3.6+) means a touch screen stands in for the buttons (the ESP32-3248S035C "yellow board"); taps still arrive as ordinary `btn` / `ack` / `snooze` messages, so nothing else changes. Boards with buttons leave it out. PC replies by sending `cfg`, `apps`, every `val`, `mood`, active `alert`s. |
 | `pong`   | –      | Heartbeat reply. |
 | `diag`   | `boot`, `scan` | `boot` = the startup report line; `scan` = live I2C scan, e.g. `I2C scan now: bus 1 (SDA=8 SCL=9): 0x3C (OLED)`. The TFT is on SPI and never shows up in the scan. Typing `?` in a serial monitor prints the same two lines as plain text. |
 | `btn`    | `b` ∈ `sel`,`left`,`right`,`magic`; `long` (bool); `scr` (app id or `face`) | Button press. `sel` acts on the screen in `scr`: short on an app = "open it" (PC opens configured URL), long = "refresh now"; on a countdown screen (the Pomodoro timer) press = start / pause and long press = reset. `magic` always runs the action configured in the PC app (mute, play/pause, ...), whatever the screen. The PC answers with a `say` describing the result. MAGIC presses are sent even during a takeover and never acknowledge it. |
@@ -64,4 +64,5 @@ The [simulator](../firmware/README.md#simulator) speaks the protocol above on st
 | Direction | `t` | Fields | Meaning |
 |---|---|---|---|
 | PC → sim | `sim.btn` | `b` ∈ `left`,`right`,`sel`,`magic`; `down` (bool) | Press or release a button. Changes are applied at least debounce-time apart, so a quick click never gets lost. |
+| PC → sim | `sim.touch` | `n` (fingers on the screen: 0 = none, 1, or 2), `x` (0-479), `y` (0-319) | Only with `--hw cyd` (the yellow touch board): the mouse acting as a finger. Changes in the number of fingers are applied at least 30 ms apart, so a quick click is seen as a touch and a release. |
 | sim → PC | `sim.frame` | `fw`, `kind`, plus per kind: **`oled`** `w`, `h`, `pixels` (base64 SSD1306 buffer: 4 pages × 128 columns, LSB on top); **`tft`** `w`, `h`, `light` (backlight 0-255), `rle` (base64 run-length RGB565: little-endian uint16 pairs of run length and colour) | What the screen shows, sent whenever it changes (at most ~25 per second, 20 for the TFT). |

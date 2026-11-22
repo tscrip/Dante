@@ -46,17 +46,21 @@ class Panel : public lgfx::LGFX_Device {
   }
 };
 #else
-// ST7796 480x320 on SPI2 (FSPI). Panel-specific settings are in config.h.
+// ST7796 480x320 on SPI2 (FSPI on the S3, HSPI on the classic ESP32). Pins and panel settings are in
+// config.h. On the yellow board the GT911 touch panel is part of the same LovyanGFX device.
 class Panel : public lgfx::LGFX_Device {
   lgfx::Panel_ST7796 panel;
   lgfx::Bus_SPI bus;
   lgfx::Light_PWM light;
+#if HAS_TOUCH
+  lgfx::Touch_GT911 touch;
+#endif
 
  public:
   Panel() {
     {
       auto c = bus.config();
-      c.spi_host = SPI2_HOST;
+      c.spi_host = TFT_SPI_HOST;
       c.spi_mode = 0;
       c.freq_write = TFT_SPI_HZ;
       c.freq_read = 16000000;
@@ -65,7 +69,7 @@ class Panel : public lgfx::LGFX_Device {
       c.dma_channel = SPI_DMA_CH_AUTO;
       c.pin_sclk = TFT_PIN_SCK;
       c.pin_mosi = TFT_PIN_MOSI;
-      c.pin_miso = -1;
+      c.pin_miso = TFT_PIN_MISO;
       c.pin_dc = TFT_PIN_DC;
       bus.config(c);
       panel.setBus(&bus);
@@ -96,6 +100,28 @@ class Panel : public lgfx::LGFX_Device {
       light.config(c);
       panel.setLight(&light);
     }
+#if HAS_TOUCH
+    {
+      // GT911 on its own I2C bus. The panel is 320x480 in portrait, like the screen; LovyanGFX turns
+      // touch points with the screen (setRotation), so x, y come out in the same pixels DANTE draws in.
+      auto c = touch.config();
+      c.x_min = 0;
+      c.x_max = 319;
+      c.y_min = 0;
+      c.y_max = 479;
+      c.pin_int = TOUCH_PIN_INT;
+      c.pin_rst = TOUCH_PIN_RST;
+      c.bus_shared = false;
+      c.offset_rotation = TOUCH_OFFSET_ROTATION;
+      c.i2c_port = TOUCH_I2C_PORT;
+      c.i2c_addr = 0x5D;          // the GT911 answers at 0x5D or 0x14; LovyanGFX tries both
+      c.pin_sda = TOUCH_PIN_SDA;
+      c.pin_scl = TOUCH_PIN_SCL;
+      c.freq = 400000;
+      touch.config(c);
+      panel.setTouch(&touch);
+    }
+#endif
     setPanel(&panel);
   }
 };
@@ -454,6 +480,16 @@ bool simSnapshot(uint16_t* out, uint8_t& backlight) {
   for (int i = 0; i < TFT_W * TFT_H; i++) out[i] = (uint16_t)((out[i] >> 8) | (out[i] << 8));
   backlight = awake ? tft.light.level : 0;
   return true;
+}
+#endif
+
+#if HAS_TOUCH && !defined(DANTE_SIMULATOR)
+uint8_t readTouch(int& x, int& y) {
+  if (!active()) return 0;
+  lgfx::touch_point_t points[2];
+  uint8_t n = tft.getTouch(points, 2);
+  if (n) { x = points[0].x; y = points[0].y; }
+  return n;
 }
 #endif
 

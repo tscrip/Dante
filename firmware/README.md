@@ -1,10 +1,10 @@
-# DANTE firmware (ESP32-S3)
+# DANTE firmware (ESP32-S3, or the yellow ESP32-3248S035C touch board)
 
 **D**esk **A**ssistant for **N**otifications, **T**asks & **E**fficiency. See the [main README](../README.md)
 for what DANTE is, the parts list and getting started.
 
 The firmware draws DANTE's face and widget screens on one screen (a 0.91" 128×32 OLED or a 3.5" 480×320
-colour TFT), reads the four buttons, and talks to the PC app over Bluetooth LE or USB. The PC app does
+colour TFT), reads the four buttons (or, on the yellow touch board, taps on the screen), and talks to the PC app over Bluetooth LE or USB. The PC app does
 all the thinking; the device just draws what it is told and reports button presses.
 
 Protocol: [`../docs/protocol.md`](../docs/protocol.md). Pins and timings: [`src/config.h`](src/config.h).
@@ -77,6 +77,26 @@ permanently white screen. A right-angle header, or wires soldered straight into 
 
 Modules answer at I2C address `0x3C`, or `0x3D` with the address jumper moved; both are found automatically.
 
+### The "yellow board" (ESP32-3248S035C, touch)
+
+The cheap all-in-one boards sold as *ESP32-3248S035C* (yellow PCB, 3.5" screen, a "C" at the end for
+**capacitive** touch) work too, with no soldering at all: the ST7796 480×320 screen and a GT911 touch panel
+are already on the board. It's a plain ESP32 (ESP32-WROOM-32), not an S3: Bluetooth LE works the same, but
+there is no PSRAM, so the screen is drawn in strips (a little less smooth than an S3 with PSRAM).
+
+There are no buttons; the touch screen stands in for them:
+
+| Touch | Does what this button does |
+|---|---|
+| Tap the left third of the screen | LEFT (hold: long LEFT, jump home to the face) |
+| Tap the middle | SELECT (hold: long SELECT) |
+| Tap the right third | RIGHT (hold: long RIGHT) |
+| Swipe left / right | RIGHT / LEFT: next / previous screen, like a phone |
+| Tap with two fingers | MAGIC (hold: long MAGIC) |
+
+The pins are fixed by the board and set in `src/config.h` (the `DANTE_BOARD_CYD35C` section). The
+resistive version (*ESP32-3248S035R*, XPT2046 touch) is not supported yet.
+
 ## Build and flash
 
 ```bash
@@ -102,6 +122,14 @@ pio device monitor
 Type `?` and press Enter for a status line (version, what was found, the screen in use, frames per
 second). Close the monitor before starting the PC app: only one program can use the USB port.
 
+**Yellow board:** use its own environment. Its USB port goes through a CH340 serial chip, so the port is
+`COMx` on Windows, `/dev/ttyUSB0` on Linux and `/dev/cu.usbserial…` on macOS. Windows may need the CH340
+driver if no COM port appears.
+
+```bash
+pio run -e esp32-3248s035c -t upload
+```
+
 The environment is `esp32-s3` (board `esp32-s3-devkitc-1`, octal PSRAM, `huge_app.csv` partitions for
 the Bluetooth stack). `ARDUINO_USB_CDC_ON_BOOT=1` makes the native **USB** port the main serial port.
 
@@ -125,6 +153,11 @@ I2C scan now: bus 1 (SDA=8 SCL=9): nothing
 * **`strips (no PSRAM)` on an R8 module:** the PSRAM setting in `platformio.ini` doesn't match the module.
 * **`NO MEMORY FOR THE FRAME BUFFER`:** please report it, with the module marking.
 * **OLED: nothing found on I2C:** check SDA → GPIO 8, SCL → GPIO 9, power and GND.
+* **Yellow board, taps land in the wrong place** (left and right swapped, or nothing on one side): type
+  `?` in the monitor, touch a corner, and type `?` again: the last line shows where DANTE thinks you
+  touched (the screen is 480 wide, 320 high). If it's mirrored, change `TOUCH_OFFSET_ROTATION` in
+  `src/config.h` (try 2, then 1, 3, 4...) and flash again.
+* **Yellow board, colours wrong:** the same `TFT_INVERT` / `TFT_BGR` settings, in its section of `src/config.h`.
 * **Power:** if the line ends in `last reset: BROWNOUT`, the supply dipped. Try another USB cable or port.
 
 ## Connecting to the PC
@@ -155,6 +188,8 @@ If no message arrives from the PC for 30 s DANTE decides it is alone: it gets sl
 | Nudge | SELECT | "I'm on it": `ack` to the PC, DANTE winks. |
 | Nudge | LEFT / RIGHT | "Later": `snooze` to the PC. |
 | Any screen | MAGIC / long MAGIC | Always runs what the PC app's *Magic button* page says, whatever is on screen; DANTE sparkles and shows the result. |
+
+On the yellow touch board the taps above stand in for the buttons, so this table works the same.
 
 Every press is reported to the PC as a `btn` event (nudge presses as `ack` / `snooze`).
 
@@ -216,6 +251,7 @@ Values tween smoothly, and critical values blink.
 | `src/Gfx.h` | drawing interface: the 128×32 layouts, drawn 1:1 on the OLED or scaled on the TFT |
 | `src/Tft.*` | 3.5" ST7796 TFT (LovyanGFX): colour canvas, PSRAM frame buffer / strips, DMA |
 | `src/Buttons.*` | debounced short / long presses |
+| `src/Touch.*` | the touch screen as buttons: taps, holds, swipes and two-finger taps become button presses (yellow board, simulator) |
 | `src/Face.*` | procedural eyes, moods, gags, mini faces |
 | `src/Apps.*` | widget store and the eight visuals, marquee helper |
 | `src/SimMain.cpp` | the simulator's `main()` (empty in the ESP32 build) |
@@ -238,7 +274,8 @@ How it works:
   memory-backed panel (`Tft.cpp`, `DANTE_SIMULATOR`), the only firmware code with a simulator branch.
 * `src/SimMain.cpp` provides `main()`: it runs `setup()`/`loop()`, passes protocol lines through,
   handles `sim.btn`, and sends the screen as `sim.frame` whenever it changes.
-* Choose the screen with `--hw tft|oled`. You can also run it by hand and type protocol lines, e.g.
+* Choose the screen with `--hw tft|oled|cyd`. `cyd` is the yellow touch board: the PC app's mouse clicks
+  on the screen arrive as `sim.touch` and go through the same touch code as the board. You can also run it by hand and type protocol lines, e.g.
   `{"t":"hello"}` or `?`.
 
 To change what the device draws (a new visual, a new face behaviour), see "Firmware standards" in
