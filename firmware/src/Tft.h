@@ -24,8 +24,14 @@ class TftGfx : public Gfx {
   // fg = colour 1, bg = colour 0 (also what the strip is cleared to), accent = lines drawn in colour 2.
   void setColors(uint32_t fg, uint32_t bg = Rgb::Black, uint32_t accent = Rgb::Teal);
   void setStripTop(int y) { stripTop = y; }
-  // The sprite and the screen row its top line shows, for drawing in screen pixels.
-  LGFX_Sprite& sprite() { return s; }
+  // The sprite and the screen row its top line shows, for drawing in screen pixels. Whoever draws on
+  // the sprite directly may draw anywhere, so the whole width counts as drawn on (see drawnSpan).
+  LGFX_Sprite& sprite() { touchAll(); return s; }
+
+  // Which columns anything was drawn into since resetDrawn(), so the rest of the strip is known to be
+  // background and needn't be compared pixel by pixel. Returns false if nothing was drawn.
+  void resetDrawn() { drawnX0 = INT32_MAX; drawnX1 = INT32_MIN; }
+  bool drawnSpan(int& x0, int& x1) const { x0 = drawnX0; x1 = drawnX1; return x1 >= x0; }
   int top() const { return stripTop; }
 
   void setFont(const uint8_t* font) override;
@@ -70,6 +76,14 @@ class TftGfx : public Gfx {
   float Yf(float y) const { return oy + y * sy - stripTop; }
   uint32_t color() const { return drawColor == 0 ? bg : (drawColor == 2 ? accent : fg); }
   void invert(int x, int y, int w, int h);
+  void smoothLine(float x0, float y0, float x1, float y1, float r, uint32_t c);
+
+  int drawnX0 = INT32_MIN, drawnX1 = INT32_MAX;   // until resetDrawn(): everything
+  void touch(int x0, int x1) { if (x0 < drawnX0) drawnX0 = x0; if (x1 > drawnX1) drawnX1 = x1; }
+  void touchAll() { drawnX0 = INT32_MIN; drawnX1 = INT32_MAX; }
+  // Is the screen-row range [y0, y1] (in this strip's rows) outside the strip? Then skip drawing it:
+  // each strip draws the whole scene, and the smooth (anti-aliased) shapes are costly even when clipped.
+  bool offStrip(float y0, float y1) const { return y1 < -2 || y0 > s.height() + 2; }
 };
 
 // The 3.5" ST7796 TFT on SPI.

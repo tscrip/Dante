@@ -223,6 +223,7 @@ void TftGfx::drawStr(int x, int y, const char* str) {
   s.setTextSize(unit());
   s.setTextDatum(lgfx::textdatum_t::baseline_left);
   s.setTextColor(color());
+  touch(X(x), X(x) + s.textWidth(str));
   s.drawString(str, X(x), Y(y));
 }
 
@@ -233,12 +234,14 @@ int TftGfx::getStrWidth(const char* str) {
   return s.textWidth(str);
 }
 
-void TftGfx::drawPixel(int x, int y) { s.fillRect(X(x), Y(y), X(x + 1) - X(x), Y(y + 1) - Y(y), color()); }
+void TftGfx::drawPixel(int x, int y) { touch(X(x), X(x + 1)); s.fillRect(X(x), Y(y), X(x + 1) - X(x), Y(y + 1) - Y(y), color()); }
 
 void TftGfx::drawLine(int x0, int y0, int x1, int y1) {
   float w = unit();
+  if (offStrip(min(Yc(y0), Yc(y1)) - w, max(Yc(y0), Yc(y1)) + w)) return;
+  touch(min(Xc(x0), Xc(x1)) - (int)w - 1, max(Xc(x0), Xc(x1)) + (int)w + 1);
   if (w < 1.5f) s.drawLine(Xc(x0), Yc(y0), Xc(x1), Yc(y1), color());
-  else s.drawWideLine(Xc(x0), Yc(y0), Xc(x1), Yc(y1), w / 2, color());
+  else smoothLine(Xc(x0), Yc(y0), Xc(x1), Yc(y1), w / 2, color());
 }
 
 void TftGfx::drawHLine(int x, int y, int w) { drawBox(x, y, w, 1); }
@@ -246,17 +249,20 @@ void TftGfx::drawVLine(int x, int y, int h) { drawBox(x, y, 1, h); }
 
 void TftGfx::drawBox(int x, int y, int w, int h) {
   if (w <= 0 || h <= 0) return;
+  touch(X(x), X(x + w));
   if (drawColor == 2) invert(X(x), Y(y), X(x + w) - X(x), Y(y + h) - Y(y));
   else s.fillRect(X(x), Y(y), X(x + w) - X(x), Y(y + h) - Y(y), color());
 }
 
 void TftGfx::drawRBox(int x, int y, int w, int h, int r) {
   if (w <= 0 || h <= 0) return;
+  touch(X(x), X(x + w));
   s.fillRoundRect(X(x), Y(y), X(x + w) - X(x), Y(y + h) - Y(y), (int)lroundf(r * unit()), color());
 }
 
 void TftGfx::drawRFrame(int x, int y, int w, int h, int r) {
   int px = X(x), py = Y(y), pw = X(x + w) - px, ph = Y(y + h) - py, pr = (int)lroundf(r * unit());
+  touch(px, px + pw);
   int t = (int)lroundf(unit());
   if (t < 1) t = 1;
   for (int i = 0; i < t && pw > 2 * i && ph > 2 * i; i++)
@@ -264,11 +270,14 @@ void TftGfx::drawRFrame(int x, int y, int w, int h, int r) {
 }
 
 void TftGfx::drawDisc(int x, int y, int r) {
+  touch(Xc(x) - (int)lroundf((r + 0.5f) * sx), Xc(x) + (int)lroundf((r + 0.5f) * sx));
   s.fillEllipse(Xc(x), Yc(y), (int)lroundf((r + 0.5f) * sx), (int)lroundf((r + 0.5f) * sy), color());
 }
 
 void TftGfx::drawCircle(int x, int y, int r, uint8_t opt) {
   int rx = (int)lroundf((r + 0.5f) * sx), ry = (int)lroundf((r + 0.5f) * sy);
+  if (offStrip(Yc(y) - ry, Yc(y) + ry)) return;
+  touch(Xc(x) - rx, Xc(x) + rx);
   int t = (int)lroundf(unit());
   if (t < 1) t = 1;
   // Quadrants as u8g2 names them; LovyanGFX angles start at 3 o'clock and run clockwise.
@@ -281,10 +290,12 @@ void TftGfx::drawCircle(int x, int y, int r, uint8_t opt) {
 }
 
 void TftGfx::drawTriangle(int x0, int y0, int x1, int y1, int x2, int y2) {
+  touch(min(X(x0), min(X(x1), X(x2))), max(X(x0), max(X(x1), X(x2))));
   s.fillTriangle(X(x0), Y(y0), X(x1), Y(y1), X(x2), Y(y2), color());
 }
 
 void TftGfx::drawFilledEllipse(int x, int y, int rx, int ry) {
+  touch(Xc(x) - (int)lroundf((rx + 0.5f) * sx), Xc(x) + (int)lroundf((rx + 0.5f) * sx));
   s.fillEllipse(Xc(x), Yc(y), (int)lroundf((rx + 0.5f) * sx), (int)lroundf((ry + 0.5f) * sy), color());
 }
 
@@ -297,6 +308,7 @@ void TftGfx::setMaxClipWindow() { s.clearClipRect(); }
 // ---- fractional, anti-aliased shapes (the face's eyes) ------------------------------------
 void TftGfx::fillRectF(float x, float y, float w, float h) {
   int px = (int)lroundf(Xf(x)), py = (int)lroundf(Yf(y));
+  touch(px, (int)lroundf(Xf(x + w)));
   s.fillRect(px, py, (int)lroundf(Xf(x + w)) - px, (int)lroundf(Yf(y + h)) - py, color());
 }
 
@@ -306,21 +318,26 @@ void TftGfx::fillRoundRectF(float x, float y, float w, float h, float r) {
   int pr = (int)lroundf(r * unit());
   if (pr > pw / 2) pr = pw / 2;
   if (pr > ph / 2) pr = ph / 2;
-  if (pw <= 0 || ph <= 0) return;
+  if (pw <= 0 || ph <= 0 || offStrip(py, py + ph)) return;
+  touch(px - 1, px + pw + 1);   // smooth edges spill a pixel
   s.fillSmoothRoundRect(px, py, pw, ph, pr, color());
 }
 
 void TftGfx::fillTriangleF(float x0, float y0, float x1, float y1, float x2, float y2) {
   float ax = Xf(x0), ay = Yf(y0), bx = Xf(x1), by = Yf(y1), cx = Xf(x2), cy = Yf(y2);
+  if (offStrip(fminf(ay, fminf(by, cy)), fmaxf(ay, fmaxf(by, cy)))) return;
+  touch((int)fminf(ax, fminf(bx, cx)) - 2, (int)fmaxf(ax, fmaxf(bx, cx)) + 2);
   uint32_t c = color();
   s.fillTriangle(lroundf(ax), lroundf(ay), lroundf(bx), lroundf(by), lroundf(cx), lroundf(cy), c);
   // Anti-alias the slanted edges (the eyelid cuts) with thin smooth lines in the same colour.
-  s.drawWideLine(lroundf(ax), lroundf(ay), lroundf(cx), lroundf(cy), 0.6f, c);
-  s.drawWideLine(lroundf(bx), lroundf(by), lroundf(cx), lroundf(cy), 0.6f, c);
+  smoothLine(ax, ay, cx, cy, 0.6f, c);
+  smoothLine(bx, by, cx, cy, 0.6f, c);
 }
 
 void TftGfx::fillEllipseF(float cx, float cy, float rx, float ry) {
   float pcx = Xf(cx), pcy = Yf(cy), prx = rx * sx, pry = ry * sy;
+  if (offStrip(pcy - pry, pcy + pry)) return;
+  touch((int)(pcx - prx) - 2, (int)(pcx + prx) + 2);
   uint32_t c = color();
   s.fillEllipse(lroundf(pcx), lroundf(pcy), lroundf(prx), lroundf(pry), c);
   // Smooth the upper arc (the edge that cuts into the eye for "happy" cheeks).
@@ -329,13 +346,83 @@ void TftGfx::fillEllipseF(float cx, float cy, float rx, float ry) {
   for (int i = 1; i <= SEG; i++) {
     float a = (float)M_PI + (float)M_PI * i / SEG;   // 180 -> 360 degrees: the top half
     float nx = pcx + cosf(a) * prx, ny = pcy + sinf(a) * pry;
-    s.drawWideLine(lroundf(px), lroundf(py), lroundf(nx), lroundf(ny), 0.6f, c);
+    // Each smooth segment costs a lot even when clipped away: only draw the ones in this strip.
+    smoothLine(px, py, nx, ny, 0.6f, c);
     px = nx; py = ny;
+  }
+}
+
+// A smooth (anti-aliased) line with round ends: a solid core of radius `r` plus a one-pixel soft edge,
+// like LovyanGFX's drawWideLine. That one draws every pixel through the general drawing calls
+// (clipping, colour conversion, reading the pixel back to blend), which made the eyelids and the X eyes
+// the slowest part of a frame. This writes straight into the strip's pixels: for each row of the strip
+// it works out which few pixels the line touches, fills the solid ones and blends only the edge.
+void TftGfx::smoothLine(float x0, float y0, float x1, float y1, float r, uint32_t c) {
+  uint16_t* buf = (uint16_t*)s.getBuffer();
+  if (!buf) return;
+  int32_t cx, cy, cw, ch;                       // honour the clip window (marquees, bubbles)
+  s.getClipRect(&cx, &cy, &cw, &ch);
+  const float R = r + 0.5f;                     // alpha = R - distance: 1 inside the core, fading over a pixel
+  const float dx = x1 - x0, dy = y1 - y0;
+  const float len2 = dx * dx + dy * dy;
+  int yTop = (int)floorf(fminf(y0, y1) - R), yBot = (int)ceilf(fmaxf(y0, y1) + R);
+  if (yTop < cy) yTop = cy;
+  if (yBot > cy + ch - 1) yBot = cy + ch - 1;
+  if (yTop > yBot) return;                      // nothing of it in this strip
+  touch((int)floorf(fminf(x0, x1) - R), (int)ceilf(fmaxf(x0, x1) + R));
+
+  // The colour as RGB565 parts (0xRRGGBB in), and the sprite's byte-swapped pixel for solid pixels.
+  const int cr = (c >> 19) & 31, cg = (c >> 10) & 63, cb = (c >> 3) & 31;
+  const uint16_t solid565 = (uint16_t)((cr << 11) | (cg << 5) | cb);
+  const uint16_t solid = (uint16_t)((solid565 >> 8) | (solid565 << 8));
+  const int w = s.width();
+
+  for (int y = yTop; y <= yBot; y++) {
+    // The row's span: a superset of where the capsule (line + round ends) crosses this row.
+    float py = y - y0;
+    float xl = fminf(x0, x1) - R, xr = fmaxf(x0, x1) + R;
+    if (fabsf(dy) > 0.01f && len2 > 0.0001f) {
+      // Across a slanted line, the band of half-width R is R*len/|dy| wide (plus the round ends).
+      float xc = x0 + dx * (py / dy);
+      float half = R * sqrtf(len2) / fabsf(dy) + 1;
+      xl = fmaxf(xl, xc - half);
+      xr = fminf(xr, xc + half);
+      // Rows past the ends belong to the round caps only.
+      float xa = py * dy <= 0 ? x0 : (py * dy >= len2 ? x1 : xc);
+      xl = fminf(xl, xa - R);
+      xr = fmaxf(xr, xa + R);
+    }
+    int ix0 = (int)floorf(xl), ix1 = (int)ceilf(xr);
+    if (ix0 < cx) ix0 = cx;
+    if (ix1 > cx + cw - 1) ix1 = cx + cw - 1;
+    uint16_t* row = buf + y * w;
+    for (int x = ix0; x <= ix1; x++) {
+      // Distance from the pixel to the nearest point of the segment.
+      float px = x - x0;
+      float t = len2 > 0.0001f ? (px * dx + py * dy) / len2 : 0;
+      t = t < 0 ? 0 : (t > 1 ? 1 : t);
+      float ex = px - t * dx, ey = py - t * dy;
+      float d2 = ex * ex + ey * ey;
+      if (d2 >= R * R) continue;                                   // outside, even the soft edge
+      if (d2 <= (R - 1) * (R - 1)) { row[x] = solid; continue; }   // fully inside: no blending
+      float a = R - sqrtf(d2);
+      int ai = (int)(a * 256);
+      if (ai <= 0) continue;
+      if (ai >= 256) { row[x] = solid; continue; }
+      uint16_t p = (uint16_t)((row[x] >> 8) | (row[x] << 8));      // the pixel underneath, as RGB565
+      int pr = p >> 11, pg = (p >> 5) & 63, pb = p & 31;
+      pr += ((cr - pr) * ai) >> 8;
+      pg += ((cg - pg) * ai) >> 8;
+      pb += ((cb - pb) * ai) >> 8;
+      uint16_t m = (uint16_t)((pr << 11) | (pg << 5) | pb);
+      row[x] = (uint16_t)((m >> 8) | (m << 8));
+    }
   }
 }
 
 // XOR on a monochrome screen = inverted colours here (16-bit pixels: flip every bit).
 void TftGfx::invert(int x, int y, int w, int h) {
+  touch(x, x + w);
   int x1 = x + w, y1 = y + h;
   if (x < 0) x = 0;
   if (y < 0) y = 0;
@@ -420,6 +507,18 @@ uint32_t hashChunk(const uint16_t* buf, int rows, int chunk) {
   return h;
 }
 
+// The fingerprint of an all-black block of `rows` rows (worked out once).
+uint32_t blackHash(int rows) {
+  static int forRows = -1;
+  static uint32_t h = 0;
+  if (rows != forRows) {
+    h = 2166136261u;
+    for (int i = 0; i < rows * CHUNK_W / 2; i++) h = (h ^ 0u) * 16777619u;   // same steps as hashChunk
+    forRows = rows;
+  }
+  return h;
+}
+
 uint32_t pushStrips(const std::function<void(TftGfx& g)>& draw) {
   uint32_t bytes = 0;
   int cur = 0;   // the buffer to draw into; the other one may still be going out by DMA
@@ -434,14 +533,20 @@ uint32_t pushStrips(const std::function<void(TftGfx& g)>& draw) {
     s.fillScreen(TFT_BLACK);
     g.setStripTop(top);
     g.setDrawColor(1);
+    g.resetDrawn();
     draw(g);
     s.clearClipRect();
 
-    // Which columns changed? Send only the span from the first to the last changed block.
+    // Which columns changed? Send only the span from the first to the last changed block. Blocks
+    // nothing was drawn into are still black, so they get the "all black" fingerprint without
+    // looking at their pixels (comparing every pixel was ~40% of a frame).
     uint16_t* buf = (uint16_t*)s.getBuffer();
+    int dx0, dx1;
+    if (!g.drawnSpan(dx0, dx1)) { dx0 = 1; dx1 = 0; }   // nothing drawn at all
     int first = CHUNKS, last = -1;
     for (int c = 0; c < CHUNKS; c++) {
-      uint32_t h = hashChunk(buf, rows, c);
+      bool untouched = (c + 1) * CHUNK_W <= dx0 || c * CHUNK_W > dx1;
+      uint32_t h = untouched ? blackHash(rows) : hashChunk(buf, rows, c);
       if (h == sent[i][c] && !forceAll) continue;
       sent[i][c] = h;
       if (c < first) first = c;

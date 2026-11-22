@@ -401,9 +401,9 @@ static const char* moodName(Mood m) {
 
 // Name, mood, waiting count and link on top; page dots for the screens.
 static void tftStatusBar(TftGfx& g, uint32_t now) {
-  LGFX_Sprite& s = g.sprite();
   const int y = -g.top();
-  if (y + TFT_BAR < 0) return;   // this strip is below the bar
+  if (y + TFT_BAR < 0) return;   // this strip is below the bar (checked first: taking the sprite marks the strip drawn on)
+  LGFX_Sprite& s = g.sprite();
   FaceInfo f = Face::info();
   s.setTextSize(1);
   s.setTextDatum(lgfx::textdatum_t::middle_left);
