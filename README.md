@@ -76,7 +76,16 @@ capacitive touch; the model ends in **C**) has the 3.5" screen and a touch panel
 screen stand in for the four buttons, so there's nothing to wire. Flash it with its own command (see
 [Flash DANTE](#2-flash-dante)); details in [`firmware/README.md`](firmware/README.md#the-yellow-board-esp32-3248s035c-touch).
 
-A 3D-printable case is in [`case/`](case) (an OpenSCAD model; it is still sized for the small OLEDs).
+3D-printable cases are in [`case/`](case) (OpenSCAD models):
+
+- **Yellow board:** [`case/cyd35_tilt_case.scad`](case/cyd35_tilt_case.scad) holds the ESP32-3248S035C at a
+  60° tilt so the screen faces you. Print the three ready-made parts, all without supports:
+  [`cyd35_front.stl`](case/cyd35_front.stl) (face down), [`cyd35_back.stl`](case/cyd35_back.stl) (flat side down)
+  and [`cyd35_stand.stl`](case/cyd35_stand.stl) (on its base). Drop the board face-down into the front, press the
+  back in until it clicks, and stand the case in the stand with the USB port on the right. If the picture is
+  upside down, tick *Screen is mounted upside down* on the **Device** page. The angle, the USB side and the
+  stand's size are settings at the top of the file.
+- **Two small OLEDs:** [`case/dante_case.scad`](case/dante_case.scad).
 
 ## Wiring
 
@@ -323,7 +332,7 @@ More hardware troubleshooting is in [`firmware/README.md`](firmware/README.md).
 | [`firmware/`](firmware) | PlatformIO / Arduino firmware for the ESP32-S3: face, widget visuals, buttons, OLED and TFT drivers. |
 | [`docs/protocol.md`](docs/protocol.md) | The JSON-lines protocol between the PC app and DANTE. |
 | [`docs/research/custom-plugins.md`](docs/research/custom-plugins.md) | Research on plugins defined in the UI (call an API, transform the response with a script). |
-| [`case/`](case) | OpenSCAD case model. |
+| [`case/`](case) | OpenSCAD case models: the tilted case for the yellow board, and the two-OLED box. |
 | [`CLAUDE.md`](CLAUDE.md) | Architecture, standards and the step-by-step recipe for adding a plugin. |
 
 ```bash
