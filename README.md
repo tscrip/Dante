@@ -75,6 +75,8 @@ in an app on your PC, which talks to DANTE over Bluetooth or USB. You add new th
 capacitive touch; the model ends in **C**) has the 3.5" screen and a touch panel built in. Taps on the
 screen stand in for the four buttons, so there's nothing to wire. Flash it with its own command (see
 [Flash DANTE](#2-flash-dante)); details in [`firmware/README.md`](firmware/README.md#the-yellow-board-esp32-3248s035c-touch).
+Its **P3** connector takes an optional notification light (IO22) and MAGIC button (IO35); the wiring is on the
+*Device* page and in the firmware README.
 
 A 3D-printable case is in [`case/`](case) (an OpenSCAD model; it is still sized for the small OLEDs).
 

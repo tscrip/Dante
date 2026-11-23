@@ -96,6 +96,14 @@ There are no buttons; the touch screen stands in for them:
 
 During a nudge: tap = "I'm on it", swipe left or right = "later".
 
+**Extras on the P3 connector** (GND, IO35, IO22, IO21), set up on the PC app's *Device* page:
+
+| Part | Wiring | Notes |
+|---|---|---|
+| Notification light | IO22 → 330 Ω resistor → LED long leg; LED short leg → GND | Blinks by what's waiting: a short blink every 2 s while something waits, once a second during a nudge, fast when urgent (or only during nudges, or off). A brighter light or LED strip needs a transistor in between. |
+| MAGIC button | IO35 → button → GND, **plus a 10 kΩ resistor from IO35 to 3.3 V** | IO35 can only read and has no built-in pull-up, hence the resistor (P3 has no 3.3 V: take it from another connector or a pad marked 3.3V / 3V3). Then tick *A MAGIC button is wired to IO35* on the Device page. Works like the S3's MAGIC button, long press included. |
+| IO21 | leave free | The touch chip uses it on this board. |
+
 The pins are fixed by the board and set in `src/config.h` (the `DANTE_BOARD_CYD35C` section). The
 resistive version (*ESP32-3248S035R*, XPT2046 touch) is not supported yet.
 

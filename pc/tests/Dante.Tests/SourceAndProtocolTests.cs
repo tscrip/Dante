@@ -44,7 +44,7 @@ public class ProtocolTests
     public void Cfg_carries_the_single_screen_settings()
     {
         var msg = DeviceProtocol.Cfg(new DeviceSettings { Brightness = 300, Display = DisplayType.Tft35, Flip = true });
-        Assert.Equal("""{"t":"cfg","bright":255,"display":"tft","flip":true,"accent":6220500,"look":0,"motion":"auto"}""", msg.ToJsonString());
+        Assert.Equal("""{"t":"cfg","bright":255,"display":"tft","flip":true,"accent":6220500,"look":0,"motion":"auto","light":"waiting","xbtn":false}""", msg.ToJsonString());
         Assert.False(DeviceProtocol.Cfg(new DeviceSettings())["flip"]!.GetValue<bool>());
     }
 

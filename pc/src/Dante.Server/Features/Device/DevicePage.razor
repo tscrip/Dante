@@ -203,6 +203,48 @@
     </div>
 </div>
 
+@if (Link.HasLight || Link.HasExtraButton)
+{
+    <div class="panel">
+        <h2>Notification light &amp; MAGIC button</h2>
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+            <div>
+                @if (Link.HasLight)
+                {
+                    <div class="fields">
+                        <span class="small"><strong>Light</strong></span>
+                        <label class="check"><input type="radio" name="light" checked="@(_cfg.Device.Light == NotificationLight.Waiting)" @onchange="() => _cfg.Device.Light = NotificationLight.Waiting" />
+                            <span>Whenever something is waiting <span class="muted small">— a short blink every 2 s; blinking during a nudge, fast when urgent</span></span></label>
+                        <label class="check"><input type="radio" name="light" checked="@(_cfg.Device.Light == NotificationLight.Nudges)" @onchange="() => _cfg.Device.Light = NotificationLight.Nudges" />
+                            <span>Only during nudges <span class="muted small">— blinking, fast when urgent</span></span></label>
+                        <label class="check"><input type="radio" name="light" checked="@(_cfg.Device.Light == NotificationLight.Off)" @onchange="() => _cfg.Device.Light = NotificationLight.Off" />
+                            <span>Off</span></label>
+                    </div>
+                }
+                @if (Link.HasExtraButton)
+                {
+                    <label class="check" style="margin-top:.75rem"><input type="checkbox" @bind="_cfg.Device.ExtraMagicButton" />
+                        <span>A MAGIC button is wired to IO35 <span class="muted small">— it does what you set on the <a href="magic">Magic button</a> page.
+                            Only tick this once the button and its resistor are in: without the resistor, IO35 picks up noise and DANTE would see presses that never happened.</span></span></label>
+                }
+                <button class="btn primary" @onclick="Save" style="margin-top:.75rem">Save &amp; send to DANTE</button>
+            </div>
+            <div>
+                <h3 class="small muted">Wiring (connector P3 on the yellow board)</h3>
+                <table class="small">
+                    <tbody>
+                        <tr><td>Light</td><td>IO22 → 330 Ω resistor → LED (long leg) · LED (short leg) → GND</td></tr>
+                        <tr><td>MAGIC button</td><td>IO35 → button → GND, plus a 10 kΩ resistor from IO35 to 3.3 V</td></tr>
+                        <tr><td>IO21</td><td>leave it free: the touch screen uses it</td></tr>
+                    </tbody>
+                </table>
+                <p class="muted small">P3 has no 3.3 V pin: take it from another connector or pad marked 3.3V (or 3V3). A brighter light or
+                    an LED strip needs a transistor in between: a pin can only power a single small LED.</p>
+            </div>
+        </div>
+    </div>
+}
+
 <div class="panel">
     <h2>Traffic</h2>
     <div class="log">
