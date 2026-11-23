@@ -49,8 +49,9 @@ static Alert alerts[MAX_ALERTS];
 
 static void copyStr(char* dst, size_t n, const char* src) {
   if (!src) src = "";
-  strncpy(dst, src, n - 1);
-  dst[n - 1] = 0;
+  size_t len = strnlen(src, n - 1);   // at most n-1 characters, always terminated
+  memcpy(dst, src, len);
+  dst[len] = 0;
 }
 
 // Highest level wins; ties go to the newest.

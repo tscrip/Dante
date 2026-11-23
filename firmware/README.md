@@ -167,6 +167,9 @@ I2C scan now: bus 1 (SDA=8 SCL=9): nothing
   `?` in the monitor, touch a corner, and type `?` again: the last line shows where DANTE thinks you
   touched (the screen is 480 wide, 320 high). If it's mirrored, change `TOUCH_OFFSET_ROTATION` in
   `src/config.h` (try 2, then 1, 3, 4...) and flash again.
+* **Yellow board stays dark or keeps restarting right after flashing:** its build reads the flash chip at
+  80 MHz for speed. In `platformio.ini`, under `[env:esp32-3248s035c]`, set `board_build.f_flash = 40000000L`
+  and flash again.
 * **Yellow board, speckles, stray pixels or a garbled picture:** the screen runs at 80 MHz on this board.
   Set `TFT_SPI_HZ` back to `40000000` in its section of `src/config.h` and flash again (a little less smooth,
   but every panel handles it).
