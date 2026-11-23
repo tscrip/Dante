@@ -9,6 +9,7 @@ namespace {
   // so without the resistor that goes with the button it floats and would make up presses.
   const int8_t extraMagicPin = PIN_EXTRA_MAGIC;
   bool extraMagicOn = false;
+  uint32_t extraPresses = 0;   // presses of the extra MAGIC button since start, for the status line
 
   int8_t pinFor(uint8_t i) {
     static const int8_t pins[BTN_COUNT] = { PIN_BTN_LEFT, PIN_BTN_RIGHT, PIN_BTN_SELECT, PIN_BTN_MAGIC };
@@ -42,6 +43,15 @@ namespace Buttons {
     if (on) setUp(extraMagicPin);
   }
 
+  void describeExtra(char* out, size_t n) {
+    if (extraMagicPin < 0) { snprintf(out, n, "MAGIC button: none on this board"); return; }
+    if (!extraMagicOn) pinMode(extraMagicPin, INPUT);   // read-only check; the pin can't drive anything
+    bool low = digitalRead(extraMagicPin) == LOW;
+    snprintf(out, n, "MAGIC button (IO%d): %s, pin reads %s right now, %lu presses seen", extraMagicPin,
+             extraMagicOn ? "on" : "not switched on in the PC app", low ? "LOW (pressed)" : "HIGH (released)",
+             (unsigned long)extraPresses);
+  }
+
   bool poll(ButtonEvent& ev) {
     uint32_t now = millis();
     for (uint8_t i = 0; i < BTN_COUNT; i++) {
@@ -56,12 +66,14 @@ namespace Buttons {
           s.pressedAt = now;
           s.longFired = false;
         } else if (!s.longFired) {
+          if (pin == extraMagicPin) extraPresses++;
           ev = { (ButtonId)i, false };
           return true;
         }
       }
       if (s.stable && !s.longFired && now - s.pressedAt >= BTN_LONG_MS) {
         s.longFired = true;
+        if (pin == extraMagicPin) extraPresses++;
         ev = { (ButtonId)i, true };
         return true;
       }

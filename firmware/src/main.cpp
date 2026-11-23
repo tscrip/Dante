@@ -163,6 +163,10 @@ static void onMessage(JsonDocument& m) {
     Displays::describe(buf, sizeof(buf));
     d["boot"] = buf;                            // ArduinoJson copies char arrays
     Displays::scanNow(buf, sizeof(buf));
+    if (PIN_EXTRA_MAGIC >= 0) {                 // the yellow board's P3 button: is it seen?
+      size_t used = strlen(buf);
+      if (used + 3 < sizeof(buf)) { strcat(buf, " | "); Buttons::describeExtra(buf + used + 3, sizeof(buf) - used - 3); }
+    }
     d["scan"] = buf;
     Link::send(d);
   } else if (!strcmp(t, "ping")) {
@@ -217,6 +221,7 @@ static void onText(const char* line) {
   Displays::scanNow(buf, sizeof(buf));
   Link::sendText(buf);
   if (Touch::available()) { Touch::describe(buf, sizeof(buf)); Link::sendText(buf); }
+  if (PIN_EXTRA_MAGIC >= 0) { Buttons::describeExtra(buf, sizeof(buf)); Link::sendText(buf); }
 #ifndef DANTE_SIMULATOR
   // How much memory is left: album art needs ~30 KB in one piece on boards without PSRAM.
   snprintf(buf, sizeof(buf), "memory: %u KB free, largest block %u KB",
