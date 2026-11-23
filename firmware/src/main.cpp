@@ -49,8 +49,9 @@ static Alert alerts[MAX_ALERTS];
 
 static void copyStr(char* dst, size_t n, const char* src) {
   if (!src) src = "";
-  strncpy(dst, src, n - 1);
-  dst[n - 1] = 0;
+  size_t len = strnlen(src, n - 1);   // at most n-1 characters, always terminated
+  memcpy(dst, src, len);
+  dst[len] = 0;
 }
 
 // Highest level wins; ties go to the newest.
@@ -316,8 +317,9 @@ static void drawToast(Gfx& g, uint32_t now) {
   drawMarquee(g, toast.text, bx + 3, textY, bw - 6, now, toast.start + 300, by + 1, by + bh - 1);
 }
 
-// "Knock knock": shake every 3 s.
+// "Knock knock": shake every 3 s (not in calm mode: the shake moves the whole screen).
 static int knockOffset(uint32_t t) {
+  if (Face::calm()) return 0;
   uint32_t ph = t % 3000;
   return ph < 450 ? (int)(sinf(ph * 0.09f) * 3) : 0;
 }
@@ -401,9 +403,9 @@ static const char* moodName(Mood m) {
 
 // Name, mood, waiting count and link on top; page dots for the screens.
 static void tftStatusBar(TftGfx& g, uint32_t now) {
-  LGFX_Sprite& s = g.sprite();
   const int y = -g.top();
-  if (y + TFT_BAR < 0) return;   // this strip is below the bar
+  if (y + TFT_BAR < 0) return;   // this strip is below the bar (checked first: taking the sprite marks the strip drawn on)
+  LGFX_Sprite& s = g.sprite();
   FaceInfo f = Face::info();
   s.setTextSize(1);
   s.setTextDatum(lgfx::textdatum_t::middle_left);
@@ -508,6 +510,7 @@ void loop() {
   lastFrame = now;
 
   Face::setAlone(!Link::pcAlive());
+  Face::setCalm(Displays::calmMotion());
   Face::update(now);
   Apps::update(now);
 

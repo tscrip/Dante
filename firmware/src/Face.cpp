@@ -21,6 +21,7 @@ int radiusCap = 6;   // corner radius limit
 EyeStyle cur[2], tgt[2];
 float lookX = 0, lookY = 0, tgtLookX = 0, tgtLookY = 0;
 float offX = 0, offY = 0;
+bool calmMode = false;   // see Face::setCalm
 Shape shape[2] = { SH_NORMAL, SH_NORMAL };
 uint16_t decor = 0;
 
@@ -41,7 +42,13 @@ uint32_t frameNow = 0;   // time of the last update(): every strip of a TFT fram
 
 inline float rnd(float a, float b) { return a + (b - a) * (float)random(0, 10001) / 10000.0f; }
 inline uint32_t rndMs(uint32_t a, uint32_t b) { return (uint32_t)random(a, b + 1); }
-inline float approach(float c, float t, float k) { return c + (t - c) * k; }
+// Eases towards the target and lands on it once close. Plain easing never quite arrives: the eyes would
+// keep creeping by fractions of a pixel for a dozen frames, and on the big screen each of those frames
+// means redrawing and resending the eyes.
+inline float ease(float c, float t, float k, float snap) {
+  float n = c + (t - c) * k;
+  return fabsf(t - n) < snap ? t : n;
+}
 inline float clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
 EyeStyle style(float w, float h, float lid = 0, float angry = 0, float worried = 0, float happy = 0) {
@@ -512,6 +519,8 @@ Mood moodFromString(const char* s) {
 void setPending(int n) { pending = n < 0 ? 0 : n; }
 void setLook(uint8_t l) { look = l < LOOK_COUNT ? l : (uint8_t)LOOK_CLASSIC; }
 void setAlone(bool a) { alone = a; }
+void setCalm(bool c) { calmMode = c; }
+bool calm() { return calmMode; }
 
 void playGag(Gag g, uint16_t durationMs) {
   gag = g;
@@ -550,18 +559,26 @@ void update(uint32_t now) {
     if ((now / 2500) % 3 == 0) decor |= DEC_STARS;       // and some confetti
   }
 
+  // Calm: the face keeps still. Hops, foot tapping, shaking and jitter move both whole eyes, which is
+  // most of the screen; expressions, blinks and glances stay.
+  if (calmMode) offX = offY = 0;
+
   float k = (m == MOOD_MELTDOWN || gag != GAG_NONE) ? 0.45f : 0.28f;
+  const float snap = calmMode ? 0.15f : 0.04f;          // logical pixels: calm lands sooner
+  const float sizeSnap = calmMode ? 0.02f : 0.005f;     // for the 0..1 lid / mood amounts
   for (int i = 0; i < 2; i++) {
-    cur[i].w = approach(cur[i].w, tgt[i].w, k);
-    cur[i].h = approach(cur[i].h, tgt[i].h, k);
-    cur[i].open = approach(cur[i].open, tgt[i].open, 0.35f);
-    cur[i].lid = approach(cur[i].lid, tgt[i].lid, k);
-    cur[i].angry = approach(cur[i].angry, tgt[i].angry, k);
-    cur[i].worried = approach(cur[i].worried, tgt[i].worried, k);
-    cur[i].happy = approach(cur[i].happy, tgt[i].happy, k);
+    cur[i].w = ease(cur[i].w, tgt[i].w, k, snap);
+    cur[i].h = ease(cur[i].h, tgt[i].h, k, snap);
+    cur[i].open = ease(cur[i].open, tgt[i].open, 0.35f, sizeSnap);
+    cur[i].lid = ease(cur[i].lid, tgt[i].lid, k, sizeSnap);
+    cur[i].angry = ease(cur[i].angry, tgt[i].angry, k, sizeSnap);
+    cur[i].worried = ease(cur[i].worried, tgt[i].worried, k, sizeSnap);
+    cur[i].happy = ease(cur[i].happy, tgt[i].happy, k, sizeSnap);
   }
-  lookX = approach(lookX, tgtLookX, 0.35f);
-  lookY = approach(lookY, tgtLookY, 0.35f);
+  // Glances: calm ones get there in a few frames instead of gliding over many.
+  const float lookK = calmMode ? 0.6f : 0.35f;
+  lookX = ease(lookX, tgtLookX, lookK, snap);
+  lookY = ease(lookY, tgtLookY, lookK, snap);
 }
 
 void draw(Gfx& g, int ox, bool chrome) {

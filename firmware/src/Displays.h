@@ -15,9 +15,15 @@ namespace Displays {
     uint8_t bright = 200;       // OLED contrast / TFT backlight
     uint32_t accent = 0x5EEAD4; // TFT accent colour, 0xRRGGBB (title, happy eyes, highlights)
     uint8_t look = 0;           // Face::Look: DANTE's style and accessories
+    uint8_t motion = 0;         // MOTION_*: how much the face moves around
   };
 
+  // How lively the face is (`motion` in `cfg`). Auto = calm where the screen is drawn in strips (no PSRAM).
+  enum Motion : uint8_t { MOTION_AUTO = 0, MOTION_LIVELY = 1, MOTION_CALM = 2 };
+
   void begin();
+  // Should the face keep still (no hops, shakes or knocks)? Motion setting with Auto resolved.
+  bool calmMotion();
   const Settings& settings();
   bool oledDetected();          // did the OLED answer at boot?
   Kind active();                // the screen in use (KIND_AUTO resolved)
