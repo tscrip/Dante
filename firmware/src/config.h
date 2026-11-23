@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 // ---- Identity ---------------------------------------------------------------
-#define FW_VERSION      "3.10.1"
+#define FW_VERSION      "3.11.0"
 #define DEVICE_NAME     "DANTE"
 
 // ---- Board ------------------------------------------------------------------------
@@ -63,15 +63,11 @@
 #define PIN_BTN_SELECT  -1
 #define PIN_BTN_MAGIC   -1
 
-// ---- Extras on the P3 connector (GND, IO35, IO22, IO21) ----------------------------------------
-// IO21 is the touch chip's "touched" (INT) line on this board: leave it alone.
-// A MAGIC button between IO35 and GND. IO35 can only read and has no built-in pull-up, so it needs
-// a 10 kOhm resistor from IO35 to 3.3V; that's why it is switched on in the PC app (Device page),
-// otherwise a loose IO35 would make up presses.
-#define PIN_EXTRA_MAGIC 35
-// A notification light: IO22 -> 330 Ohm resistor -> LED -> GND. HIGH = on.
-#define PIN_LIGHT       22
-#define LIGHT_ON        HIGH
+// ---- An extra MAGIC button on P3 (GND, IO35, IO22, IO21) or CN1 (GND, IO22, IO21, 3.3V) -----------
+// Between IO22 and GND (a push button's NO and C terminals). IO22 has a built-in pull-up, so nothing
+// else is needed, and a board without the button just reads "released". (Not IO35: it has no pull-up
+// and floats without an extra resistor. Not IO21: it is the touch chip's "touched" line here.)
+#define PIN_EXTRA_MAGIC 22
 
 #else
 // ==== ESP32-S3 (e.g. ESP32-S3-DevKitC-1) =========================================================
@@ -126,13 +122,6 @@
 #define PIN_BTN_MAGIC   7    // also on top: does whatever the PC app says (mute, play/pause, ...)
 
 #define PIN_EXTRA_MAGIC -1   // the S3 has MAGIC on its own pin already
-#ifdef DANTE_SIMULATOR
-#define PIN_LIGHT       22   // the simulator's "yellow board" mode shows the notification light
-#define LIGHT_ON        HIGH
-#else
-#define PIN_LIGHT       -1   // no notification light (set a free pin here to add one)
-#define LIGHT_ON        HIGH
-#endif
 #endif
 
 #define BTN_DEBOUNCE_MS 25

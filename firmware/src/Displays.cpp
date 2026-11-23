@@ -38,8 +38,6 @@ void load() {
   cfg.accent = prefs.getUInt("accent", 0x5EEAD4) & 0xFFFFFF;
   cfg.look = prefs.getUChar("look", 0);
   cfg.motion = prefs.getUChar("motion", Displays::MOTION_AUTO);
-  cfg.light = prefs.getUChar("light", Displays::LIGHT_WAITING);
-  cfg.extraMagic = prefs.getBool("xbtn", false);
   prefs.end();
 }
 
@@ -51,10 +49,9 @@ void save() {
   prefs.putUInt("accent", cfg.accent);
   prefs.putUChar("look", cfg.look);
   prefs.putUChar("motion", cfg.motion);
-  prefs.putUChar("light", cfg.light);
-  prefs.putBool("xbtn", cfg.extraMagic);
-  // Settings of removed features: two screens (2.x) and the character LCD (3.4 and older).
-  for (const char* old : { "screens", "layout", "content", "swap", "flip1", "flip2", "lcdAddr", "lcdSize" })
+  // Settings of removed features: two screens (2.x), the character LCD (3.4 and older), the P3 light and
+  // the IO35 button switch (3.10).
+  for (const char* old : { "screens", "layout", "content", "swap", "flip1", "flip2", "lcdAddr", "lcdSize", "light", "xbtn" })
     if (prefs.isKey(old)) prefs.remove(old);
   prefs.end();
 }
@@ -127,17 +124,12 @@ bool applyConfig(JsonDocument& m) {
     const char* mo = m["motion"];
     cfg.motion = !strcmp(mo, "lively") ? MOTION_LIVELY : !strcmp(mo, "calm") ? MOTION_CALM : MOTION_AUTO;
   }
-  if (m["light"].is<const char*>()) {
-    const char* l = m["light"];
-    cfg.light = !strcmp(l, "nudges") ? LIGHT_NUDGES : !strcmp(l, "off") ? LIGHT_OFF : LIGHT_WAITING;
-  }
-  if (m["xbtn"].is<bool>()) cfg.extraMagic = m["xbtn"];
   if (m["flip"].is<bool>()) cfg.flip = m["flip"];
   else if (m["flip1"].is<bool>()) cfg.flip = m["flip1"];   // a PC app from before 3.0
 
   bool changed = before.kind != cfg.kind || before.flip != cfg.flip || before.bright != cfg.bright ||
                  before.accent != cfg.accent || before.look != cfg.look ||
-                 before.motion != cfg.motion || before.light != cfg.light || before.extraMagic != cfg.extraMagic;
+                 before.motion != cfg.motion;
   if (changed) { apply(); save(); }
   return changed;
 }

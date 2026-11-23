@@ -58,18 +58,15 @@ public sealed partial record WiringReport(DateTimeOffset At, string Boot, string
             hints.Add($"The bus has {string.Join(", ", bus.Select(Hex))}, but no OLED (0x3C or 0x3D). Is the screen type set right?");
         }
 
-        // The yellow board's extra MAGIC button on P3 (firmware 3.10.1+): "MAGIC button (IO35): on, pin reads ...".
+        // The yellow board's extra MAGIC button (firmware 3.11+ on IO22): "MAGIC button (IO22): pin reads ...".
         if (Scan.Contains("MAGIC button (IO", StringComparison.Ordinal))
         {
-            if (Scan.Contains("not switched on", StringComparison.Ordinal))
-                hints.Add("The MAGIC button isn't switched on, so DANTE ignores IO35: tick \"A MAGIC button is wired to IO35\" " +
-                          "below and press Save & send to DANTE.");
-            else if (Scan.Contains("LOW (pressed)", StringComparison.Ordinal))
-                hints.Add("IO35 reads \"pressed\". If you weren't holding the button during the check, it's connected to GND all " +
-                          "the time: use the switch's NO and COM terminals (not NC), and make sure the 10 kΩ resistor goes to 3.3 V, not GND.");
+            if (Scan.Contains("LOW (pressed)", StringComparison.Ordinal))
+                hints.Add("The MAGIC button pin reads \"pressed\". If you weren't holding the button during the check, it's " +
+                          "connected to GND all the time: use the switch's NO and C terminals, not NC.");
             else
-                hints.Add("IO35 reads \"released\". Press Check wiring again while holding the button down: it should then read " +
-                          "\"pressed\". If it doesn't, the button isn't connecting IO35 to GND: check IO35 → NO and COM → GND.");
+                hints.Add("The MAGIC button pin reads \"released\". Press Check wiring again while holding the button down: it " +
+                          "should then read \"pressed\". If it doesn't, the button isn't connecting IO22 to GND: check NO → IO22 and C → GND.");
         }
 
         if (Boot.Contains("BROWNOUT", StringComparison.Ordinal))

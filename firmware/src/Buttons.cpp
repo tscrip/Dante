@@ -3,17 +3,16 @@
 
 // Each button is wired between its pin and GND. A pin of -1 means "not on this board": the yellow
 // board has no buttons of its own (on the classic ESP32, the S3's GPIO 6 and 7 belong to the flash
-// chip, so they must never be touched there), but can have an extra MAGIC button on P3 (IO35).
+// chip, so they must never be touched there), but can have an extra MAGIC button on IO22.
 namespace {
-  // The extra MAGIC button counts only when switched on in the PC app: its pin has no built-in pull-up,
-  // so without the resistor that goes with the button it floats and would make up presses.
+  // The extra MAGIC button (yellow board): its pin has a built-in pull-up, so without a button it simply
+  // reads "released" and can always be read.
   const int8_t extraMagicPin = PIN_EXTRA_MAGIC;
-  bool extraMagicOn = false;
   uint32_t extraPresses = 0;   // presses of the extra MAGIC button since start, for the status line
 
   int8_t pinFor(uint8_t i) {
     static const int8_t pins[BTN_COUNT] = { PIN_BTN_LEFT, PIN_BTN_RIGHT, PIN_BTN_SELECT, PIN_BTN_MAGIC };
-    if (i == BTN_MAGIC && pins[i] < 0 && extraMagicOn) return extraMagicPin;
+    if (i == BTN_MAGIC && pins[i] < 0) return extraMagicPin;
     return pins[i];
   }
 
@@ -36,20 +35,11 @@ namespace Buttons {
     for (uint8_t i = 0; i < BTN_COUNT; i++) setUp(pinFor(i));
   }
 
-  void setExtraMagic(bool on) {
-    if (extraMagicPin < 0 || on == extraMagicOn) return;
-    extraMagicOn = on;
-    st[BTN_MAGIC] = State();   // start fresh: no half-seen press from before
-    if (on) setUp(extraMagicPin);
-  }
-
   void describeExtra(char* out, size_t n) {
     if (extraMagicPin < 0) { snprintf(out, n, "MAGIC button: none on this board"); return; }
-    if (!extraMagicOn) pinMode(extraMagicPin, INPUT);   // read-only check; the pin can't drive anything
     bool low = digitalRead(extraMagicPin) == LOW;
-    snprintf(out, n, "MAGIC button (IO%d): %s, pin reads %s right now, %lu presses seen", extraMagicPin,
-             extraMagicOn ? "on" : "not switched on in the PC app", low ? "LOW (pressed)" : "HIGH (released)",
-             (unsigned long)extraPresses);
+    snprintf(out, n, "MAGIC button (IO%d): pin reads %s right now, %lu presses seen", extraMagicPin,
+             low ? "LOW (pressed)" : "HIGH (released)", (unsigned long)extraPresses);
   }
 
   bool poll(ButtonEvent& ev) {

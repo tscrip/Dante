@@ -79,15 +79,6 @@ public sealed class DeviceSettings
     /// <summary>How much DANTE's face moves around (hops, shakes, gliding glances). See <see cref="Motion"/>.</summary>
     public Motion Motion { get; set; } = Motion.Auto;
 
-    /// <summary>When the notification light blinks, on DANTEs that have one (yellow board: wired to P3, IO22).</summary>
-    public NotificationLight Light { get; set; } = NotificationLight.Waiting;
-
-    /// <summary>
-    /// An extra MAGIC button is wired (yellow board: P3, IO35 to GND, with a 10 kΩ resistor from IO35 to 3.3 V).
-    /// Off by default: without its resistor the pin floats and would make up presses.
-    /// </summary>
-    public bool ExtraMagicButton { get; set; }
-
     /// <summary>Older configs had one flag per screen (two-screen mode); the first screen's flag carries over.</summary>
     [JsonPropertyName("flipScreen1")]
     public bool? LegacyFlipScreen1 { get; set; }
@@ -168,18 +159,6 @@ public enum DisplayType
 /// boards without PSRAM (the yellow ESP32-3248S035C) can't do smoothly; calm keeps the expressions, blinks
 /// and glances but drops the hops, shakes and screen knocks.
 /// </summary>
-/// <summary>When DANTE's notification light blinks (on DANTEs that have one wired).</summary>
-[JsonConverter(typeof(JsonStringEnumConverter<NotificationLight>))]
-public enum NotificationLight
-{
-    /// <summary>A short blink every 2 s while something is waiting, blinking during a nudge, fast when urgent.</summary>
-    Waiting = 0,
-    /// <summary>Only during nudges (blinking; fast when urgent).</summary>
-    Nudges = 1,
-    /// <summary>Never.</summary>
-    Off = 2,
-}
-
 [JsonConverter(typeof(JsonStringEnumConverter<Motion>))]
 public enum Motion
 {

@@ -16,15 +16,10 @@ namespace Displays {
     uint32_t accent = 0x5EEAD4; // TFT accent colour, 0xRRGGBB (title, happy eyes, highlights)
     uint8_t look = 0;           // Face::Look: DANTE's style and accessories
     uint8_t motion = 0;         // MOTION_*: how much the face moves around
-    uint8_t light = 0;          // LIGHT_*: when the notification light blinks (boards with PIN_LIGHT)
-    bool extraMagic = false;    // a MAGIC button is wired to PIN_EXTRA_MAGIC (yellow board, P3)
   };
 
   // How lively the face is (`motion` in `cfg`). Auto = calm where the screen is drawn in strips (no PSRAM).
   enum Motion : uint8_t { MOTION_AUTO = 0, MOTION_LIVELY = 1, MOTION_CALM = 2 };
-  // When the notification light blinks (`light` in `cfg`): whenever something is waiting, only during
-  // nudges, or never.
-  enum Light : uint8_t { LIGHT_WAITING = 0, LIGHT_NUDGES = 1, LIGHT_OFF = 2 };
 
   void begin();
   // Should the face keep still (no hops, shakes or knocks)? Motion setting with Auto resolved.

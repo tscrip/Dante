@@ -49,13 +49,6 @@ else
                 @SimButton("sel", "SELECT", "select")
             </div>
         }
-         (_led is { } led)
-        {
-            <div class="small" style="display:flex;align-items:center;gap:.4rem;color:#8b95a7" title="The notification light on P3 (IO22)">
-                <span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:@(_led == true ? "#ff4d4d" : "#3a1f22");box-shadow:@(_led == true ? "0 0 10px #ff4d4d" : "none")"></span>
-                notification light
-            </div>
-        }
         <div class="sim-screens">
             @if (_shape is { } shape)
             {
@@ -114,7 +107,6 @@ else
     private bool _drawing;
     private string? _pending;
     private DotNetObjectReference<SimulatorPage>? _self;
-    private bool? _led;   // the yellow board's notification light, when the simulator reports one
 
     /// <summary>Pretending to be the yellow board: taps on the screen instead of buttons.</summary>
     private bool TouchBoard => _cfg.Device.SimulatedHardware.HasTouch();
@@ -201,17 +193,8 @@ else
         return new Shape(kind, f?["w"]?.GetValue<int>() ?? 128, f?["h"]?.GetValue<int>() ?? 32);
     }
 
-    /// <summary>The light's state from a frame: <c>"led":true</c> sits near the start, before the big picture data.</summary>
-    private static bool? LedOf(string frame)
-    {
-        var head = frame.AsSpan(0, Math.Min(frame.Length, 120));
-        return head.Contains("\"led\":true", StringComparison.Ordinal) ? true
-            : head.Contains("\"led\":false", StringComparison.Ordinal) ? false : null;
-    }
-
     private void OnFrame(string frame) => _ = InvokeAsync(async () =>
     {
-        if (LedOf(frame) is var led && led != _led) { _led = led; StateHasChanged(); }
         var shape = ShapeOf(frame);
         if (shape != _shape)
         {
