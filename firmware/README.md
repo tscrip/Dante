@@ -175,6 +175,11 @@ I2C scan now: bus 1 (SDA=8 SCL=9): nothing
   `?` in the monitor, touch a corner, and type `?` again: the last line shows where DANTE thinks you
   touched (the screen is 480 wide, 320 high). If it's mirrored, change `TOUCH_OFFSET_ROTATION` in
   `src/config.h` (try 2, then 1, 3, 4...) and flash again.
+* **Yellow board, the P3 MAGIC button does nothing:** use **Device → Check wiring** (or type `?` in the
+  monitor) twice: once with the button released, once holding it. The `MAGIC button (IO35)` line should say
+  `on` and switch from `HIGH (released)` to `LOW (pressed)`. `not switched on`: tick the box on the Device
+  page. Always `LOW`: the switch is on NC, or the resistor goes to GND instead of 3.3 V. Always `HIGH`: the
+  button isn't reaching GND.
 * **Yellow board stays dark or keeps restarting right after flashing:** its build reads the flash chip at
   80 MHz for speed. In `platformio.ini`, under `[env:esp32-3248s035c]`, set `board_build.f_flash = 40000000L`
   and flash again.

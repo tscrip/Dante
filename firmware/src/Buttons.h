@@ -17,4 +17,6 @@ namespace Buttons {
   bool poll(ButtonEvent& ev);
   // The extra MAGIC button (yellow board, P3: IO35): read only when the PC app says one is wired.
   void setExtraMagic(bool on);
+  // "MAGIC button (IO35): on, pin reads HIGH (released) right now, 3 presses seen": for `?` and Check wiring.
+  void describeExtra(char* out, size_t n);
 }

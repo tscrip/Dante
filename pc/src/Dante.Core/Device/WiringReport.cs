@@ -58,6 +58,20 @@ public sealed partial record WiringReport(DateTimeOffset At, string Boot, string
             hints.Add($"The bus has {string.Join(", ", bus.Select(Hex))}, but no OLED (0x3C or 0x3D). Is the screen type set right?");
         }
 
+        // The yellow board's extra MAGIC button on P3 (firmware 3.10.1+): "MAGIC button (IO35): on, pin reads ...".
+        if (Scan.Contains("MAGIC button (IO", StringComparison.Ordinal))
+        {
+            if (Scan.Contains("not switched on", StringComparison.Ordinal))
+                hints.Add("The MAGIC button isn't switched on, so DANTE ignores IO35: tick \"A MAGIC button is wired to IO35\" " +
+                          "below and press Save & send to DANTE.");
+            else if (Scan.Contains("LOW (pressed)", StringComparison.Ordinal))
+                hints.Add("IO35 reads \"pressed\". If you weren't holding the button during the check, it's connected to GND all " +
+                          "the time: use the switch's NO and COM terminals (not NC), and make sure the 10 kΩ resistor goes to 3.3 V, not GND.");
+            else
+                hints.Add("IO35 reads \"released\". Press Check wiring again while holding the button down: it should then read " +
+                          "\"pressed\". If it doesn't, the button isn't connecting IO35 to GND: check IO35 → NO and COM → GND.");
+        }
+
         if (Boot.Contains("BROWNOUT", StringComparison.Ordinal))
             hints.Insert(0, "DANTE last restarted because its supply voltage dipped (brownout). That is a power problem: " +
                             "try a different USB cable or port (or a powered hub), and check for a short on the 3V3/5V lines.");

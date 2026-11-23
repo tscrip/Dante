@@ -45,6 +45,30 @@ public class WiringReportTests
         Assert.Contains("\"C\"", hint);
     }
 
+    private static IReadOnlyList<string> ButtonHints(string button) =>
+        Report($"touch panel: GT911 found at 0x5D | {button}", TouchBoot).Explain(new DeviceSettings { Display = DisplayType.Auto });
+
+    [Fact]
+    public void A_magic_button_that_is_not_switched_on_says_where_to_switch_it_on()
+    {
+        var hints = ButtonHints("MAGIC button (IO35): not switched on in the PC app, pin reads HIGH (released) right now, 0 presses seen");
+        Assert.Contains(hints, h => h.Contains("isn't switched on") && h.Contains("wired to IO35"));
+    }
+
+    [Fact]
+    public void A_magic_button_that_reads_pressed_points_at_NC_or_the_resistor()
+    {
+        var hints = ButtonHints("MAGIC button (IO35): on, pin reads LOW (pressed) right now, 1 presses seen");
+        Assert.Contains(hints, h => h.Contains("NO and COM") && h.Contains("3.3 V"));
+    }
+
+    [Fact]
+    public void A_magic_button_that_reads_released_says_to_check_again_while_holding_it()
+    {
+        var hints = ButtonHints("MAGIC button (IO35): on, pin reads HIGH (released) right now, 0 presses seen");
+        Assert.Contains(hints, h => h.Contains("while holding the button"));
+    }
+
     [Fact]
     public void Ordinary_scans_are_not_mistaken_for_a_touch_board() =>
         Assert.False(Report("I2C scan now: bus 1 (SDA=8 SCL=9): nothing").TouchBoard);
