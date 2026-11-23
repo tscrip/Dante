@@ -164,6 +164,8 @@ std::string rle565(const uint16_t* px, size_t n) {
 
 std::string frameJson() {
   std::string j = "{\"t\":\"sim.frame\",\"fw\":\"" FW_VERSION "\"";
+  // The yellow board's notification light (P3), so the PC app can show it blinking.
+  if (PIN_LIGHT >= 0 && Touch::available()) j += g_simPins[PIN_LIGHT] == LIGHT_ON ? ",\"led\":true" : ",\"led\":false";
   switch (Displays::active()) {
     case Displays::KIND_TFT: {
       static uint16_t px[TFT_W * TFT_H];

@@ -65,7 +65,7 @@ inline void randomSeed(unsigned long) {}
 extern int g_simPins[64];
 inline void pinMode(int, int) {}
 inline int digitalRead(int p) { return (p >= 0 && p < 64) ? g_simPins[p] : HIGH; }
-inline void digitalWrite(int, int) {}
+inline void digitalWrite(int p, int v) { if (p >= 0 && p < 64) g_simPins[p] = v; }   // e.g. the notification light
 inline void yield() {}
 
 // Enough of Arduino's String for libraries that offer String overloads.

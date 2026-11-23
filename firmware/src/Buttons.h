@@ -15,4 +15,6 @@ namespace Buttons {
   void begin();
   // Returns true and fills `ev` if a press event is ready.
   bool poll(ButtonEvent& ev);
+  // The extra MAGIC button (yellow board, P3: IO35): read only when the PC app says one is wired.
+  void setExtraMagic(bool on);
 }

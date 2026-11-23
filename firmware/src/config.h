@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 // ---- Identity ---------------------------------------------------------------
-#define FW_VERSION      "3.9.1"
+#define FW_VERSION      "3.10.0"
 #define DEVICE_NAME     "DANTE"
 
 // ---- Board ------------------------------------------------------------------------
@@ -17,7 +17,7 @@
 // ==== Yellow board: ESP32-3248S035C (ESP32-WROOM-32, 4 MB flash, no PSRAM) ========================
 #define BOARD_ID        "esp32-3248s035c"
 #define HAS_OLED        0         // the screen is built in: always the TFT
-#define HAS_BUTTONS     0         // no buttons: the touch panel stands in for them
+#define HAS_BUTTONS     0         // no buttons of its own: the touch panel stands in (+ optional MAGIC on P3)
 #define HAS_TOUCH       1
 
 // The OLED symbols below only keep the shared code compiling; nothing uses them on this board.
@@ -57,11 +57,21 @@
 // where the last touch landed.
 #define TOUCH_OFFSET_ROTATION 0
 
-// Unused here (no buttons), kept so the shared code compiles.
+// No buttons on the board itself (-1 = not there). One can be added on the P3 connector, see below.
 #define PIN_BTN_LEFT    -1
 #define PIN_BTN_RIGHT   -1
 #define PIN_BTN_SELECT  -1
 #define PIN_BTN_MAGIC   -1
+
+// ---- Extras on the P3 connector (GND, IO35, IO22, IO21) ----------------------------------------
+// IO21 is the touch chip's "touched" (INT) line on this board: leave it alone.
+// A MAGIC button between IO35 and GND. IO35 can only read and has no built-in pull-up, so it needs
+// a 10 kOhm resistor from IO35 to 3.3V; that's why it is switched on in the PC app (Device page),
+// otherwise a loose IO35 would make up presses.
+#define PIN_EXTRA_MAGIC 35
+// A notification light: IO22 -> 330 Ohm resistor -> LED -> GND. HIGH = on.
+#define PIN_LIGHT       22
+#define LIGHT_ON        HIGH
 
 #else
 // ==== ESP32-S3 (e.g. ESP32-S3-DevKitC-1) =========================================================
@@ -114,6 +124,15 @@
 #define PIN_BTN_RIGHT   5
 #define PIN_BTN_SELECT  6    // the "top" button
 #define PIN_BTN_MAGIC   7    // also on top: does whatever the PC app says (mute, play/pause, ...)
+
+#define PIN_EXTRA_MAGIC -1   // the S3 has MAGIC on its own pin already
+#ifdef DANTE_SIMULATOR
+#define PIN_LIGHT       22   // the simulator's "yellow board" mode shows the notification light
+#define LIGHT_ON        HIGH
+#else
+#define PIN_LIGHT       -1   // no notification light (set a free pin here to add one)
+#define LIGHT_ON        HIGH
+#endif
 #endif
 
 #define BTN_DEBOUNCE_MS 25
