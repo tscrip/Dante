@@ -66,7 +66,8 @@
 // ---- Extras on the P3 connector (GND, IO35, IO22, IO21) ----------------------------------------
 // IO21 is the touch chip's "touched" (INT) line on this board: leave it alone.
 // A MAGIC button between IO35 and GND. IO35 can only read and has no built-in pull-up, so it needs
-// a 10 kOhm resistor from IO35 to 3.3V; that's why it is switched on in the PC app (Device page),
+// a 10 kOhm resistor from IO35 to 3.3V (the 3.3V pin of connector CN1: GND, IO22, IO21, 3.3V); that's why
+// it is switched on in the PC app (Device page),
 // otherwise a loose IO35 would make up presses.
 #define PIN_EXTRA_MAGIC 35
 // A notification light: IO22 -> 330 Ohm resistor -> LED -> GND. HIGH = on.
