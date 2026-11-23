@@ -134,8 +134,6 @@ public static class DeviceProtocol
         ["accent"] = d.AccentRgb,   // 0xRRGGBB, used by the TFT
         ["look"] = Enum.IsDefined(d.Look) ? (int)d.Look : 0,
         ["motion"] = d.Motion switch { Motion.Lively => "lively", Motion.Calm => "calm", _ => "auto" },
-        ["light"] = d.Light switch { NotificationLight.Nudges => "nudges", NotificationLight.Off => "off", _ => "waiting" },
-        ["xbtn"] = d.ExtraMagicButton,
     };
 
     public static string DisplayWireName(DisplayType d) => d switch

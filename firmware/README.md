@@ -96,13 +96,19 @@ There are no buttons; the touch screen stands in for them:
 
 During a nudge: tap = "I'm on it", swipe left or right = "later".
 
-**Extras on the P3 connector** (GND, IO35, IO22, IO21), set up on the PC app's *Device* page:
+**An extra MAGIC button** (as well as the two-finger tap), on IO22, which is on both the **P3** (GND, IO35, IO22,
+IO21) and **CN1** (GND, IO22, IO21, 3.3V) connectors:
 
-| Part | Wiring | Notes |
-|---|---|---|
-| Notification light | IO22 → 330 Ω resistor → LED long leg; LED short leg → GND. A lit push button (e.g. a 12 V one): its **+** to IO22 and **−** to GND, no extra resistor (it has one built in; it glows dimmer at 3.3 V) | Blinks by what's waiting: a short blink every 2 s while something waits, once a second during a nudge, fast when urgent (or only during nudges, or off). A brighter light or LED strip needs a transistor in between. |
-| MAGIC button | IO35 → button → GND, **plus a 10 kΩ resistor from IO35 to 3.3 V** | IO35 can only read and has no built-in pull-up, hence the resistor. P3 has no 3.3 V: take it from the **3.3V pin of connector CN1** (GND, IO22, IO21, 3.3V; its IO22 is the same pin as on P3). Use the switch's **NO** and **C** terminals. Then tick *A MAGIC button is wired to IO35* on the Device page. Works like the S3's MAGIC button, long press included. |
-| IO21 | leave free | The touch chip uses it on this board. |
+| Button terminal | Goes to |
+|---|---|
+| **NO** | IO22 |
+| **C** (common) | GND |
+| **NC** | not connected |
+
+Nothing else: IO22 has a built-in pull-up, so no resistor is needed, and nothing has to be switched on in
+the PC app. It works like the S3's MAGIC button, long press included. A lit button's own LED is separate:
+its **+** to 3.3V (CN1) and **−** to GND keeps it glowing. Leave **IO21** free: the touch chip uses it on
+this board, and **IO35** can't be used for a button without an extra resistor (it has no pull-up).
 
 The pins are fixed by the board and set in `src/config.h` (the `DANTE_BOARD_CYD35C` section). The
 resistive version (*ESP32-3248S035R*, XPT2046 touch) is not supported yet.
@@ -175,11 +181,10 @@ I2C scan now: bus 1 (SDA=8 SCL=9): nothing
   `?` in the monitor, touch a corner, and type `?` again: the last line shows where DANTE thinks you
   touched (the screen is 480 wide, 320 high). If it's mirrored, change `TOUCH_OFFSET_ROTATION` in
   `src/config.h` (try 2, then 1, 3, 4...) and flash again.
-* **Yellow board, the P3 MAGIC button does nothing:** use **Device → Check wiring** (or type `?` in the
-  monitor) twice: once with the button released, once holding it. The `MAGIC button (IO35)` line should say
-  `on` and switch from `HIGH (released)` to `LOW (pressed)`. `not switched on`: tick the box on the Device
-  page. Always `LOW`: the switch is on NC, or the resistor goes to GND instead of 3.3 V. Always `HIGH`: the
-  button isn't reaching GND.
+* **Yellow board, the MAGIC button does nothing:** use **Device → Check wiring** (or type `?` in the
+  monitor) twice: once with the button released, once holding it. The `MAGIC button (IO22)` line should switch
+  from `HIGH (released)` to `LOW (pressed)`. Always `LOW`: the switch is on NC instead of NO. Always `HIGH`: the
+  button isn't connecting IO22 to GND.
 * **Yellow board stays dark or keeps restarting right after flashing:** its build reads the flash chip at
   80 MHz for speed. In `platformio.ini`, under `[env:esp32-3248s035c]`, set `board_build.f_flash = 40000000L`
   and flash again.

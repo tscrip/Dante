@@ -91,9 +91,7 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
     public bool DeviceTft => DeviceDisplay == "tft";
     /// <summary>DANTE has a touch screen instead of buttons (the ESP32-3248S035C "yellow board"; firmware 3.6+).</summary>
     public bool TouchScreen { get; private set; }
-    /// <summary>DANTE can drive a notification light (yellow board, P3: IO22; firmware 3.10+).</summary>
-    public bool HasLight { get; private set; }
-    /// <summary>DANTE can read an extra MAGIC button (yellow board, P3: IO35; firmware 3.10+).</summary>
+    /// <summary>DANTE can read an extra MAGIC button (yellow board: IO22 on P3 or CN1; firmware 3.10+).</summary>
     public bool HasExtraButton { get; private set; }
     /// <summary>Latest reply to <see cref="DeviceProtocol.Diag"/>.</summary>
     public WiringReport? LastDiag { get; private set; }
@@ -220,7 +218,6 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
         DeviceDisplay = null;
         OledDetected = null;
         TouchScreen = false;
-        HasLight = false;
         HasExtraButton = false;
         LastSimFrame = null;
         SetStatus(LinkStatus.Connected, Target(settings));
@@ -285,7 +282,6 @@ public sealed class DeviceLink(ConfigStore config, ILogger<DeviceLink> log, Time
                     DeviceDisplay = evt.Raw["display"]?.GetValue<string>();
                     OledDetected = evt.Raw["oled"]?.GetValue<bool>();
                     TouchScreen = evt.Raw["touch"]?.GetValue<bool>() == true;   // absent on boards with buttons
-                    HasLight = evt.Raw["light"]?.GetValue<bool>() == true;
                     HasExtraButton = evt.Raw["xbtn"]?.GetValue<bool>() == true;
                 }
                 StatusChanged?.Invoke();

@@ -203,45 +203,22 @@
     </div>
 </div>
 
-@if (Link.HasLight || Link.HasExtraButton)
+@if (Link.HasExtraButton)
 {
     <div class="panel">
-        <h2>Notification light &amp; MAGIC button</h2>
-        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
-            <div>
-                @if (Link.HasLight)
-                {
-                    <div class="fields">
-                        <span class="small"><strong>Light</strong></span>
-                        <label class="check"><input type="radio" name="light" checked="@(_cfg.Device.Light == NotificationLight.Waiting)" @onchange="() => _cfg.Device.Light = NotificationLight.Waiting" />
-                            <span>Whenever something is waiting <span class="muted small">— a short blink every 2 s; blinking during a nudge, fast when urgent</span></span></label>
-                        <label class="check"><input type="radio" name="light" checked="@(_cfg.Device.Light == NotificationLight.Nudges)" @onchange="() => _cfg.Device.Light = NotificationLight.Nudges" />
-                            <span>Only during nudges <span class="muted small">— blinking, fast when urgent</span></span></label>
-                        <label class="check"><input type="radio" name="light" checked="@(_cfg.Device.Light == NotificationLight.Off)" @onchange="() => _cfg.Device.Light = NotificationLight.Off" />
-                            <span>Off</span></label>
-                    </div>
-                }
-                @if (Link.HasExtraButton)
-                {
-                    <label class="check" style="margin-top:.75rem"><input type="checkbox" @bind="_cfg.Device.ExtraMagicButton" />
-                        <span>A MAGIC button is wired to IO35 <span class="muted small">— it does what you set on the <a href="magic">Magic button</a> page.
-                            Only tick this once the button and its resistor are in: without the resistor, IO35 picks up noise and DANTE would see presses that never happened.</span></span></label>
-                }
-                <button class="btn primary" @onclick="Save" style="margin-top:.75rem">Save &amp; send to DANTE</button>
-            </div>
-            <div>
-                <h3 class="small muted">Wiring (connector P3 on the yellow board)</h3>
-                <table class="small">
-                    <tbody>
-                        <tr><td>Light</td><td>IO22 → 330 Ω resistor → LED (long leg) · LED (short leg) → GND. A lit button (e.g. 12 V): its + to IO22 and − to GND, no resistor (it has one built in; dimmer at 3.3 V)</td></tr>
-                        <tr><td>MAGIC button</td><td>IO35 → button (NO and C) → GND, plus a 10 kΩ resistor from IO35 to the 3.3V pin of connector CN1</td></tr>
-                        <tr><td>IO21</td><td>leave it free: the touch screen uses it</td></tr>
-                    </tbody>
-                </table>
-                <p class="muted small">CN1 (GND, IO22, IO21, 3.3V) carries the same IO22 as P3, so the light can go on either. A brighter light or
-                    an LED strip needs a transistor in between: a pin can only power a single small LED.</p>
-            </div>
-        </div>
+        <h2>MAGIC button</h2>
+        <p class="small">This DANTE can have a real MAGIC button as well as the two-finger tap. It does what you set on the
+            <a href="magic">Magic button</a> page, long press included. Nothing to switch on: wire it and it works.</p>
+        <table class="small">
+            <tbody>
+                <tr><td>Button <strong>NO</strong></td><td>→ IO22 (on connector P3 or CN1: same pin)</td></tr>
+                <tr><td>Button <strong>C</strong> (common)</td><td>→ GND</td></tr>
+                <tr><td>Button <strong>NC</strong></td><td>not connected</td></tr>
+                <tr><td>IO21</td><td>leave it free: the touch screen uses it</td></tr>
+            </tbody>
+        </table>
+        <p class="muted small">No resistor needed: IO22 has one built in. A lit button's own LED is separate: its + to 3.3V (on CN1)
+            and − to GND keeps it glowing. Check wiring shows whether DANTE sees the button pressed.</p>
     </div>
 }
 

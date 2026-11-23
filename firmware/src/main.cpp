@@ -72,32 +72,6 @@ static void showToast(const char* title, const char* text) {
 }
 
 // ---- outgoing messages ----------------------------------------------------------
-// Does this board have the notification light? (The simulator shows one in its yellow-board mode.)
-static bool hasLight() {
-#ifdef DANTE_SIMULATOR
-  return PIN_LIGHT >= 0 && Touch::available();
-#else
-  return PIN_LIGHT >= 0;
-#endif
-}
-
-// The notification light (P3 on the yellow board): blinks by how much needs the human, as set in the
-// PC app. Urgent nudge: fast. Nudge: once a second. Something waiting (setting "waiting"): a short
-// blink every 2 s. Nothing, or no PC: off.
-static void updateLight(Alert* alert, uint32_t now) {
-  if (!hasLight()) return;
-  static int last = -1;
-  uint8_t mode = Displays::settings().light;
-  bool on = false;
-  if (mode != Displays::LIGHT_OFF && Link::pcAlive()) {
-    if (alert) on = alert->lvl >= 2 ? (now % 250) < 125 : (now % 1000) < 500;
-    else if (mode == Displays::LIGHT_WAITING && Face::info().pending > 0) on = (now % 2000) < 150;
-  }
-  if ((int)on == last) return;
-  last = on;
-  digitalWrite(PIN_LIGHT, on ? LIGHT_ON : !LIGHT_ON);
-}
-
 static void fillHello(JsonDocument& d) {
   d["t"] = "hello";
   d["fw"] = FW_VERSION;
@@ -105,8 +79,7 @@ static void fillHello(JsonDocument& d) {
   d["display"] = Displays::kindName();      // oled / tft
   d["oled"] = Displays::oledDetected();
   if (Touch::available()) d["touch"] = true;   // a touch screen instead of buttons (yellow board)
-  if (hasLight()) d["light"] = true;           // a notification light can be wired
-  if (PIN_EXTRA_MAGIC >= 0) d["xbtn"] = true;  // an extra MAGIC button can be wired
+  if (PIN_EXTRA_MAGIC >= 0) d["xbtn"] = true;  // an extra MAGIC button can be wired (yellow board: IO22)
 }
 
 static void sendHello() {
@@ -512,7 +485,6 @@ void setup() {
   randomSeed(esp_random());
   Buttons::begin();
   Displays::begin();
-  if (hasLight()) { pinMode(PIN_LIGHT, OUTPUT); digitalWrite(PIN_LIGHT, !LIGHT_ON); }
   Touch::begin();
   Apps::restore();   // last time's widgets, so their screens and page dots are there right away
   Face::begin();
@@ -536,7 +508,6 @@ void loop() {
   Link::poll();
 
   ButtonEvent ev;
-  Buttons::setExtraMagic(Displays::settings().extraMagic);   // only read when the PC app says it's wired
   while (Buttons::poll(ev)) handleButton(ev);
   while (Touch::poll(ev)) handleButton(ev);      // taps on a touch screen are presses too
 
@@ -552,7 +523,6 @@ void loop() {
   if (toast.active && now - toast.start > TOAST_MS) { toast.active = false; Face::react(); }   // double-take afterwards
   if (sliding && now - slideStart >= SLIDE_MS) sliding = false;
   Alert* alert = currentAlert();
-  updateLight(alert, now);
 
   switch (Displays::active()) {
     case Displays::KIND_TFT: renderTft(alert, now); break;
